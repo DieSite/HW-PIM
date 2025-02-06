@@ -31,7 +31,6 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'categorie' => $row['categorie'] ?? null,
             'productnaam' => $row['productnaam'] ?? null,
             'collectie' => $row['collectie'] ?? null,
-            'cross_sell' => $row['cross_sell'] ?? null,
             'kwaliteit' => $row['kwaliteit'] ?? null,
             'maat' => $row['maat'] ?? null,
             'onderkleed' => $row['onderkleed'] ?? null,
@@ -55,28 +54,28 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'beschrijving_l' => $row['beschrijving_l'] ?? null,
             'beschrijving_k' => $row['beschrijving_k'] ?? null,
             'prijs' => [
-                'USD' => $row['prijs'] ?? null,
+                'EUR' => $row['prijs'] ?? null,
             ],
             'prijs2' => [
-                'USD' => $row['prijs2'] ?? null,
+                'EUR' => $row['prijs2'] ?? null,
             ],
             'sale_prijs' => [
-                'USD' => $row['sale_prijs'] ?? null,
+                'EUR' => $row['sale_prijs'] ?? null,
             ],
             'prijs_per_m2' => [
-                'USD' => $row['prijs_per_m2'] ?? null,
+                'EUR' => $row['prijs_per_m2'] ?? null,
             ],
             'sale_prijs_per_m2' => [
-                'USD' => $row['sale_prijs_per_m2'] ?? null,
+                'EUR' => $row['sale_prijs_per_m2'] ?? null,
             ],
             'minimale_prijs' => [
-                'USD' => $row['minimale_prijs'] ?? null,
+                'EUR' => $row['minimale_prijs'] ?? null,
             ],
             'prijs_rond_m2' => [
-                'USD' => $row['prijs_rond_m2'] ?? null,
+                'EUR' => $row['prijs_rond_m2'] ?? null,
             ],
             'sale_prijs_rond_m2' => [
-                'USD' => $row['sale_prijs_rond_m2'] ?? null,
+                'EUR' => $row['sale_prijs_rond_m2'] ?? null,
             ],
             'afbeelding' => $row['afbeelding'] ?? null,
             'afbeelding_zonder_logo' => $row['afbeelding_zonder_logo'] ?? null,
@@ -96,13 +95,20 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'meta_titel' => $row['meta_title'] ?? null,
             'meta_beschrijving' => $row['meta_omschrijving'] ?? null,
         ];
-        
+
+        $associations = [
+            'cross_sells' => $row['cross_sell'] ? explode(',', $row['cross_sell']) : []
+        ];
+
         return new Product([
             'sku' => $row['code'],
             'status' => 1,
             'type' => 'simple',
             'attribute_family_id' => 2,
-            'values' => json_encode(['common' => $common])
+            'values' => json_encode([
+                'common' => $common,
+                'associations' => $associations
+            ])
         ]);
     }
 
