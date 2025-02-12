@@ -29,3 +29,5 @@ require 'notification-routes.php';
  * Remaining routes.
  */
 require 'rest-routes.php';
+
+require 'custom-routes.php';

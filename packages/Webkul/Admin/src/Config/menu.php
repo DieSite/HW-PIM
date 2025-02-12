@@ -89,6 +89,17 @@ return [
     ],
 
     /**
+     * Custom Imports
+     */
+    [
+        'key'        => 'custom_imports',
+        'name'       => 'admin::app.components.layouts.sidebar.custom-imports',
+        'route'      => 'admin.custom.imports.index',
+        'sort'       => 7,  // Adjust this number based on where you want it to appear
+        'icon'       => 'icon-import',
+    ],
+
+    /**
      * Settings.
      */
     [

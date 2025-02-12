@@ -10,6 +10,5 @@ class Product extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'in_collectie' => 'boolean',
     ];
 }

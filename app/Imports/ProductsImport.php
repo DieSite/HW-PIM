@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Product;
+use App\Models\Category;
 use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
@@ -11,8 +12,10 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithProgressBar;
 use Maatwebsite\Excel\Concerns\WithSkipDuplicates;
 use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
+use Maatwebsite\Excel\Concerns\WithUpserts;
+use Illuminate\Support\Facades\DB;
 
-class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithBatchInserts, WithProgressBar, WithSkipDuplicates, WithCalculatedFormulas
+class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithBatchInserts, WithProgressBar, WithSkipDuplicates, WithCalculatedFormulas, WithUpserts
 {
 
     use Importable;
@@ -20,20 +23,48 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
     public function model(array $row)
     {
 
+        $type = 'simple';
+        $parent = null;
+        $parentId = null;
+        $categories = [];
+
         if (!isset($row['code'])) {
             return null;
+        }
+
+        if (!isset($row['maat'])) {
+            $type = 'configurable';
+        }
+
+        if (isset($row['categorie'])) {
+            $categories = explode('|', $row['categorie']);
+            foreach ($categories as $category) {
+                $category = Category::firstOrCreate([
+                    'code' => $category,
+                ]);
+        }
+    }
+
+        if ($type === 'simple') {
+            $parent = DB::table('products')
+                ->whereJsonContains('values->common->productnaam', $row['productnaam'])
+                ->where('type', 'configurable')
+                ->first();
+        }
+
+        if ($parent) {
+            $parentId = $parent->id;
         }
 
         $common = [
             'sku' => $row['code'],
             'ean' => $row['ean'] ?? null,
             'merk' => $row['merk'] ?? null,
-            'categorie' => $row['categorie'] ?? null,
             'productnaam' => $row['productnaam'] ?? null,
             'collectie' => $row['collectie'] ?? null,
             'kwaliteit' => $row['kwaliteit'] ?? null,
-            'maat' => $row['maat'] ?? null,
-            'onderkleed' => $row['onderkleed'] ?? null,
+            'maat' => $this->formatMaat($row['maat']) ?? null,
+            'onderkleed' => strtolower(explode(' ', $row['onderkleed'])[0]) ?? null,
             'voorraad_eurogros' => $row['voorraad_eurogros'] ?? null,
             'voorraad_5_korting_handmatig' => $row['voorraad_5_korting_handmatig'] ?? null,
             'voorraad_5_korting' => $row['voorraad_5_korting'] ?? null,
@@ -43,11 +74,11 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'in_collectie' => $row['in_collectie'] ?? null,
             'afwerking' => $row['afwerking'] ?? null,
             'maximale_breedte' => $row['maximale_breedte'] ?? null,
-            'maximale_breedte_cm' => $row['maximale_breedte_cm'] ?? null,
+            'maximale_breedte_cm' => $row['maximale_breedte_met_cm'] ?? null,
             'maximale_lengte' => $row['maximale_lengte'] ?? null,
-            'maximale_lengte_cm' => $row['maximale_lengte_cm'] ?? null,
+            'maximale_lengte_cm' => $row['maximale_lengte_met_cm'] ?? null,
             'maximale_diameter' => $row['maximale_diameter'] ?? null,
-            'maximale_diameter_cm' => $row['maximale_diameter_cm'] ?? null,
+            'maximale_diameter_cm' => $row['maximale_diameter_met_cm'] ?? null,
             'vorm' => $row['vorm'] ?? null,
             'levertijd_voorradig' => $row['levertijd_voorradig'] ?? null,
             'levertijd_niet_voorradig' => $row['levertijd_niet_voorradig'] ?? null,
@@ -82,7 +113,7 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'materiaal' => $row['materiaal'] ?? null,
             'loopvlak' => $row['loopvlak'] ?? null,
             'poolhoogte' => $row['poolhoogte'] ?? null,
-            'product_techniek' => $row['product_techniek'] ?? null,
+            'productie_techniek' => $row['productie_techniek'] ?? null,
             'randafwerking' => $row['randafwerking'] ?? null,
             'productieland' => $row['productieland'] ?? null,
             'garantie' => $row['garantie'] ?? null,
@@ -97,28 +128,48 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
         ];
 
         $associations = [
-            'cross_sells' => $row['cross_sell'] ? explode(',', $row['cross_sell']) : []
+            'cross_sells' => $row['cross_sells'] ? explode(',', $row['cross_sells']) : []
         ];
 
         return new Product([
             'sku' => $row['code'],
             'status' => 1,
-            'type' => 'simple',
+            'type' => $type,
+            'parent_id' => $parentId,
             'attribute_family_id' => 2,
             'values' => json_encode([
                 'common' => $common,
-                'associations' => $associations
+                'associations' => $associations,
+                'categories' => $categories
             ])
         ]);
     }
 
+    public function uniqueBy()
+    {
+        return 'code';
+    }
+
     public function chunkSize(): int
     {
-        return 1000;
+        return 1;
     }
 
     public function batchSize(): int
     {
         return 1000;
+    }
+
+    private function formatMaat($maat)
+    {
+        if (!$maat) {
+            return null;
+        }
+
+        $maat = strtolower($maat);
+        $maat = preg_replace('/\s+cm/i', '', $maat);
+        $maat = preg_replace('/\s*x\s*/', 'x', $maat);
+        
+        return trim($maat);
     }
 }

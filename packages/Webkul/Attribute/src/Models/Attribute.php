@@ -178,10 +178,6 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
             };
         }
 
-        if ($this->code === 'sku') {
-            $validations[] = new Slug;
-        }
-
         return $validations;
     }
 
