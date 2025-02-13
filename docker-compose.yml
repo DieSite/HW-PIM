@@ -45,4 +45,5 @@ services:
 
 # On-disk storage of DB data, when containers are stopped
 volumes:
-  unopim-mysql-disk: {}
+  unopim-mysql-disk:
+    driver: local

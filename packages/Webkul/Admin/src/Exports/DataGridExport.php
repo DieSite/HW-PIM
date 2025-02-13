@@ -4,8 +4,10 @@ namespace Webkul\Admin\Exports;
 
 use Maatwebsite\Excel\Concerns\FromGenerator;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class DataGridExport implements FromGenerator, WithCustomCsvSettings
+class DataGridExport implements FromGenerator, WithCustomCsvSettings, WithStyles
 {
     /**
      * Create a new instance.
@@ -77,6 +79,19 @@ class DataGridExport implements FromGenerator, WithCustomCsvSettings
     {
         return [
             'delimiter' => ',',
+        ];
+    }
+
+    public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)  
+    {
+        return [
+            1 => [
+                'font' => ['bold' => true],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'F0F0F0']
+                ]
+            ],
         ];
     }
 }
