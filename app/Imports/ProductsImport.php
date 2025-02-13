@@ -14,8 +14,9 @@ use Maatwebsite\Excel\Concerns\WithSkipDuplicates;
 use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
 use Maatwebsite\Excel\Concerns\WithUpserts;
 use Illuminate\Support\Facades\DB;
+use Storage;
 
-class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithBatchInserts, WithProgressBar, WithSkipDuplicates, WithCalculatedFormulas, WithUpserts
+class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithProgressBar, WithSkipDuplicates, WithCalculatedFormulas, WithUpserts
 {
 
     use Importable;
@@ -27,6 +28,7 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
         $parent = null;
         $parentId = null;
         $categories = [];
+        $processedImages = [];
 
         if (!isset($row['code'])) {
             return null;
@@ -42,8 +44,14 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
                 $category = Category::firstOrCreate([
                     'code' => $category,
                 ]);
+            }
         }
-    }
+
+        if (isset($row['merk'])) {
+            $category = Category::firstOrCreate([
+                'code' => $row['merk']
+            ]);
+        }
 
         if ($type === 'simple') {
             $parent = DB::table('products')
@@ -55,6 +63,8 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
         if ($parent) {
             $parentId = $parent->id;
         }
+
+        $processedImages = $this->processImages($row['afbeelding']);
 
         $common = [
             'sku' => $row['code'],
@@ -72,7 +82,7 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'uitverkoop_15_korting' => $row['uitverkoop_15_korting'] ?? null,
             'dob' => $row['dob'] ?? null,
             'in_collectie' => $row['in_collectie'] ?? null,
-            'afwerking' => $row['afwerking'] ?? null,
+            'afwerking' => strtolower($row['afwerking']) ?? null,
             'maximale_breedte' => $row['maximale_breedte'] ?? null,
             'maximale_breedte_cm' => $row['maximale_breedte_met_cm'] ?? null,
             'maximale_lengte' => $row['maximale_lengte'] ?? null,
@@ -103,12 +113,12 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
                 'EUR' => $row['minimale_prijs'] ?? null,
             ],
             'prijs_rond_m2' => [
-                'EUR' => $row['prijs_rond_m2'] ?? null,
+                'EUR' => $row['Prijs_rond_m2'] ?? null,
             ],
             'sale_prijs_rond_m2' => [
                 'EUR' => $row['sale_prijs_rond_m2'] ?? null,
             ],
-            'afbeelding' => $row['afbeelding'] ?? null,
+            'afbeelding' => $processedImages ?? null,
             'afbeelding_zonder_logo' => $row['afbeelding_zonder_logo'] ?? null,
             'materiaal' => $row['materiaal'] ?? null,
             'loopvlak' => $row['loopvlak'] ?? null,
@@ -123,8 +133,8 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
             'onderhoudsadvies' => $row['onderhoudsadvies'] ?? null,
             'gebruik' => $row['gebruik'] ?? null,
             'sorteer_volgorde' => $row['sorteer_volgorde'] ?? null,
-            'meta_titel' => $row['meta_title'] ?? null,
-            'meta_beschrijving' => $row['meta_omschrijving'] ?? null,
+            'meta_titel' => $row['meta_titel'] ?? null,
+            'meta_beschrijving' => $row['meta_beschrijving'] ?? null,
         ];
 
         $associations = [
@@ -152,24 +162,43 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithB
 
     public function chunkSize(): int
     {
-        return 1;
-    }
-
-    public function batchSize(): int
-    {
         return 1000;
     }
 
-    private function formatMaat($maat)
+    private function formatMaat($value)
     {
-        if (!$maat) {
+        if (!$value) {
             return null;
         }
 
-        $maat = strtolower($maat);
-        $maat = preg_replace('/\s+cm/i', '', $maat);
-        $maat = preg_replace('/\s*x\s*/', 'x', $maat);
-        
-        return trim($maat);
+        $value = strtolower($value);
+        $value = preg_replace('/\s+cm/i', '', $value);
+        $value = preg_replace('/\s*x\s*/', 'x', $value);
+
+        return trim($value);
+    }
+
+    private function processImages($images)
+    {
+        if (!$images) {
+            return [];
+        }
+
+        $processedImages = [];
+        $imageArray = explode('|', $images);
+
+        foreach ($imageArray as $image) {
+            $cleanedImage = trim($image);
+            $cleanedImage = str_replace([' ', '&-'], ['-', ''], $cleanedImage);
+            $cleanedImage = preg_replace('/-+/', '-', $cleanedImage);
+            $cleanedImage = str_replace(['.-', '-.'], '-', $cleanedImage);
+            $cleanedImage = 'product-images/' . $cleanedImage;
+
+            if (Storage::disk('public')->exists($cleanedImage)) {
+                $processedImages[] = $cleanedImage;
+            }
+        }
+
+        return $processedImages;
     }
 }

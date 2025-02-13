@@ -87,11 +87,7 @@ class Exporter extends AbstractExporter
      */
     protected function getResults()
     {
-        return $this->source->with([
-            'attribute_family',
-            'parent',
-            'super_attributes',
-        ])->orderBy('id', 'desc')->all()?->getIterator();
+        return $this->source->orderBy('id', 'asc')->all()?->getIterator();
     }
 
     /**
@@ -113,18 +109,9 @@ class Exporter extends AbstractExporter
                     $values = $this->setAttributesValues($mergedFields, $filePath);
 
                     $data = array_merge([
-                        'channel'                 => $channel,
-                        'locale'                  => $locale,
                         'sku'                     => $rowData['sku'],
-                        'status'                  => $rowData['status'] ? 'true' : 'false',
-                        'type'                    => $rowData['type'],
-                        'parent'                  => $rowData['parent']['sku'] ?? null,
-                        'attribute_family'        => $rowData['attribute_family']['code'] ?? null,
-                        'configurable_attributes' => $this->getSuperAttributes($rowData),
                         'categories'              => $this->getCategories($rowData),
-                        'up_sells'                => $this->getAssociations($rowData, 'up_sells'),
                         'cross_sells'             => $this->getAssociations($rowData, 'cross_sells'),
-                        'related_products'        => $this->getAssociations($rowData, 'related_products'),
                     ], $values);
 
                     $products[] = $data;
