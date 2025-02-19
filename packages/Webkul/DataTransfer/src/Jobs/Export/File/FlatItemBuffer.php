@@ -4,6 +4,7 @@ namespace Webkul\DataTransfer\Jobs\Export\File;
 
 use Webkul\DataTransfer\Buffer\BufferInterface;
 use Webkul\DataTransfer\Buffer\FileBuffer;
+use PhpOffice\PhpSpreadsheet\Style\Color;
 
 /**
  * Puts items into a buffer and calculate headers during a flat file export
@@ -34,6 +35,7 @@ class FlatItemBuffer extends FileBuffer implements BufferInterface
         $this->reopen($filePath, $filePath->getWriterType(), $options);
 
         $sheet = $this->spreadsheet->getActiveSheet();
+        $sheet->getDefaultColumnDimension()->setWidth(20);
         // Find the last row
         $this->highestRow = $sheet->getHighestRow();
 
