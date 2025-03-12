@@ -166,7 +166,7 @@ return [
     |
     */
 
-    'memory_limit' => 64,
+    'memory_limit' => 1024,
 
     /*
     |--------------------------------------------------------------------------
@@ -188,7 +188,21 @@ return [
             'maxProcesses'        => 1,
             'maxTime'             => 0,
             'maxJobs'             => 0,
-            'memory'              => 128,
+            'memory'              => 1024,
+            'tries'               => 1,
+            'timeout'             => 60,
+            'nice'                => 0,
+        ],
+        
+        'database-supervisor' => [
+            'connection'          => 'database',
+            'queue'               => ['default'],
+            'balance'             => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses'        => 1,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 1024,
             'tries'               => 1,
             'timeout'             => 60,
             'nice'                => 0,
@@ -202,10 +216,18 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'database-supervisor' => [
+                'maxProcesses'    => 10,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
+                'maxProcesses' => 3,
+            ],
+            'database-supervisor' => [
                 'maxProcesses' => 3,
             ],
         ],
