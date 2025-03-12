@@ -7,6 +7,8 @@ services:
     container_name: unopim-web
     volumes:
       - .:/var/www/html
+    networks:
+        - diesite
     ports:
       - "8000:80"
     restart: "no"
@@ -20,6 +22,8 @@ services:
       - unopim-mysql-disk:/var/lib/mysql
     ports:
       - "3306:3306"
+    networks:
+        - diesite
     restart: "no"
     environment:
       MYSQL_ROOT_PASSWORD: password
@@ -32,16 +36,26 @@ services:
     container_name: unopim-q
     volumes:
       - .:/var/www/html
-    restart: unless-stopped
+    restart: no
+    networks:
+        - diesite
     depends_on:
       - unopim-mysql
 
   unopim-mailpit:
     image: 'axllent/mailpit:latest'
     container_name: unopim-mailpit
+    networks:
+        - diesite
     restart: "no"
     ports:
       - "8025:8025"
+
+networks:
+    diesite:
+        name: diesite
+        external: true
+        driver: bridge
 
 # On-disk storage of DB data, when containers are stopped
 volumes:
