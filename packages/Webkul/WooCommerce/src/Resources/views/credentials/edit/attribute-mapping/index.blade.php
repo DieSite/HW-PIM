@@ -1,0 +1,1 @@
+<x-woocommerce::mappings.attribute-mapping :id="$id" :standard-attributes="$standardAttributes" :default-mappings="$defaultMappings" :media-mapping="json_encode($mediaMapping)" :custom-attributes="json_encode($customAttributes)" :attribute-mappings="$attributeMappings" :enableSelect="$enabled" />

@@ -79,7 +79,8 @@
             "Webkul\\Product\\": "packages/Webkul/Product/src",
             "Webkul\\Theme\\": "packages/Webkul/Theme/src",
             "Webkul\\User\\": "packages/Webkul/User/src",
-            "Webkul\\AdminApi\\": "packages/Webkul/AdminApi/src"
+            "Webkul\\AdminApi\\": "packages/Webkul/AdminApi/src",
+            "Webkul\\WooCommerce\\": "packages/Webkul/WooCommerce/src"
         }
     },
     "autoload-dev": {
