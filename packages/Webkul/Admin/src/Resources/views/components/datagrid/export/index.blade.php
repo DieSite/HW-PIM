@@ -5,11 +5,10 @@
 </v-datagrid-export>
 
 @pushOnce('scripts')
-    <script
-        type="text/x-template"
-        id="v-datagrid-export-template"
-    >
-        <div>
+<script
+    type="text/x-template"
+    id="v-datagrid-export-template">
+    <div>
             <!-- Modal Component -->
             <x-admin::modal ref="exportModal">
                 <!-- Modal Toggle -->
@@ -28,15 +27,18 @@
                 </x-slot>
 
                 @php
-                    $supportedType = ['csv', 'xls', 'xlsx'];
-
+                    $supportedType = Config('quick_exporters');
                     $options = [];
 
-                    foreach($supportedType as $type) {
+                    foreach($supportedType as $type => $value) {
                         $options[] = [
                             'id'    => $type,
-                            'label' => trans('admin::app.export.' . $type)
+                            'label' => $value['title']
                         ];
+
+                        if(!empty($value['route'])){
+                            $supportedType[$type]['route'] = route($value['route']);
+                        }
                     }
 
                     $optionsInJson = json_encode($options);
@@ -46,7 +48,7 @@
                 <!-- Modal Content -->
                 <x-slot:content>
                     <x-admin::form action="">
-                        <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group>
                             <x-admin::form.control-group.control
                                 type="select"
                                 id="format"
@@ -59,6 +61,21 @@
                             >
                             </x-admin::form.control-group.control>
                         </x-admin::form.control-group>
+                        <x-admin::form.control-group v-if="!['csv', 'xls', 'xlsx'].includes(format) && format" class="!mb-0">
+                            <x-admin::form.control-group.label>
+                               With Media
+                            </x-admin::form.control-group.label>
+                            <input
+                                type="hidden"
+                                name="with_media"
+                                value="0" />
+
+                            <x-admin::form.control-group.control
+                                type="switch"
+                                name="with_media"
+                                value="1" 
+                                v-model="with_media"/>
+                        </x-admin::form.control-group>
                     </x-admin::form>
                 </x-slot>
 
@@ -68,6 +85,7 @@
                         type="button"
                         class="primary-button"
                         @click="download"
+                        :disabled="!format"
                     >
                         @lang('admin::app.export.export')
                     </button>
@@ -76,75 +94,103 @@
         </div>
     </script>
 
-    <script type="module">
-        app.component('v-datagrid-export', {
-            template: '#v-datagrid-export-template',
+<script type="module">
+    app.component('v-datagrid-export', {
+        template: '#v-datagrid-export-template',
 
-            props: ['src'],
+        props: ['src'],
 
-            data() {
-                return {
-                    format: 'xls',
+        data() {
+            return {
+                format: 'xls',
 
-                    available: null,
+                available: null,
 
-                    applied: null,
-                };
+                applied: null,
+
+                supportedTypes: @json($supportedType),
+
+                routes: {},
+
+                with_media: false,
+            };
+        },
+
+        mounted() {
+            this.registerEvents();
+            this.routes = Object.keys(this.supportedTypes)
+                .filter(key => !["csv", "xls", "xlsx"].includes(key)) // Exclude unwanted keys
+                .reduce((obj, key) => {
+                    obj[key] = this.supportedTypes[key]?.route ?? []; // Use optional chaining
+                    return obj;
+                }, {});
+        },
+
+        watch: {
+            format(value) {
+                this.format = this.parseValue(value)?.id ?? this.format;
+            }
+        },
+
+        methods: {
+            registerEvents() {
+                this.$emitter.on('change-datagrid', this.updateProperties);
             },
 
-            mounted() {
-                this.registerEvents();
+            updateProperties({
+                available,
+                applied
+            }) {
+                this.available = available;
+
+                this.applied = applied;
             },
 
-            watch: {
-                format(value) {
-                    this.format = this.parseValue(value)?.id ?? this.format;
-                }
-            },
+            download() {
+                if (!this.available?.records?.length) {
+                    this.$emitter.emit('add-flash', {
+                        type: 'warning',
+                        message: '@lang('
+                        admin::app.export.no - records ')'
+                    });
 
-            methods: {
-                registerEvents() {
-                    this.$emitter.on('change-datagrid', this.updateProperties);
-                },
+                    this.$refs.exportModal.toggle();
+                } else {
+                    const withMedia = this.with_media || 0;
 
-                updateProperties({available, applied }) {
-                    this.available = available;
+                    let params = {
+                        export: 1,
 
-                    this.applied = applied;
-                },
+                        format: this.format,
 
-                download() {
-                    if (! this.available?.records?.length) {                        
-                        this.$emitter.emit('add-flash', { type: 'warning', message: '@lang('admin::app.export.no-records')' });
+                        sort: {},
 
-                        this.$refs.exportModal.toggle();
-                    } else {
-                        let params = {
-                            export: 1,
-    
-                            format: this.format,
-    
-                            sort: {},
-    
-                            filters: {},
+                        with_media: withMedia,
 
-                            pagination: {
-                                page: this?.applied?.pagination?.page ?? 1,
-                                per_page: this?.applied?.pagination?.perPage ?? 10,
-                            },
-                        };
-    
-                        if (
-                            this.applied.sort.column &&
-                            this.applied.sort.order
-                        ) {
-                            params.sort = this.applied.sort;
-                        }
-    
-                        this.applied.filters.columns.forEach(column => {
-                            params.filters[column.index] = column.value;
-                        });
-    
+                        productIds: this?.applied?.massActions?.indices,
+
+                        filters: {},
+
+                        pagination: {
+                            page: this?.applied?.pagination?.page ?? 1,
+                            per_page: this?.applied?.pagination?.perPage ?? 10,
+                        },
+                    };
+
+                    if (
+                        this.applied.sort.column &&
+                        this.applied.sort.order
+                    ) {
+                        params.sort = this.applied.sort;
+                    }
+
+                    this.applied.filters.columns.forEach(column => {
+                        params.filters[column.index] = column.value;
+                    });
+
+                    let types = ['csv', 'xls', 'xlsx'];
+
+                    if (types.includes(this.format)) {
                         this.$axios
                             .get(this.src, {
                                 params,
@@ -158,9 +204,9 @@
                                  */
                                 const contentDisposition = response.headers.get('Content-Disposition');
 
-                                const filename = contentDisposition
-                                    ? contentDisposition.split('filename=')[1].replace(/["']/g, '')
-                                    : (Math.random() + 1).toString(36).substring(7) + '.' + this.format;
+                                const filename = contentDisposition ?
+                                    contentDisposition.split('filename=')[1].replace(/["']/g, '') :
+                                    (Math.random() + 1).toString(36).substring(7) + '.' + this.format;
 
                                 /**
                                  * Link generation.
@@ -178,17 +224,48 @@
 
                                 this.$refs.exportModal.toggle();
                             });
-                    }
-                },
+                    } else {
+                        if (!params?.productIds?.length) {
+                            this.$emitter.emit('add-flash', {
+                                type: 'warning',
+                                message: 'No products selected for quick export'
+                            });
+                            this.$refs.exportModal.toggle();
+                            return;
+                        }
+                        const formatType = this.format;
 
-                parseValue(value) {
-                    try {
-                        return value ? JSON.parse(value) : null;
-                    } catch (error) {
-                        return null;
+                        this.$axios
+                            .post(this.routes[this.format], {
+                                params
+                            })
+                            .then((response) => {
+                                this.$emitter.emit('add-flash', {
+                                    type: 'success',
+                                    message: response.data.message || 'Export successful!',
+                                });
+                            })
+                            .catch((error) => {
+                                this.$emitter.emit('add-flash', {
+                                    type: 'warning',
+                                    message: error.response?.data?.error || 'Something went wrong!',
+                                });
+                            })
+                            .finally(() => {
+                                this.$refs.exportModal.toggle();
+                            });
                     }
                 }
             },
-        });
-    </script>
+
+            parseValue(value) {
+                try {
+                    return value ? JSON.parse(value) : null;
+                } catch (error) {
+                    return null;
+                }
+            }
+        },
+    });
+</script>
 @endPushOnce

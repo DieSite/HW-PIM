@@ -10,15 +10,15 @@ use Webkul\WooCommerce\Repositories\CredentialRepository;
 
 class WooCommerceService
 {
-    const ATTRIBUTE_MAPPING = 'settings';
+    public const ATTRIBUTE_MAPPING = 'settings';
 
-    const DEFAULT_MAPPING = 'defaults';
+    public const DEFAULT_MAPPING = 'defaults';
 
-    const MEDIA_MAPPING = 'media';
+    public const MEDIA_MAPPING = 'media';
 
-    const CUSTOM_FIELD_MAPPING = 'custom_field';
+    public const CUSTOM_FIELD_MAPPING = 'custom_field';
 
-    const TRANSLATIONS_KEY = 'translations';
+    public const TRANSLATIONS_KEY = 'translations';
 
     public function __construct(
         protected CredentialRepository $credentialRepository,
@@ -26,43 +26,6 @@ class WooCommerceService
         protected AttributeRepository $attributeRepository,
         protected AttributeFamilyRepository $attributeFamilyRepository
     ) {}
-
-    public function getAttributeMappings(int $credentialId): array
-    {
-        $attributeMappings = [];
-        $this->credential = $this->credentialRepository->find($credentialId);
-
-        if ($this->credential && $this->credential->extras) {
-            $attributeMappings = isset($this->credential->extras[self::ATTRIBUTE_MAPPING]) ? $this->credential->extras[self::ATTRIBUTE_MAPPING] : [];
-        }
-
-        return $attributeMappings;
-
-    }
-
-    public function getMediaMappings(int $credentialId): array
-    {
-        $mediaMappings = [];
-        $this->credential = $this->credentialRepository->find($credentialId);
-
-        if ($this->credential && $this->credential->extras) {
-            $mediaMappings = isset($this->credential->extras[self::MEDIA_MAPPING]) ? $this->credential->extras[self::MEDIA_MAPPING] : [];
-        }
-
-        return $mediaMappings;
-    }
-
-    public function getDefaultMappings(int $credentialId): array
-    {
-        $defaultMappings = [];
-        $this->credential = $this->credentialRepository->find($credentialId);
-
-        if ($this->credential && $this->credential->extras) {
-            $defaultMappings = isset($this->credential->extras[self::DEFAULT_MAPPING]) ? $this->credential->extras[self::DEFAULT_MAPPING] : [];
-        }
-
-        return $defaultMappings;
-    }
 
     public function getCustomAttributes(int $credentialId): array
     {
@@ -76,17 +39,13 @@ class WooCommerceService
         return $customMapping;
     }
 
-    public function getAttributeByCode(string $code): array
-    {
-        return $this->attributeRepository->findOneWhere(['code' => $code])?->toArray() ?? [];
-    }
-
     public function requestApiAction($action, $data, $parameters)
     {
         $credentialId = 1;
         if (! empty($parameters['credential'])) {
             $credentialId = $parameters['credential'];
         }
+
         $credential = $this->credentialRepository->find($credentialId);
 
         $credentials = [];
@@ -108,67 +67,6 @@ class WooCommerceService
         $response = $oauthClient->request($action, $parameters, $data);
 
         return $response;
-    }
-
-    /**
-     * Prepare additional attributes for storage.
-     *
-     * @param  string  $code  The attribute code.
-     * @return array The prepared attribute data.
-     */
-    public function prepareAdditionalAttribute(string $id, string $code): array
-    {
-        $attribute = $this->getAttributeByCode($code);
-        $name = $this->getDefaultName($attribute);
-
-        if (! empty($attribute)) {
-            return [
-                'name'     => $code,
-                'types'    => [$attribute['type']],
-                'label'    => ! empty($name) ? $name : '['.$code.']',
-                'required' => false,
-            ];
-        }
-
-        return [
-            'id'         => $id,
-            'name'       => $code,
-            'types'      => [],
-            'label'      => ucfirst($code),
-            'isEditable' => true,
-            'required'   => false,
-        ];
-    }
-
-    public function getAdditionalAttributes($credentialId)
-    {
-        $additionalAttributeMapping = $this->attributeMappingRepository->getCustomAttributesMapping($credentialId);
-
-        if (empty($additionalAttributeMapping)) {
-            return [];
-        }
-
-        $attributes = array_values($additionalAttributeMapping);
-
-        return $attributes;
-    }
-
-    public function getDefaultName(array $data, $defaultLocale = null): string
-    {
-        if (empty($data)) {
-            return '';
-        }
-
-        $locale = $defaultLocale ?? core()->getRequestedLocaleCode();
-        $translations = $this->getTranslationsData($data);
-        $name = collect($translations)->firstWhere('locale', $locale)['name'] ?? '';
-
-        return $name;
-    }
-
-    public function getTranslationsData(array $data): array
-    {
-        return isset($data[self::TRANSLATIONS_KEY]) && ! empty($data[self::TRANSLATIONS_KEY]) ? $data[self::TRANSLATIONS_KEY] : [];
     }
 
     public function convertToCode($name)
@@ -200,5 +98,71 @@ class WooCommerceService
 
             return $option->code;
         })->toArray();
+    }
+
+    public function getCredentialForQuickExport()
+    {
+        return $this->credentialRepository->findOneWhere(['defaultSet' => 1])?->toArray();
+
+    }
+
+    public function prepareAdditionalAttribute(string $id, string $code): array
+    {
+        $attribute = $this->getAttributeByCode($code);
+        $name = $this->getDefaultName($attribute);
+
+        if (! empty($attribute)) {
+            return [
+                'name'     => $code,
+                'types'    => [$attribute['type']],
+                'label'    => ! empty($name) ? $name : '['.$code.']',
+                'required' => false,
+            ];
+        }
+
+        return [
+            'id'         => $id,
+            'name'       => $code,
+            'types'      => [],
+            'label'      => ucfirst($code),
+            'isEditable' => true,
+            'required'   => false,
+        ];
+    }
+
+    public function getAdditionalAttributes($credentialId)
+    {
+        $additionalAttributeMapping = $this->attributeMappingRepository->getAdditionalFieldMapping($credentialId);
+
+        if (empty($additionalAttributeMapping)) {
+            return [];
+        }
+
+        $attributes = array_values($additionalAttributeMapping);
+
+        return $attributes;
+    }
+
+    public function getDefaultName(array $data, $defaultLocale = null): string
+    {
+        if (empty($data)) {
+            return '';
+        }
+
+        $locale = $defaultLocale ?? core()->getRequestedLocaleCode();
+        $translations = $this->getTranslationsData($data);
+        $name = collect($translations)->firstWhere('locale', $locale)['name'] ?? '';
+
+        return $name;
+    }
+
+    public function getTranslationsData(array $data): array
+    {
+        return isset($data[self::TRANSLATIONS_KEY]) && ! empty($data[self::TRANSLATIONS_KEY]) ? $data[self::TRANSLATIONS_KEY] : [];
+    }
+
+    public function getAttributeByCode(string $code): array
+    {
+        return $this->attributeRepository->findOneWhere(['code' => $code])?->toArray() ?? [];
     }
 }

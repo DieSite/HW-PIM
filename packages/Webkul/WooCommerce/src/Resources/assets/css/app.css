@@ -1,0 +1,18 @@
+@font-face {
+    font-family: "unopim-woocommerce";
+    src: url("../fonts/unopim-woocommerce.woff?jwnnow") format("woff");
+    font-weight: normal;
+    font-style: normal;
+    font-display: block;
+}
+
+span.icon-woocommerce {
+    font-family: "unopim-woocommerce" !important;
+}
+
+.icon-woocommerce {
+    font-family: "unopim-woocommerce" !important;
+}
+.icon-woocommerce:before {
+    content: "\e300";
+}

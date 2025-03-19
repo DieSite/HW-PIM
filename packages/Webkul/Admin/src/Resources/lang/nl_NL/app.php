@@ -52,7 +52,7 @@ return [
 
     'account' => [
         'edit' => [
-            'back-btn'          => 'Rug',
+            'back-btn'          => 'Terug',
             'change-password'   => 'Verander wachtwoord',
             'confirm-password'  => 'bevestig wachtwoord',
             'current-password'  => 'huidig ​​wachtwoord',
@@ -97,7 +97,7 @@ return [
                 'title'         => 'Producten',
 
                 'create' => [
-                    'back-btn'                          => 'Rug',
+                    'back-btn'                          => 'Terug',
                     'configurable-attributes'           => 'Configureerbare attributen',
                     'create-btn'                        => 'Creëer product',
                     'family'                            => 'Familie',
@@ -303,7 +303,7 @@ return [
                 'add-row'               => 'Rij toevoegen',
                 'admin'                 => 'beheerder',
                 'admin-name'            => 'Beheerdernaam',
-                'back-btn'              => 'Rug',
+                'back-btn'              => 'Terug',
                 'boolean'               => 'Boolean',
                 'checkbox'              => 'Selectievakje',
                 'code'                  => 'Code',
@@ -346,7 +346,7 @@ return [
                 'type'                  => 'Type',
                 'url'                   => 'Url',
                 'use-in-flat'           => 'Creëer in product platte tafel',
-                'validations'           => 'Geldigmaking',
+                'validations'           => 'Validatie',
                 'value-per-channel'     => 'Waarde per kanaal',
                 'value-per-locale'      => 'Waarde per locale',
                 'yes'                   => 'Ja',
@@ -369,7 +369,7 @@ return [
                 'add-row'               => 'Rij toevoegen',
                 'admin'                 => 'beheerder',
                 'admin-name'            => 'Beheerdernaam',
-                'back-btn'              => 'Rug',
+                'back-btn'              => 'Terug',
                 'boolean'               => 'Boolean',
                 'checkbox'              => 'Selectievakje',
                 'code'                  => 'Code',
@@ -412,7 +412,7 @@ return [
                 'type'                  => 'Type',
                 'url'                   => 'Url',
                 'use-in-flat'           => 'Creëer in product platte tafel',
-                'validations'           => 'Geldigmaking',
+                'validations'           => 'Validatie',
                 'value-per-channel'     => 'Waarde per kanaal',
                 'value-per-locale'      => 'Waarde per locale',
                 'yes'                   => 'Ja',
@@ -463,19 +463,19 @@ return [
             'create' => [
                 'title'    => 'Attribuutgroep toevoegen',
                 'save-btn' => 'Sla attribuutgroep op',
-                'back-btn' => 'Rug',
+                'back-btn' => 'Terug',
                 'general'  => 'Algemeen',
                 'code'     => 'Code',
-                'label'    => 'Etiket',
+                'label'    => 'Label',
             ],
 
             'edit' => [
                 'title'    => 'Attribuutgroep bewerken',
-                'back-btn' => 'Rug',
+                'back-btn' => 'Terug',
                 'save-btn' => 'Sla attribuutgroep op',
                 'general'  => 'Algemeen',
                 'code'     => 'Code',
-                'label'    => 'Etiket',
+                'label'    => 'Label',
             ],
 
             'create-success'          => 'Attribute Group met succes gemaakt',
@@ -509,7 +509,7 @@ return [
             ],
 
             'create' => [
-                'back-btn'            => 'Rug',
+                'back-btn'            => 'Terug',
                 'code'                => 'Code',
                 'general'             => 'Algemeen',
                 'meta-description'    => 'Meta omschrijving',
@@ -530,7 +530,7 @@ return [
             ],
 
             'edit' => [
-                'back-btn'               => 'Rug',
+                'back-btn'               => 'Terug',
                 'code'                   => 'Code',
                 'display-mode'           => 'Weergavemodus',
                 'enter-position'         => 'Voer de positie in',
@@ -600,7 +600,7 @@ return [
                 'add-row'               => 'Rij toevoegen',
                 'admin'                 => 'beheerder',
                 'admin-name'            => 'Beheerdernaam',
-                'back-btn'              => 'Rug',
+                'back-btn'              => 'Terug',
                 'boolean'               => 'Boolean',
                 'checkbox'              => 'Selectievakje',
                 'code'                  => 'Code',
@@ -620,7 +620,7 @@ return [
                 'input-validation'      => 'Invoervalidatie',
                 'is-required'           => 'Is benodigd',
                 'is-unique'             => 'Is uniek',
-                'label'                 => 'Etiket',
+                'label'                 => 'Label',
                 'multiselect'           => 'Meerkeuze selectie',
                 'no'                    => 'Nee',
                 'number'                => 'Nummer',
@@ -637,7 +637,7 @@ return [
                 'type'                  => 'Type',
                 'url'                   => 'Url',
                 'use-in-flat'           => 'Creëer in product platte tafel',
-                'validations'           => 'Geldigmaking',
+                'validations'           => 'Validatie',
                 'value-per-channel'     => 'Value Per Channel',
                 'value-per-locale'      => 'Waarde per locale',
                 'yes'                   => 'Ja',
@@ -664,7 +664,7 @@ return [
                 'add-row'               => 'Rij toevoegen',
                 'admin'                 => 'beheerder',
                 'admin-name'            => 'Beheerdernaam',
-                'back-btn'              => 'Rug',
+                'back-btn'              => 'Terug',
                 'boolean'               => 'Boolean',
                 'checkbox'              => 'Selectievakje',
                 'code'                  => 'Code',
@@ -685,7 +685,7 @@ return [
                 'is-filterable'         => 'Gebruik in gelaagde navigatie',
                 'is-required'           => 'Is benodigd',
                 'is-unique'             => 'Is uniek',
-                'label'                 => 'Etiket',
+                'label'                 => 'Label',
                 'multiselect'           => 'Meerkeuze selectie',
                 'no'                    => 'Nee',
                 'number'                => 'Nummer',
@@ -702,7 +702,7 @@ return [
                 'type'                  => 'Type',
                 'url'                   => 'Url',
                 'use-in-flat'           => 'Creëer in product platte tafel',
-                'validations'           => 'Geldigmaking',
+                'validations'           => 'Validatie',
                 'value-per-channel'     => 'Waarde per kanaal',
                 'value-per-locale'      => 'Waarde per locale',
                 'yes'                   => 'Ja',
@@ -759,9 +759,9 @@ return [
                 'assign-group-btn'                 => 'Attribuutgroep toewijzen',
                 'assign-group-title'               => 'Attribuutgroep toewijzen',
                 'assign-group-btn'                 => 'Attribuutgroep toewijzen',
-                'back-btn'                         => 'Rug',
+                'back-btn'                         => 'Terug',
                 'code'                             => 'Code',
-                'label'                            => 'Etiket',
+                'label'                            => 'Label',
                 'column'                           => 'Kolom',
                 'delete-group-btn'                 => 'Verwijder groep',
                 'edit-group-info'                  => 'Dubbelklik om de groep te bewerken',
@@ -791,9 +791,9 @@ return [
                 'assign-group-btn'                 => 'Attribuutgroep toewijzen',
                 'assign-group-title'               => 'Attribuutgroep toewijzen',
                 'assign-group-btn'                 => 'Attribuutgroep toewijzen',
-                'back-btn'                         => 'Rug',
+                'back-btn'                         => 'Terug',
                 'code'                             => 'Code',
-                'label'                            => 'Etiket',
+                'label'                            => 'Label',
                 'column'                           => 'Kolom',
                 'delete-group-btn'                 => 'Verwijder groep',
                 'edit-group-info'                  => 'Dubbelklik om de groep te bewerken',
@@ -985,7 +985,7 @@ return [
                 ],
 
                 'import'            => [
-                    'back-btn'                => 'Rug',
+                    'back-btn'                => 'Terug',
                     'completed-batches'       => 'Totale batches voltooid:',
                     'download-error-report'   => 'Download het volledige rapport',
                     'edit-btn'                => 'Bewerking',
@@ -1025,7 +1025,7 @@ return [
                     'code'                => 'Code',
                     'action'              => 'Actie',
                     'allowed-errors'      => 'Fouten toegestaan',
-                    'back-btn'            => 'Rug',
+                    'back-btn'            => 'Terug',
                     'create-update'       => 'Maak/update',
                     'delete'              => 'Verwijderen',
                     'media'               => 'Bestand / afbeeldingen',
@@ -1054,7 +1054,7 @@ return [
                     'images'              => 'Afbeeldingen',
                     'action'              => 'Actie',
                     'allowed-errors'      => 'Fouten toegestaan',
-                    'back-btn'            => 'Rug',
+                    'back-btn'            => 'Terug',
                     'create-update'       => 'Maak/update',
                     'delete'              => 'Verwijderen',
                     'download-sample'     => 'Download voorbeeld',
@@ -1105,7 +1105,7 @@ return [
                 ],
 
                 'import'            => [
-                    'back-btn'                => 'Rug',
+                    'back-btn'                => 'Terug',
                     'completed-batches'       => 'Totale batches voltooid:',
                     'download-error-report'   => 'Download het volledige rapport',
                     'edit-btn'                => 'Bewerking',
@@ -1147,7 +1147,7 @@ return [
                     'code'                => 'Code',
                     'action'              => 'Actie',
                     'allowed-errors'      => 'Fouten toegestaan',
-                    'back-btn'            => 'Rug',
+                    'back-btn'            => 'Terug',
                     'create-update'       => 'Maak/update',
                     'delete'              => 'Verwijderen',
                     'media'               => 'Bestand / afbeeldingen',
@@ -1175,7 +1175,7 @@ return [
                 'edit'              => [
                     'action'              => 'Actie',
                     'allowed-errors'      => 'Fouten toegestaan',
-                    'back-btn'            => 'Rug',
+                    'back-btn'            => 'Terug',
                     'create-update'       => 'Maak/update',
                     'delete'              => 'Verwijderen',
                     'download-sample'     => 'Download voorbeeld',
@@ -1226,7 +1226,7 @@ return [
                 ],
 
                 'export'            => [
-                    'back-btn'                => 'Rug',
+                    'back-btn'                => 'Terug',
                     'completed-batches'       => 'Totale batches voltooid:',
                     'download-error-report'   => 'Download het volledige rapport',
                     'edit-btn'                => 'Bewerking',
@@ -1283,7 +1283,7 @@ return [
 
             'create' => [
                 'allowed-ips'             => 'Toegestaan ​​IP\'s',
-                'cancel'                  => 'Rug',
+                'cancel'                  => 'Terug',
                 'code'                    => 'Code',
                 'create-success'          => 'Kanaal met succes gemaakt.',
                 'currencies'              => 'Valuta',
@@ -1318,7 +1318,7 @@ return [
 
             'edit' => [
                 'allowed-ips'                 => 'Toegestaan ​​IP\'s',
-                'back-btn'                    => 'Rug',
+                'back-btn'                    => 'Terug',
                 'code'                        => 'Code',
                 'currencies'                  => 'Valuta',
                 'currencies-and-locales'      => 'Valuta en locaties',
@@ -1394,7 +1394,7 @@ return [
             ],
 
             'edit' => [
-                'back-btn'         => 'Rug',
+                'back-btn'         => 'Terug',
                 'confirm-password' => 'bevestig wachtwoord',
                 'email'            => 'E -mail',
                 'general'          => 'Algemeen',
@@ -1436,7 +1436,7 @@ return [
             'create' => [
                 'access-control' => 'Toegangscontrole',
                 'all'            => 'Alle',
-                'back-btn'       => 'Rug',
+                'back-btn'       => 'Terug',
                 'custom'         => 'Aangepast',
                 'description'    => 'Beschrijving',
                 'general'        => 'Algemeen',
@@ -1449,7 +1449,7 @@ return [
             'edit' => [
                 'access-control' => 'Toegangscontrole',
                 'all'            => 'Alle',
-                'back-btn'       => 'Rug',
+                'back-btn'       => 'Terug',
                 'custom'         => 'Aangepast',
                 'description'    => 'Beschrijving',
                 'general'        => 'Algemeen',
@@ -1489,7 +1489,7 @@ return [
 
     'configuration' => [
         'index' => [
-            'back-btn'                     => 'Rug',
+            'back-btn'                     => 'Terug',
             'delete'                       => 'Verwijderen',
             'enable-at-least-one-payment'  => 'Schakel ten minste één betaalmethode in.',
             'enable-at-least-one-shipping' => 'Schakel ten minste één verzendmethode in.',
@@ -1953,7 +1953,7 @@ return [
             'create' => [
                 'access-control' => 'Toegangscontrole',
                 'all'            => 'Alle',
-                'back-btn'       => 'Rug',
+                'back-btn'       => 'Terug',
                 'custom'         => 'Aangepast',
                 'assign-user'    => 'Gebruiker toewijzen',
                 'general'        => 'Algemeen',
@@ -1966,7 +1966,7 @@ return [
             'edit' => [
                 'access-control' => 'Toegangscontrole',
                 'all'            => 'Alle',
-                'back-btn'       => 'Rug',
+                'back-btn'       => 'Terug',
                 'custom'         => 'Aangepast',
                 'assign-user'    => 'Gebruiker toewijzen',
                 'general'        => 'Algemeen',
@@ -2022,7 +2022,7 @@ return [
             ],
 
             'sidebar' => [
-                'attribute-families'       => 'Teken families toe',
+                'attribute-families'       => 'Attribuutfamilies',
                 'attribute-groups'         => 'Attribuutgroepen',
                 'attributes'               => 'Attributen',
                 'history'                  => 'Geschiedenis',
@@ -2340,7 +2340,7 @@ return [
 
     'errors' => [
         'dashboard' => 'Dashboard',
-        'go-back'   => 'Ga terug',
+        'go-back'   => 'Ga Terug',
         'support'   => 'Als het probleem aanhoudt, neem dan contact met ons op op <a href=":link" class=":class">:email</a> for assistance.',
 
         '404' => [

@@ -1,0 +1,11 @@
+{
+  "src/Resources/assets/css/app.css": {
+    "file": "assets/app-18d0bfef.css",
+    "isEntry": true,
+    "src": "src/Resources/assets/css/app.css"
+  },
+  "src/Resources/assets/fonts/unopim-woocommerce.woff": {
+    "file": "assets/unopim-woocommerce-acea6d77.woff",
+    "src": "src/Resources/assets/fonts/unopim-woocommerce.woff"
+  }
+}

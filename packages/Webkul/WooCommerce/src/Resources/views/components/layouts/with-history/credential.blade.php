@@ -17,6 +17,8 @@
 
     @stack('meta')
 
+    @unoPimVite(['src/Resources/assets/css/app.css',], 'woocommerce')
+
     @unoPimVite(['src/Resources/assets/css/app.css', 'src/Resources/assets/js/app.js'], 'admin')
 
 
@@ -167,8 +169,6 @@
 
     {!! view_render_event('unopim.admin.layout.vue-app-mount.before') !!}
 
-
-    {!! view_render_event('bagisto.admin.layout.vue-app-mount.after') !!}
 </body>
 
 </html>

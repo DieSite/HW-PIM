@@ -2,7 +2,6 @@
 
 namespace Webkul\WooCommerce\Traits;
 
-use Illuminate\Http\JsonResponse;
 use Webkul\WooCommerce\Http\Client\ApiClient;
 use Webkul\WooCommerce\Models\Credential;
 
@@ -20,7 +19,7 @@ trait RestApiRequestTrait
         $oauthClient = new ApiClient($params['shopUrl'], $params['consumerKey'], $params['consumerSecret']);
         $response = $oauthClient->request('settings', [], []);
 
-        return ! empty($response['code']) && $response['code'] == JsonResponse::HTTP_OK && strpos($params['shopUrl'], '/wp-login.php') === false;
+        return $response;
     }
 
     /**

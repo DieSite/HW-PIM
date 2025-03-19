@@ -21,6 +21,7 @@ class CredentialDataGrid extends DataGrid
                 'consumerKey',
                 'consumerSecret',
                 'active',
+                'defaultSet',
             );
 
         return $queryBuilder;
@@ -49,7 +50,17 @@ class CredentialDataGrid extends DataGrid
             'searchable' => true,
             'filterable' => true,
             'sortable'   => true,
-            'closure'    => fn ($row) => $row->active ? '<span class="label-active">'.trans('admin::app.common.yes').'</span>' : '<span class="label-info">'.trans('admin::app.common.no').'</span>',
+            'closure'    => fn ($row) => $row->active ? '<span class="label-active">'.trans('admin::app.common.yes').'</span>' : '<span class="label-info text-gray-600 dark:text-gray-300">'.trans('admin::app.common.no').'</span>',
+        ]);
+
+        $this->addColumn([
+            'index'      => 'defaultSet',
+            'label'      => trans('woocommerce::app.woocommerce.credential.datagrid.defaultSet'),
+            'type'       => 'boolean',
+            'searchable' => true,
+            'filterable' => true,
+            'sortable'   => true,
+            'closure'    => fn ($row) => $row->defaultSet ? '<span class="label-active">'.trans('admin::app.common.yes').'</span>' : '<span class="label-info text-gray-600 dark:text-gray-300">'.trans('admin::app.common.no').'</span>',
         ]);
     }
 

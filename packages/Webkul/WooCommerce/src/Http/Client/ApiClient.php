@@ -40,7 +40,6 @@ class ApiClient
         protected $consumerKey,
         protected $consumerSecret,
         protected $options = []
-
     ) {
         $this->url = $this->buildApiUrl($url);
     }

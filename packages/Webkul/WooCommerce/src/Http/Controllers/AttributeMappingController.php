@@ -51,6 +51,25 @@ class AttributeMappingController
         );
     }
 
+    public function update(StandardAttributeRequest $request, int $id)
+    {
+        $data = request()->except(['code']);
+
+        if (! $data) {
+            abort(404);
+        }
+
+        $data['extras'] = $this->transformData($data);
+        $credentialExtras = $this->credentialRepository->find($id)?->extras ?? [];
+        $data['extras']['additional_attributes'] = $credentialExtras['additional_attributes'] ?? [];
+        $this->credentialRepository->update($data, $id);
+
+        session()->flash('success', trans('woocommerce::app.woocommerce.credential.edit.tab.'.$data['tab'].'.update-success'));
+        $id = $id.'?'.$data['tab'];
+
+        return redirect()->route('woocommerce.credentials.edit', $id);
+    }
+
     /**
      * Add additional attributes to the standard mapping.
      *
@@ -72,41 +91,22 @@ class AttributeMappingController
 
         $this->attributeMappingRepository->saveAdditionalField($credentialId, $fields);
 
+        // if ($data['type']) {
+        //     $this->attributeMappingRepository->mapAdditionalField($data['code']);
+        // }
+
         return new JsonResponse([
-            'message' => trans('woocommerce::app.mappings.attribute-mapping.other-mapping.add-success'),
+            'message' => trans('woocommerce::app.mappings.attribute-mapping.additional-field.add-success'),
         ]);
     }
 
-    /**
-     * Remove an additional attribute from mappings.
-     *
-     * @return JsonResponse Indicates success of the removal.
-     */
     public function removeAdditionalAttribute(): JsonResponse
     {
         $this->attributeMappingRepository->removeAdditionalField(request()->get('code'), request()->get('credentialId'));
 
         return new JsonResponse([
-            'message' => trans('woocommerce::app.mappings.attribute-mapping.other-mapping.remove-success'),
+            'message' => trans('woocommerce::app.mappings.attribute-mapping.additional-field.remove-success'),
         ]);
-    }
-
-    public function update(StandardAttributeRequest $request, int $id)
-    {
-        $data = request()->except(['code']);
-
-        if (! $data) {
-            abort(404);
-        }
-
-        $data['extras'] = $this->transformData($data);
-
-        $this->credentialRepository->update($data, $id);
-
-        session()->flash('success', trans('woocommerce::app.woocommerce.credential.edit.tab.'.$data['tab'].'.update-success'));
-        $id = $id.'?'.$data['tab'];
-
-        return redirect()->route('woocommerce.credentials.edit', $id);
     }
 
     public function transformData($credentialData)
@@ -127,16 +127,15 @@ class AttributeMappingController
                     $output[self::DEFAULTS_SECTION][$newKey] = $value;
                     break;
 
-                case $key === 'qcurrency':
-                    $output[self::QUICKSETTING_SECTION][$key] = $value;
-                    break;
-
                 case in_array($key, ['media', 'custom_field'], true):
                     $output[constant('self::'.strtoupper($key).'_MAPPING')] = explode(',', $value);
                     break;
 
                 case $key === self::ENABLED:
                     $output[self::ENABLED] = $value;
+                    break;
+                case str_starts_with($key, 'quick_') || $key == 'auto_sync':
+                    $output[self::QUICKSETTING_SECTION][$key] = $value;
                     break;
 
                 default:

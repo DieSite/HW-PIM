@@ -23,11 +23,11 @@ class Exporter extends AbstractExporter
 
     public const BATCH_SIZE = 10;
 
-    const PARENT_CATEGORY_KEY = 'parent_category';
+    public const PARENT_CATEGORY_KEY = 'parent_category';
 
-    const CATEGORY_MAIN_FIELD = ['is_active', 'include_in_menu'];
+    public const CATEGORY_MAIN_FIELD = ['is_active', 'include_in_menu'];
 
-    const COLLECTION_NOT_EXIST = 'Category does not exist';
+    public const COLLECTION_NOT_EXIST = 'Category does not exist';
 
     public const UNOPIM_ENTITY_NAME = 'category';
 
@@ -159,9 +159,7 @@ class Exporter extends AbstractExporter
             }
 
             foreach ($allCategories as $category) {
-
                 $mapping = $this->getDataTransferMapping($category['code']) ?? null;
-
                 if (empty($mapping)) {
                     $response = $this->createCategory($category);
 

@@ -14,4 +14,9 @@ class CredentialRepository extends Repository
     {
         return Credential::class;
     }
+
+    public function resetDefaultSet($excludedId)
+    {
+        $this->model->where('id', '!=', $excludedId)->update(['defaultSet' => 0]);
+    }
 }

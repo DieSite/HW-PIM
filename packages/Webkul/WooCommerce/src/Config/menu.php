@@ -6,7 +6,7 @@ return [
         'name'  => 'woocommerce::app.components.layouts.sidebar.woocommerce',
         'route' => 'woocommerce.credentials.index',
         'sort'  => 10,
-        'icon'  => 'icon-dashboard',
+        'icon'  => 'icon-woocommerce',
     ],
     [
         'key'   => 'woocommerce.credentials',

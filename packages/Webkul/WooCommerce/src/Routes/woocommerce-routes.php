@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Webkul\WooCommerce\Http\Controllers\AttributeMappingController;
 use Webkul\WooCommerce\Http\Controllers\CredentialController;
 use Webkul\WooCommerce\Http\Controllers\OptionController;
+use Webkul\WooCommerce\Http\Controllers\QuickExportController;
 use Webkul\WooCommerce\Http\Controllers\WebhookController;
 
 /**
@@ -23,12 +24,9 @@ Route::group(['middleware' => ['admin'], 'prefix' => config('app.admin_url')], f
 
     Route::prefix('mappings')->group(function () {
         Route::controller(AttributeMappingController::class)->prefix('attribute')->group(function () {
-            Route::get('', 'index')->name('woocommerce.mappings.attribute-mapping.index');
+            Route::put('update/{id}', 'update')->name('woocommerce.attribute-mapping.update');
             Route::post('add-additional', 'addAdditionalAttribute')->name('woocommerce.mappings.additional_attributes.add');
             Route::post('remove-additional', 'removeAdditionalAttribute')->name('woocommerce.mappings.additional_attributes.remove');
-            Route::put('update/{id}', 'update')->name('woocommerce.attribute-mapping.update');
-            Route::post('save', 'save')->name('woocommerce.mappings.additional_attributes.save');
-            Route::post('update-editable-field', 'updateEditableField')->name('woocommerce.mappings.additional_attributes.updateEditableField');
         });
     });
 
@@ -44,6 +42,11 @@ Route::group(['middleware' => ['admin'], 'prefix' => config('app.admin_url')], f
         Route::get('get-woocommerce-locale', 'listLocale')->name('woocommerce.locale.get');
         Route::get('additional-attribute', 'getAdditionalAttributeOptions')->name('woocommerce.additional_attributes.options.get');
         Route::get('media-attribute', 'getMediaAttributeOptions')->name('woocommerce.media.options.get');
+
+    });
+
+    Route::controller(QuickExportController::class)->group(function () {
+        Route::post('woocommerce/quick-export', 'handleQuickExport')->name('woocommerce.quick_export');
 
     });
 

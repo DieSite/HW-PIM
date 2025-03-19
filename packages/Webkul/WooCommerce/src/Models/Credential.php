@@ -14,7 +14,8 @@ use Webkul\WooCommerce\Presenters\CredentialPresenter;
 
 class Credential extends Model implements CredentialContract, HistoryContract, PresentableHistoryInterface
 {
-    use HasFactory, HistoryTrait;
+    use HasFactory;
+    use HistoryTrait;
 
     protected $table = 'wk_woocommerce_credentials';
 

@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Product;
 use App\Models\Category;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -72,8 +73,8 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithP
             'productnaam' => $row['productnaam'] ?? null,
             'collectie' => $row['collectie'] ?? null,
             'kwaliteit' => $row['kwaliteit'] ?? null,
-            'maat' => $this->formatMaat($row['maat']) ?? null,
-            'onderkleed' => strtolower(explode(' ', $row['onderkleed'])[0]) ?? null,
+            'maat' => $row['maat'] ?? null,
+            'onderkleed' => Str::slug($row['onderkleed'], separator: '_'),
             'voorraad_eurogros' => $row['voorraad_eurogros'] ?? null,
             'voorraad_5_korting_handmatig' => $row['voorraad_5_korting_handmatig'] ?? null,
             'voorraad_5_korting' => $row['voorraad_5_korting'] ?? null,

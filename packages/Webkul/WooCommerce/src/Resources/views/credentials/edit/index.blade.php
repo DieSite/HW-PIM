@@ -45,12 +45,6 @@
             {!! view_render_event('unopim.admin.woocommerce.assets.edit.attribute-mapping.after') !!}
         </x-slot:attributes>
 
-        <x-slot:mapping>
-            {!! view_render_event('unopim.admin.woocommerce.assets.edit.attribute-mapping.before') !!}
-            @include('woocommerce::credentials.edit.attribute-mapping.index')
-            {!! view_render_event('unopim.admin.woocommerce.assets.edit.attribute-mapping.after') !!}
-        </x-slot:mapping>
-
         <x-slot:title>
             @lang('woocommerce::app.woocommerce.credential.index.title')
             </x-slot>
@@ -171,6 +165,21 @@
                                     name="active"
                                     value="1"
                                     :checked="(boolean) $credential->active" />
+                            </x-admin::form.control-group>
+                            <x-admin::form.control-group>
+                                <x-admin::form.control-group.label>
+                                    @lang('woocommerce::app.woocommerce.credential.edit.defaultSet')
+                                </x-admin::form.control-group.label>
+                                <input
+                                    type="hidden"
+                                    name="defaultSet"
+                                    value="0" />
+
+                                <x-admin::form.control-group.control
+                                    type="switch"
+                                    name="defaultSet"
+                                    value="1"
+                                    :checked="(boolean) $credential->defaultSet" />
                             </x-admin::form.control-group>
                         </div>
                     </div>

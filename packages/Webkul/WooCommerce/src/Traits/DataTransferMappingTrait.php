@@ -13,7 +13,7 @@ trait DataTransferMappingTrait
 {
     protected $jobFilters;
 
-    const STORE_URL_FILTER = 'credential';
+    public const STORE_URL_FILTER = 'credential';
 
     /**
      * Initialize credentials data from filters
@@ -43,10 +43,10 @@ trait DataTransferMappingTrait
         if ($code) {
             $mappingCheck = $this->dataTransferMappingRepository->where('code', $code)
                 ->where('entityType', $entityName ?? self::UNOPIM_ENTITY_NAME)
-                ->where('credentialId', $this?->credential?->id)
+                ->where('apiUrl', $this?->credential?->shopUrl ?? $this->credential['shopUrl'])
                 ->get();
 
-            return $mappingCheck->toArray();
+            return $mappingCheck?->toArray();
         }
 
         return null;
@@ -57,10 +57,10 @@ trait DataTransferMappingTrait
         if ($externalId) {
             $mappingCheck = $this->dataTransferMappingRepository->where('externalId', $externalId)
                 ->where('entityType', $entityName ?? self::UNOPIM_ENTITY_NAME)
-                ->where('credentialId', $this?->credential?->id)
+                ->where('apiUrl', $this?->credential?->shopUrl ?? $this->credential['shopUrl'])
                 ->first();
 
-            return $mappingCheck->toArray();
+            return $mappingCheck?->toArray();
         }
 
         return null;
@@ -73,8 +73,8 @@ trait DataTransferMappingTrait
             'code'          => $code,
             'externalId'    => $externalId,
             'relatedId'     => $relatedId ?? null,
-            'jobInstanceId' => $this->export->id,
-            'credentialId'  => $this->credential->id,
+            'jobInstanceId' => $this->export?->id ?? null,
+            'apiUrl'        => $this->credential?->shopUrl,
         ];
 
         $this->dataTransferMappingRepository->create($mappingData);
@@ -82,23 +82,24 @@ trait DataTransferMappingTrait
 
     protected function updateDataTransferMappingByCode(string $code, array $data)
     {
-        $this->dataTransferMappingRepository->where('code', $code)->update($data);
+        $this->dataTransferMappingRepository->where('code', $code)->update(collect($data)->except('id')->toArray());
     }
 
     protected function prepareDataWithMatcher(array $item, array $matcher)
     {
-        return collect($matcher)->filter(function ($magentoKey, $unoPimKey) use ($item) {
+        return collect($matcher)->filter(function ($woocommerceKey, $unoPimKey) use ($item) {
             return array_key_exists($unoPimKey, $item) && $item[$unoPimKey] !== '' && $item[$unoPimKey] !== null;
-        })->map(function ($magentoKey, $unoPimKey) use ($item) {
-            return [$magentoKey => $item[$unoPimKey]];
+        })->map(function ($woocommerceKey, $unoPimKey) use ($item) {
+            return [$woocommerceKey => $item[$unoPimKey]];
         })->collapse()->toArray();
     }
-
+    
+    // TODO -> Remove this function and use new apiendpoint getProductWithSku to create or update product based on if it exists.
     protected function handleAfterApiRequest($item, $result, $attributeId = null, $mapping = null)
     {
         $code = ! empty($result['code']) ? $result['code'] : 0;
         $requiredParams = ! empty($this->requiredApiParams) ? $this->requiredApiParams : [];
-        $requiredParams['credential'] = $this->credential->id;
+        $requiredParams['credential'] = $this->credential?->id ?? $this->credential['id'];
 
         if ($attributeId) {
             $requiredParams['attribute'] = $attributeId;
@@ -171,7 +172,13 @@ trait DataTransferMappingTrait
             case 'woocommerce_rest_product_invalid_id':
             case 'woocommerce_rest_taxonomy_invalid':
                 break;
-
+            case 'woocommerce_rest_authentication_error':
+                if (! empty($result['message'])) {
+                    $this->export->state = ExportHelper::STATE_FAILED;
+                    $this->export->errors = [$result['message']];
+                    $this->export->save();
+                }
+                break;
             case JsonResponse::HTTP_OK:
             case JsonResponse::HTTP_CREATED:
                 if ($mapping) {
@@ -225,7 +232,10 @@ trait DataTransferMappingTrait
 
     protected function createOptions($code, $value, $locale, $entityName)
     {
+        $formattedData = [];
+        $attributeId = null;
         $attributeMapping = $this->getDataTransferMapping($code, 'attribute');
+
         if ($attributeMapping) {
             $attributeId = [
                 'attribute' => $attributeMapping[0]['externalId'],
@@ -234,6 +244,10 @@ trait DataTransferMappingTrait
                 'name' => $value,
                 'slug' => $this->connectorService->convertToCode($value),
             ];
+        } else {
+            $this->jobLogger->log('warning', 'Error creating option, make sure the custom attribute is exported to the woocommerce first using attribute export job.');
+
+            return;
         }
 
         $optionMapping = $this->getDataTransferMapping($value, $entityName);
@@ -268,7 +282,7 @@ trait DataTransferMappingTrait
         if ($code) {
             $mappingCheck = $this->dataTransferMappingRepository->where('code', $code)
                 ->where('entityType', $entity)
-                ->where('credentialId', $this?->credential?->id)
+                ->where('apiUrl', $this?->credential?->shopUrl)
                 ->get();
 
             return $mappingCheck->toArray();
@@ -288,7 +302,7 @@ trait DataTransferMappingTrait
             'externalId'          => $id,
             'relatedId'           => $productId,
             'jobInstanceId'       => $exportId,
-            'credentialId'        => $this->credential->id,
+            'apiUrl'              => $this->credential?->shopUrl,
         ];
 
         $this->dataTransferMappingRepository->create($mappingData);

@@ -5,15 +5,20 @@
 'mediaMapping' => [],
 'customAttributes' => [],
 'attributeMappings' => [],
+'additionalAttributes' => [],
 'enableSelect' => 0,
+'quickSettings' => [],
 ])
 <v-create-attributes-mappings
     :id="$id"
+    @add-attribute="handleAddAttribute"
     :standard-attributes="$standardAttributes"
     :default-mappings="$defaultMappings"
     :media-mapping="{{json_encode($mediaMapping)}}"
     :custom-attributes="{{json_encode($customAttributes)}}"
-    :attribute-mappings="$attributeMappings" />
+    :additional-attributes="{{json_encode($additionalAttributes)}}"
+    :attribute-mappings="$attributeMappings"
+    :quickSettings="quickSettings" />
 
 @pushOnce('styles')
 <style>
@@ -138,17 +143,27 @@
                                     />
                                     <x-admin::form.control-group.error ::control-name="`default_${field.name}`" />
                                 </x-admin::form.control-group>
+                                <p class="px-4 py-2 w-[50px]" :class="{ 'invisible': !field?.removable }">
+                                    <span
+                                        class="icon-delete text-red text-lg cursor-pointer"
+                                        title="remove"
+                                        @click="removeAttribute(fieldIndex)"
+                                    ></span>
+                                </p>
                                 </div>
                             </div>
                         </template>
 
                     </div>
             </div>
-            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+
+            <x-woocommerce::mappings.additional-attribute :credentialId="$id"/>
+
+            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded box-shadow !mb-2">
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all">
                     <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.title')</p>
                 </div>
-                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all">
+                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
                 <p> @lang('woocommerce::app.mappings.attribute-mapping.other-mapping.enabled') </p>
                 <x-admin::form.control-group class="flex items-center">
                     <div>
@@ -162,7 +177,7 @@
                             name="enableSelect"
                             value="1"
                             ref="enableSelect"
-                            @change="toggleSwitch"
+                            @change="toggleEnableSelect"
                             v-model="nonSelectAsSelect"
                             ::checked="enableSelect" />
                     </div>
@@ -240,6 +255,106 @@
                     </x-admin::form.control-group>
                 </div>
             </div>
+
+            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all">
+                    <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.quick-export.title')</p>
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
+                    <p>@lang('woocommerce::app.mappings.attribute-mapping.quick-export.quick-channel')</p>
+                    @php 
+                    $oldValues = !empty($quickSettings['quick_channel']) ? $quickSettings['quick_channel'] : '' ;
+                    @endphp
+                    <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group.control
+                        type="select"
+                        name="quick_channel"
+                        :label="trans('woocommerce::app.mappings.attribute-mapping.quick-export.quick-channel')"
+                        track-by="id"
+                        label-by="label"
+                        async="true"
+                        :value="$oldValues ?? ''"
+                        :list-route="route('woocommerce.channel.get',['credentialId' => $id])"
+                        @select-option="selectOption"
+                        entityName="attributes"
+                        @remove-option="removeOption"
+                        />
+                        <x-admin::form.control-group.error control-name="quick_channel" />
+                    </x-admin::form.control-group>
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
+                    <p> @lang('woocommerce::app.mappings.attribute-mapping.quick-export.quick-locale')</p>
+                    @php 
+                    $oldValues = !empty($quickSettings['quick_locale']) ? $quickSettings['quick_locale'] : '' ;
+                    @endphp
+                    <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group.control
+                        type="select"
+                        name="quick_locale"
+                        :label="trans('woocommerce::app.mappings.attribute-mapping.quick-export.quick-locale')"
+                        track-by="id"
+                        label-by="label"
+                        async="true"
+                        :value="$oldValues ?? ''"
+                        :list-route="route('woocommerce.locale.get',['credentialId' => $id])"
+                        @select-option="selectOption"
+                        entityName="attributes"
+                        @remove-option="removeOption"
+                        />
+                        <x-admin::form.control-group.error control-name="quick_locale" />
+                    </x-admin::form.control-group>
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
+                    <p> @lang('woocommerce::app.mappings.attribute-mapping.quick-export.quick-currency')</p>
+                    @php 
+                    $oldValues = !empty($quickSettings['quick_currency']) ? $quickSettings['quick_currency'] : '' ;
+                    @endphp
+                    <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group.control
+                        type="select"
+                        name="quick_currency"
+                        :label="trans('woocommerce::app.mappings.attribute-mapping.quick-export.quick-currency')"
+                        track-by="id"
+                        label-by="label"
+                        async="true"
+                        :value="$oldValues ?? ''"
+                        :list-route="route('woocommerce.currency.get',['credentialId' => $id])"
+                        @select-option="selectOption"
+                        entityName="attributes"
+                        @remove-option="removeOption"
+                        />
+                        <x-admin::form.control-group.error control-name="quick_currency" />
+                    </x-admin::form.control-group>
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
+                    <p> Auto Sync Products</p>
+                    @php 
+                    $oldValues = !empty($quickSettings['auto_sync']) ? $quickSettings['auto_sync'] : 0 ;
+                    
+                    @endphp
+                    <x-admin::form.control-group class="flex items-center">
+                        <div>
+                            <input
+                                type="hidden"
+                                name="auto_sync"
+                                value="0" />
+
+                            <x-admin::form.control-group.control
+                                type="switch"
+                                name="auto_sync"
+                                value="1"
+                                ref="auto_sync"
+                                @change="toggleAutoSync"
+                                ::checked="auto_sync" />
+                        </div>
+                        <div class="mb-2">
+                            <span class="text-l ml-2 isAutoSync">
+                                {{ $oldValues ? 'Enabled' : 'Disabled' }}
+                            </span>
+                        </div>
+                    </x-admin::form.control-group>
+                </div>
+            </div>
         </x-admin::form>
     </script>
 <script type="module">
@@ -251,6 +366,10 @@
                 required: true
             },
             standardAttributes: {
+                type: Array,
+                required: true
+            },
+            additionalAttributes: {
                 type: Array,
                 required: true
             },
@@ -268,12 +387,14 @@
                 onchange: {},
                 customAttributes: @json($customAttributes),
                 standardAttributes: @json($standardAttributes),
+                additionalAttributesList: this.processAdditionalAttributes(),
                 attributeMappings: @json($attributeMappings),
                 oldValues: @json($oldValues),
                 defaultMappings: @json($defaultMappings),
                 id: @json($id),
                 nonSelectAsSelect: @json($enableSelect),
                 disabledFields: {},
+                quickSettings: @json($quickSettings),
             };
         },
         watch: {
@@ -282,7 +403,12 @@
             },
         },
         mounted() {
+            if (Array.isArray(this.additionalAttributesList)) {
+                this.standardAttributes.push(...this.additionalAttributesList);
+            }
             this.enableSelect = this.nonSelectAsSelect == 0 ? false : true;
+            this.auto_sync = this.quickSettings.hasOwnProperty('auto_sync') ? this.quickSettings['auto_sync'] != 0 : false
+
             this.processDisabledFields();
         },
         methods: {
@@ -294,9 +420,13 @@
                 return fieldName.startsWith('default_') ? fieldName : `default_${fieldName}`;
             },
 
-            toggleSwitch() {
+            toggleEnableSelect() {
                 this.enableSelect = this.$refs.enableSelect.checked;
                 document.querySelector('.isEnabled').innerText = this.enableSelect ? 'Enabled' : 'Disabled';
+            },
+            toggleAutoSync() {
+                this.auto_sync = this.$refs.auto_sync.checked;
+                document.querySelector('.isAutoSync').innerText = this.auto_sync ? 'Enabled' : 'Disabled';
             },
 
             parseJson(value) {
@@ -305,6 +435,20 @@
                 } catch (error) {
                     return [];
                 }
+            },
+            processAdditionalAttributes() {
+                let additionalAttributes = this.parseJson(this.additionalAttributes);
+                if (Array.isArray(additionalAttributes)) {
+                    additionalAttributes.forEach(item => item.removable = true);
+                }
+
+                return !Array.isArray(additionalAttributes) ? [] : additionalAttributes;
+            },
+
+            handleAddAttribute(newAttribute) {
+                this.addAdditionalFieldValue(newAttribute);
+                this.additionalAttributesList.push(newAttribute);
+                this.standardAttributes.push(newAttribute);
             },
 
             handleDependentChange(fieldName, dependentFieldName) {
@@ -355,7 +499,44 @@
                 });
 
                 return this.disabledFields;
-            }
+            },
+
+            addAdditionalFieldValue(newAttribute) {
+                let additionalField = {};
+
+                if (newAttribute.id) {
+                    if (0 === this.parseJson(this.standardAttributes).length) {
+                        additionalField = {};
+                        additionalField[newAttribute.code] = newAttribute.code;
+                        this.savedValues = additionalField;
+                    } else {
+                        additionalField = this.parseJson(this.standardAttributes);
+                        additionalField[newAttribute.code] = newAttribute.code;
+                        this.savedValues = additionalField;
+                    }
+                }
+
+            },
+
+            removeAttribute(index) {
+
+                this.$emitter.emit('open-delete-modal', {
+                    agree: () => {
+                        this.$axios.post("{{ route('woocommerce.mappings.additional_attributes.remove') }}", {
+                                code: this.standardAttributes[index].name,
+                                credentialId: this.id
+                            })
+                            .then((response) => {
+                                this.$emitter.emit('add-flash', {
+                                    type: 'success',
+                                    message: response.data.message
+                                });
+
+                                this.standardAttributes.splice(index, 1);
+                            });
+                    }
+                });
+            },
         }
     });
 </script>

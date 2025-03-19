@@ -24,6 +24,10 @@ trait RestApiEndpointsTrait
             'url'    => 'products/{_id}',
             'method' => 'GET',
         ],
+        'getProductWithSku' => [
+            'url'    => 'products?sku={_sku}',
+            'method' => 'GET',
+        ],
         'getWpmlProduct' => [
             'url'    => 'products',
             'method' => 'GET',

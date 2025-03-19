@@ -4,8 +4,8 @@ namespace Webkul\WooCommerce\Helpers\Exporters\Attribute;
 
 use Webkul\Attribute\Repositories\AttributeRepository;
 use Webkul\DataTransfer\Contracts\JobTrackBatch as JobTrackBatchContract;
-use Webkul\DataTransfer\Helpers\Export as ExportHelper;
 use Webkul\DataTransfer\Helpers\Export;
+use Webkul\DataTransfer\Helpers\Export as ExportHelper;
 use Webkul\DataTransfer\Helpers\Exporters\AbstractExporter;
 use Webkul\DataTransfer\Jobs\Export\File\FlatItemBuffer as FileExportFileBuffer;
 use Webkul\DataTransfer\Repositories\JobTrackBatchRepository;
@@ -61,7 +61,7 @@ class Exporter extends AbstractExporter
 
     protected $selectedLocale;
 
-    const ATTRIBUTE_OPTION_ENTITY_NAME = 'option';
+    public const ATTRIBUTE_OPTION_ENTITY_NAME = 'option';
 
     /*
      * For exporting file
@@ -207,7 +207,7 @@ class Exporter extends AbstractExporter
             $payload = $this->formatData($option);
 
             $attributeMapping = $this->getDataTransferMapping($rawData['code']) ?? null;
-            $attributeId = $attributeMapping[0]['externalId'];
+            $attributeId = $attributeMapping[0]['externalId'] ?? null;
 
             $optionMapping = $this->getDataTransferMapping($option['code'], self::ATTRIBUTE_OPTION_ENTITY_NAME) ?? null;
 

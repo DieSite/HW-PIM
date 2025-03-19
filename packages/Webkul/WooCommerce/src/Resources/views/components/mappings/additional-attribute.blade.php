@@ -15,13 +15,13 @@
 
 @pushOnce('scripts')
 <script type="text/x-template" id="v-additional-attribute-mapping-template">
-    <div class="mt-5 bg-white dark:bg-cherry-900 rounded-lg shadow-md border border-gray-300 dark:border-gray-800">
+    <div class="mt-5 bg-white dark:bg-cherry-900 rounded-lg shadow-md border border-gray-300 dark:border-gray-800 !mb-2">
         <table class="w-full table-auto">
             <thead class="bg-violet-50 dark:bg-cherry-800">
                 <tr class="text-left">
-                    <th class="px-4 py-2 text-md font-medium text-gray-700 dark:text-slate-50 " style="width: 45%;">
+                    <th class="px-4 py-2 text-md font-medium text-gray-700 dark:text-slate-50 mb-2" style="width: 45%;">
                         <p class="text-base text-gray-800 dark:text-gray-300 font-semibold">
-                            @lang('woocommerce::app.mappings.attribute-mapping.other-mapping.title')
+                            @lang('woocommerce::app.mappings.attribute-mapping.additional-field.title')
                         </p>
                    </th>
                     <th class="px-4 py-2 text-md font-medium text-gray-700 dark:text-slate-50"></th>
@@ -32,14 +32,13 @@
                     <tr class=" transition-all w-full border-b dark:border-cherry-800">
                         <!-- Field Name (Label) -->
                         <td class="px-4 py-2 text-sm " style="width: 45%;">
-
                             <p class="text-xs text-gray-500 py-2"><span class="icon-information text-violet-600"></span> @lang('woocommerce::app.mappings.attribute-mapping.other-mapping.desc')</p>
                         </td>
 
                         <!-- Mapped Field (Select Dropdown) -->
                         <td class="px-4 py-2" style="width: 50%;">
                             <x-admin::form.control-group>
-                                <v-taggingselect-handler
+                                <v-tagging-handler
                                     id="newAdditionalAttributes"
                                     name="newAdditionalAttributes"
                                     v-model="newAdditionalAttributes"
@@ -48,13 +47,10 @@
                                     placeholder="@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.placeholder')"
                                     ref="taggingField"
                                     @add-option="addAdditionalAttribute"
-                                    @select-option="addAdditionalAttribute"
-                                    list-route="{{ $route }}"
-                                    :entity-name="'attributes'"
                                     track-by="code"
                                     label-by="label"
                                 >
-                                </v-taggingselect-handler>
+                                </v-tagging-handler>
                                 <x-admin::form.control-group.error control-name="newAdditionalAttributes" />
                         </x-admin::form.control-group>
                         </td>

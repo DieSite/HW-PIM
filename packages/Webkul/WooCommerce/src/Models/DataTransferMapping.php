@@ -15,6 +15,6 @@ class DataTransferMapping extends Model implements DataTransferMappingContract
         'externalId',
         'jobInstanceId',
         'relatedId',
-        'credentialId',
+        'apiUrl',
     ];
 }

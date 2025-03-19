@@ -110,19 +110,21 @@ class CredentialController
 
         $method = 'GET';
 
-        $attributeMappings = $this->wooCommerceService->getAttributeMappings($id);
-        $defaultMappings = $this->wooCommerceService->getDefaultMappings($id);
-        $mediaMapping = $this->wooCommerceService->getMediaMappings($id);
         $credential = $this->credential;
+        $attributeMappings = $this->credential?->extras['settings'] ?? [];
+        $defaultMappings = $this->credential?->extras['defaults'] ?? [];
+        $mediaMapping = $this->credential?->extras['media'] ?? [];
         $standardAttributes = $this->attributeMappingHelper->getStandardFields();
         $customAttributes = $this->credential?->extras['custom_field'] ?? [];
         $enabled = $this->credential?->extras['enableSelect'] ?? 0;
+        $quickSettings = $this->credential?->extras['quicksettings'] ?? [];
+        $additionalAttributes = $this->credential?->extras['additional_attributes'] ?? [];
 
-        return view('woocommerce::credentials.edit.index', compact('credential', 'standardAttributes', 'defaultMappings', 'mediaMapping', 'customAttributes', 'attributeMappings', 'enabled', 'id'));
+        return view('woocommerce::credentials.edit.index', compact('credential', 'standardAttributes', 'defaultMappings', 'mediaMapping', 'customAttributes', 'attributeMappings', 'enabled', 'quickSettings', 'additionalAttributes', 'id'));
     }
 
     /**
-     * Update a Shopify credential by ID.
+     * Update a WooCommerce credential by ID.
      *
      * @return JsonResponse
      */
@@ -134,16 +136,30 @@ class CredentialController
             abort(404);
         }
 
-        $isCredentialsValid = $this->checkCredentials($this->credential);
+        $response = $this->checkCredentials($this->credential);
 
-        if (! $isCredentialsValid) {
+        if ($response['code'] !== 200) {
+            if ($response['code'] === 404) {
+                return redirect()
+                    ->route('woocommerce.credentials.edit', $id)
+                    ->withErrors([
+                        'shopUrl' => trans('woocommerce::app.woocommerce.credential.invalid'),
+                    ])
+                    ->withInput();
+            }
+
+            $message = $response['message'] ?? '';
+            $errorField = str_contains($message, 'key') ? 'consumerKey' : 'consumerSecret';
+
             return redirect()
                 ->route('woocommerce.credentials.edit', $id)
-                ->withErrors([
-                    'shopUrl'     => trans('woocommerce::app.woocommerce.credential.invalid'),
-                    'consumerKey' => trans('woocommerce::app.woocommerce.credential.invalid'),
-                ])
+                ->withErrors([$errorField => $message])
                 ->withInput();
+        }
+
+        // If defaultSet is 1, reset other credentials' defaultSet to 0
+        if (! empty($data['defaultSet']) && $data['defaultSet'] == 1) {
+            $this->credentialRepository->resetDefaultSet($id);
         }
 
         $this->credentialRepository->update($this->credential, $id);

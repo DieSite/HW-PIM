@@ -37,17 +37,19 @@ return [
                 'shopUrl'                   => 'Woocommerce URL',
                 'consumerKey'               => 'Consumer Key',
                 'active'                    => 'Is Active',
+                'defaultSet'                => 'Default for quick Export',
 
             ],
             'edit' => [
-                'title'    => 'Edit Credential',
-                'delete'   => 'Delete Credential',
-                'back-btn' => 'Back',
-                'update'   => 'Update',
-                'save'     => 'Save',
-                'settings' => 'Settings',
-                'active'   => 'Is Active',
-                'tab'      => [
+                'title'      => 'Edit Credential',
+                'delete'     => 'Delete Credential',
+                'back-btn'   => 'Back',
+                'update'     => 'Update',
+                'save'       => 'Save',
+                'settings'   => 'Settings',
+                'active'     => 'Is Active',
+                'defaultSet' => 'Default for quick Export',
+                'tab'        => [
                     'credential-settings' => [
                         'label'          => 'Credential',
                         'update-success' => 'Credentials updated successfully',
@@ -79,6 +81,17 @@ return [
             'success-response'  => 'Standard attribute mapping saved successfully.',
             'other'             => [
                 'title' => 'Other Mappings',
+            ],
+            'additional-field' => [
+                'title'          => 'Add Additional Meta Keys',
+                'add-success'    => 'Additional field is saved successfully',
+                'remove-success' => 'Additional field is removed successfully',
+            ],
+            'quick-export' => [
+                'title'                  => 'Quick Export Settings',
+                'quick-locale'           => 'Default locale for quick export',
+                'quick-channel'          => 'Default channel for quick export',
+                'quick-currency'         => 'Default currency for quick export',
             ],
             'images'            => [
                 'title'         => 'Image Mapping',
@@ -154,7 +167,7 @@ return [
                 'title'                => 'Other Mappings',
                 'label'                => 'WooCommerce product field code',
                 'enabled'              => 'Non Select Attribute send as Select Attribute (Recommended)',
-                'desc'                 => 'Please type the woocommerce field codes that must exist in the store, or select attributes to add additional product field mappings.',
+                'desc'                 => 'Please type the woocommerce field codes that must exist in the store.',
                 'custom-mapping'       => 'Attributes to be used as Custom Attributes (must add variants attributes here)',
                 'media-mapping'        => 'Attributes to be used as Images',
                 'field-type'           => 'Field Type',
@@ -162,7 +175,7 @@ return [
                 'add-success'          => 'Standard field added successfully',
                 'remove-success'       => 'Standard field removed successfully',
                 'flash-message'        => 'Please fill in both the attribute code and the type.',
-                'placeholder'          => 'Type woocommerce Field code or Choose UnoPim Attribute',
+                'placeholder'          => 'Type woocommerce field code and press enter to add',
                 'tooltip'              => 'This is additional attribute',
                 'success-update-field' => 'Standard Attribute Field updated successfully',
             ],

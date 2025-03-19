@@ -2,8 +2,11 @@
 
 namespace Webkul\WooCommerce\Providers;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Webkul\Theme\ViewRenderEventManager;
+use Webkul\WooCommerce\Console\Commands\WooCommerceInstaller;
 
 class WooCommerceServiceProvider extends ServiceProvider
 {
@@ -19,6 +22,23 @@ class WooCommerceServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__.'/../Resources/views', 'woocommerce');
         $this->loadTranslationsFrom(__DIR__.'/../Resources/lang', 'woocommerce');
         $this->app->register(ModuleServiceProvider::class);
+        Event::listen('catalog.product.update.after', 'Webkul\WooCommerce\Listeners\ProductSync@syncProductToWooCommerce');
+        Event::listen('catalog.product.create.after', 'Webkul\WooCommerce\Listeners\ProductSync@syncProductToWooCommerce');
+        Event::listen('catalog.product.delete.before', 'Webkul\WooCommerce\Listeners\ProductSync@deleteProductFromWooCommerce');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                WooCommerceInstaller::class,
+            ]);
+        }
+
+        Event::listen('unopim.admin.layout.head', static function (ViewRenderEventManager $viewRenderEventManager) {
+            $viewRenderEventManager->addTemplate('woocommerce::icon-style');
+        });
+
+        $this->publishes([
+            __DIR__.'/../../publishable' => public_path('themes/woocommerce'),
+        ], 'woocommerce-config');
     }
 
     /**
@@ -42,6 +62,14 @@ class WooCommerceServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(
             dirname(__DIR__).'/Config/exporters.php',
             'exporters'
+        );
+        $this->mergeConfigFrom(
+            dirname(__DIR__).'/Config/quick_exporters.php',
+            'quick_exporters'
+        );
+        $this->mergeConfigFrom(
+            dirname(__DIR__).'/Config/unopim-vite.php',
+            'unopim-vite.viters'
         );
     }
 }
