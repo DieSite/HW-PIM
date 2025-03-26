@@ -195,7 +195,9 @@ return [
         Webkul\Product\Providers\ProductServiceProvider::class,
         Webkul\Theme\Providers\ThemeServiceProvider::class,
         Webkul\User\Providers\UserServiceProvider::class,
-        Webkul\WooCommerce\Providers\WooCommerceServiceProvider::class
+        Webkul\WooCommerce\Providers\WooCommerceServiceProvider::class,
+        Webkul\DAM\Providers\DAMServiceProvider::class,
+
     ])->toArray(),
 
     /*
