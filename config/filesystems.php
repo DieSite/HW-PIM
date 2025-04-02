@@ -74,6 +74,13 @@ return [
             'url'    => env('AWS_URL'),
         ],
 
+        'sftp' => [
+            'driver'               => 'sftp',
+            'host'                 => env('SFTP_HOST'),
+            'username'             => env('SFTP_USERNAME'),
+            'password'             => env('SFTP_PASSWORD'),
+            'visibility'           => 'private',
+            'directory_visibility' => 'private',
+        ],
     ],
-
 ];
