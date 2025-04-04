@@ -541,7 +541,7 @@ return [
                 'select-parent-category' => 'Ouder',
                 'seo-details'            => 'SEO -details',
                 'settings'               => 'Instellingen',
-                'slug'                   => 'Naaktslak',
+                'slug'                   => 'Slug',
                 'title'                  => 'Categorie bewerken',
                 'visible-in-menu'        => 'Zichtbaar in menu',
                 'right-section'          => 'Configuratiegedeelte',
@@ -1847,7 +1847,7 @@ return [
                         'title'          => 'Oorsprong',
                         'title-info'     => 'Verzending Origin verwijst naar de locatie waar goederen of producten afkomstig zijn voordat ze naar hun bestemming worden getransporteerd.',
                         'vat-number'     => 'Btw-nummer',
-                        'zip'            => 'Ritssluiting',
+                        'zip'            => 'Postcode',
                     ],
                 ],
 
@@ -2131,8 +2131,8 @@ return [
                 ],
 
                 'boolean-options' => [
-                    'false' => 'Vals',
-                    'true'  => 'WAAR',
+                    'false' => 'False',
+                    'true'  => 'True',
                 ],
 
                 'date-options' => [
@@ -2390,9 +2390,9 @@ return [
     ],
 
     'validations' => [
-        'slug-being-used' => 'Deze slak wenst in categorieën of producten.',
-        'slug-reserved'   => 'Deze slak is gereserveerd.',
-        'invalid-locale'  => 'Ongeldige locaties:locales',
+        'slug-being-used' => 'Deze slug wordt gebruikt in categorieën of producten.',
+        'slug-reserved'   => 'Deze slug is gereserveerd.',
+        'invalid-locale'  => 'Ongeldige locaties :locales',
     ],
 
     'footer' => [
