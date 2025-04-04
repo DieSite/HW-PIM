@@ -15,6 +15,7 @@ use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
 use Maatwebsite\Excel\Concerns\WithUpserts;
 use Illuminate\Support\Facades\DB;
 use Storage;
+use Webkul\DAM\Models\Asset;
 
 class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithProgressBar, WithSkipDuplicates, WithCalculatedFormulas, WithUpserts
 {
@@ -188,14 +189,12 @@ class ProductsImport implements ToModel, WithHeadingRow, WithChunkReading, WithP
         $imageArray = explode('|', $images);
 
         foreach ($imageArray as $image) {
-            $cleanedImage = trim($image);
-            $cleanedImage = str_replace([' ', '&-'], ['-', ''], $cleanedImage);
-            $cleanedImage = preg_replace('/-+/', '-', $cleanedImage);
-            $cleanedImage = str_replace(['.-', '-.'], '-', $cleanedImage);
-            $cleanedImage = 'product-images/' . $cleanedImage;
+            $image = trim($image);
+            $image = str_replace('.jpg', '', $image);
 
-            if (Storage::disk('public')->exists($cleanedImage)) {
-                $processedImages[] = $cleanedImage;
+            $asset = Asset::where('file_name', $image)->first();
+            if ($asset) {
+                $processedImages[] = $asset->id;
             }
         }
 

@@ -93,9 +93,9 @@ return [
      */
     [
         'key'        => 'custom_imports',
-        'name'       => 'admin::app.components.layouts.sidebar.custom-imports',
+        'name'       => 'Import',
         'route'      => 'admin.custom.imports.index',
-        'sort'       => 7,  // Adjust this number based on where you want it to appear
+        'sort'       => 7,
         'icon'       => 'icon-import',
     ],
 

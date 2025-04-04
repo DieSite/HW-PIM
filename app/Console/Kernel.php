@@ -21,7 +21,9 @@ class Kernel extends ConsoleKernel
      *
      * @return void
      */
-    protected function schedule(Schedule $schedule) {}
+    protected function schedule(Schedule $schedule) {
+        $schedule->command('import:eurogros')->dailyAt('03:00')->timezone('Europe/Amsterdam');
+    }
 
     /**
      * Register the commands for the application.

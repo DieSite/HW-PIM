@@ -62,8 +62,8 @@ return [
             'name'              => 'Naam',
             'password'          => 'Wachtwoord',
             'profile-image'     => 'Profielfoto',
-            'save-btn'          => 'Bewaar account',
-            'title'             => 'Mijn rekening',
+            'save-btn'          => 'Opslaan',
+            'title'             => 'Mijn account',
             'ui-locale'         => 'UI lokaal',
             'update-success'    => 'Account met succes bijgewerkt',
             'upload-image-info' => 'Upload een profielafbeelding (110px x 110px)',
@@ -75,7 +75,7 @@ return [
         'index' => [
             'title'                       => 'Dashboard',
             'user-info'                   => 'Snel monitoren, wat \'s count in your PIM',
-            'user-name'                   => 'Hoi! :user_naam',
+            'user-name'                   => 'Hoi, :user_name !',
             'catalog-details'             => 'Catalogus',
             'total-families'              => 'Totaal gezinnen',
             'total-attributes'            => 'Totale attributen',
@@ -133,7 +133,7 @@ return [
                     'qty'                           => 'Hoeveelheid',
                     'qty-value'                     => ':qty beschikbaar',
                     'sku'                           => 'Sku',
-                    'sku-value'                     => 'Ski - :sku',
+                    'sku-value'                     => 'Sku - :sku',
                     'status'                        => 'Toestand',
                     'type'                          => 'Type',
                     'update-status'                 => 'Update status',
@@ -187,7 +187,7 @@ return [
                     'empty-info'        => 'Toevoegen :type producten terecht.',
                     'empty-title'       => 'Product toevoegen',
                     'image-placeholder' => 'product afbeelding',
-                    'sku'               => 'Ski - :sku',
+                    'sku'               => 'Sku - :sku',
                     'title'             => 'Verenigingen',
                 ],
 
@@ -201,7 +201,7 @@ return [
                         'image-placeholder'                  => 'product afbeelding',
                         'info'                               => 'Variatieproducten zijn afhankelijk van alle mogelijke combinatie van attribuut.',
                         'qty'                                => ':qty Aantal',
-                        'sku'                                => 'Ski - :sku',
+                        'sku'                                => 'Sku - :sku',
                         'title'                              => 'Variaties',
                         'variant-exists'                     => 'Deze variantcombinatie bestaat al of de SKU is al genomen.',
                         'variant-attribute-option-not-found' => 'Variant kenmerk of optie met waarde ":attributes" niet gevonden',
@@ -1542,7 +1542,7 @@ return [
 
                 'magic-ai' => [
                     'info'  => 'Stel magische AI ​​-opties in.',
-                    'title' => 'Magie die je hebt',
+                    'title' => 'Magic AI',
 
                     'settings' => [
                         'api-key'           => 'API sleutel',
@@ -1999,7 +1999,7 @@ return [
                 'account-title' => 'Rekening',
                 'app-version'   => 'Versie : :version',
                 'logout'        => 'Uitloggen',
-                'my-account'    => 'Mijn rekening',
+                'my-account'    => 'Mijn account',
                 'notifications' => 'Meldingen',
                 'visit-shop'    => 'Bezoek de winkel',
 
@@ -2016,7 +2016,7 @@ return [
                     'explore-all-products'            => 'Verken alle producten',
                     'orders'                          => 'Bevelen',
                     'products'                        => 'Producten',
-                    'sku'                             => 'Ski: :sku',
+                    'sku'                             => 'Sku: :sku',
                     'title'                           => 'Mega zoeken',
                 ],
             ],
@@ -2051,7 +2051,7 @@ return [
                 'exports'                  => 'Exporteren',
                 'invoices'                 => 'Facturen',
                 'locales'                  => 'Landen',
-                'magic-ai'                 => 'Magie die je hebt',
+                'magic-ai'                 => 'Magic AI',
                 'marketing'                => 'Marketing',
                 'mode'                     => 'Donkere modus',
                 'newsletter-subscriptions' => 'Nieuwsbrief Abonnementen',
@@ -2189,7 +2189,7 @@ return [
                 'empty-title'   => 'Geen producten gevonden',
                 'product-image' => 'product afbeelding',
                 'qty'           => ':qty beschikbaar',
-                'sku'           => 'Ski - :sku',
+                'sku'           => 'Sku - :sku',
                 'title'         => 'Selecteer producten',
             ],
         ],
@@ -2197,7 +2197,7 @@ return [
         'media' => [
             'images' => [
                 'add-image-btn'     => 'Voeg afbeelding toe',
-                'ai-add-image-btn'  => 'Magie die je hebt',
+                'ai-add-image-btn'  => 'Magic AI',
                 'ai-btn-info'       => 'Afbeelding genereren',
                 'allowed-types'     => 'PNG, JPEG, JPG',
                 'not-allowed-error' => 'Alleen afbeeldingenbestanden (.JPEG, .JPG, .png, ..) zijn toegestaan.',
@@ -2246,7 +2246,7 @@ return [
         ],
 
         'tinymce' => [
-            'ai-btn-tile' => 'Magie die je hebt',
+            'ai-btn-tile' => 'Magic AI',
 
             'ai-generation' => [
                 'apply'                  => 'Toepassen',
@@ -2304,7 +2304,7 @@ return [
         'imports'                  => 'Importeren',
         'invoices'                 => 'Facturen',
         'locales'                  => 'Landen',
-        'magic-ai'                 => 'Magie die je hebt',
+        'magic-ai'                 => 'Magic AI',
         'marketing'                => 'Marketing',
         'newsletter-subscriptions' => 'Nieuwsbrief Abonnementen',
         'note'                     => 'Opmerking',

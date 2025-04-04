@@ -7,11 +7,7 @@
     <div class="flex gap-4 justify-between items-center mb-5 max-sm:flex-wrap">
         <div class="grid gap-1.5">
             <p class="text-xl text-zinc-800 dark:text-slate-50 font-bold !leading-normal">
-                @lang('admin::app.dashboard.index.user-name', ['user_name' => auth()->guard('admin')->user()->name]),
-            </p>
-
-            <p class="text-sm text-zinc-600 !leading-normal dark:text-slate-300">
-                @lang('admin::app.dashboard.index.user-info')
+                @lang('admin::app.dashboard.index.user-name', ['user_name' => auth()->guard('admin')->user()->name])
             </p>
         </div>
     </div>

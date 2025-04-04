@@ -5,16 +5,6 @@
             <h1 class="text-2xl text-gray-800 dark:text-white font-bold">
                 Product Import
             </h1>
-
-            <!-- Queue Statistics -->
-            <div class="flex gap-4">
-                <div class="bg-white dark:bg-cherry-800 rounded-lg shadow p-4">
-                    <span class="block text-sm text-gray-500 dark:text-gray-400">Pending Jobs</span>
-                    <span class="text-2xl font-bold text-violet-600 dark:text-violet-400">
-                        {{ $queue['pending'] }}
-                    </span>
-                </div>
-            </div>
         </div>
 
         <!-- Import Section -->
@@ -35,17 +25,18 @@
                 <div class="flex items-center gap-4">
                     <button
                         type="submit"
-                        class="primary-button"
+                        class="primary-button @if($queue['pending'] > 0) opacity-50 cursor-not-allowed @endif"
+                        @if($queue['pending'] > 0) disabled @endif
                     >
                         <span class="flex items-center gap-1.5">
                             <i class="icon-upload text-xl"></i>
-                            Import Products
+                            Import Producten
                         </span>
                     </button>
 
                     @if($queue['pending'] > 0)
                         <span class="text-sm text-gray-500 dark:text-gray-400">
-                            There are pending imports in the queue
+                            Een import is aan het draaien. Dit kan even duren.
                         </span>
                     @endif
                 </div>
