@@ -4,9 +4,9 @@ namespace Webkul\DataTransfer\Buffer;
 
 use Maatwebsite\Excel\Files\TemporaryFile;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use Webkul\DataTransfer\Jobs\Export\File\SpoutWriterFactory;
 use Webkul\DataTransfer\Jobs\Export\File\TemporaryFileFactory;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class FileBuffer
 {
@@ -31,58 +31,58 @@ class FileBuffer
     protected $fileHandle;
 
     protected array $columnMap = [
-        'sku' => 'Code',
-        'ean' => 'EAN',
-        'categories' => 'Categorie',
-        'productnaam' => 'Productnaam',
-        'collectie' => 'Collectie',
-        'kwaliteit' => 'Kwaliteit',
-        'maat' => 'Maat',
-        'onderkleed' => 'Onderkleed',
-        'voorraad_eurogros' => 'Voorraad Eurogros',
+        'sku'                          => 'Code',
+        'ean'                          => 'EAN',
+        'categories'                   => 'Categorie',
+        'productnaam'                  => 'Productnaam',
+        'collectie'                    => 'Collectie',
+        'kwaliteit'                    => 'Kwaliteit',
+        'maat'                         => 'Maat',
+        'onderkleed'                   => 'Onderkleed',
+        'voorraad_eurogros'            => 'Voorraad Eurogros',
         'voorraad_5_korting_handmatig' => 'voorraad 5% korting handmatig',
-        'voorraad_5_korting' => 'voorraad 5% korting',
-        'voorraad_hw_5_korting' => 'voorraad HW 5% korting',
-        'uitverkoop_15_korting' => 'uitverkoop 15% korting',
-        'dob' => 'DOB',
-        'in_collectie' => 'In Collectie',
-        'afwerking' => 'Afwerking',
-        'maximale_breedte' => 'Maximale breedte',
-        'maximale_breedte_cm' => 'Maximale breedte met cm',
-        'maximale_lengte' => 'Maximale lengte',
-        'maximale_lengte_cm' => 'Maximale lengte met cm',
-        'maximale_diameter' => 'Maximale diameter',
-        'maximale_diameter_cm' => 'Maximale diameter met cm',
-        'vorm' => 'Vorm',
-        'levertijd_voorradig' => 'Levertijd voorradig',
-        'levertijd_niet_voorradig' => 'Levertijd niet voorradig',
-        'beschrijving_l' => 'Beschrijving L',
-        'beschrijving_k' => 'Beschrijving K',
-        'prijs (EUR)' => 'Prijs',
-        'prijs2 (EUR)' => 'Prijs2',
-        'sale_prijs (EUR)' => 'Sale Prijs',
-        'prijs_per_m2 (EUR)' => 'Prijs per m2',
-        'sale_prijs_per_m2 (EUR)' => 'Sale Prijs per m2',
-        'minimale_prijs (EUR)' => 'Minimale Prijs',
-        'prijs_rond_m2 (EUR)' => 'Prijs rond m2',
-        'sale_prijs_rond_m2 (EUR)' => 'Sale Prijs rond m2',
-        'afbeelding' => 'Afbeelding',
-        'afbeelding_zonder_logo' => 'Afbeelding zonder logo',
-        'materiaal' => 'Materiaal',
-        'loopvlak' => 'Loopvlak',
-        'poolhoogte' => 'Poolhoogte',
-        'productie_techniek' => 'Productie techniek',
-        'randafwerking' => 'Randafwerking',
-        'productieland' => 'Productieland',
-        'garantie' => 'Garantie',
-        'kleuren' => 'Kleuren',
-        'patroon' => 'Patroon',
-        'gewicht' => 'Gewicht',
-        'onderhoudsadvies' => 'Onderhoudsadvies',
-        'gebruik' => 'Gebruik',
-        'sorteer_volgorde' => 'Sorteer volgorde',
-        'meta_titel' => 'Meta titel',
-        'meta_beschrijving' => 'Meta beschrijving'
+        'voorraad_5_korting'           => 'voorraad 5% korting',
+        'voorraad_hw_5_korting'        => 'voorraad HW 5% korting',
+        'uitverkoop_15_korting'        => 'uitverkoop 15% korting',
+        'dob'                          => 'DOB',
+        'in_collectie'                 => 'In Collectie',
+        'afwerking'                    => 'Afwerking',
+        'maximale_breedte'             => 'Maximale breedte',
+        'maximale_breedte_cm'          => 'Maximale breedte met cm',
+        'maximale_lengte'              => 'Maximale lengte',
+        'maximale_lengte_cm'           => 'Maximale lengte met cm',
+        'maximale_diameter'            => 'Maximale diameter',
+        'maximale_diameter_cm'         => 'Maximale diameter met cm',
+        'vorm'                         => 'Vorm',
+        'levertijd_voorradig'          => 'Levertijd voorradig',
+        'levertijd_niet_voorradig'     => 'Levertijd niet voorradig',
+        'beschrijving_l'               => 'Beschrijving L',
+        'beschrijving_k'               => 'Beschrijving K',
+        'prijs (EUR)'                  => 'Prijs',
+        'prijs2 (EUR)'                 => 'Prijs2',
+        'sale_prijs (EUR)'             => 'Sale Prijs',
+        'prijs_per_m2 (EUR)'           => 'Prijs per m2',
+        'sale_prijs_per_m2 (EUR)'      => 'Sale Prijs per m2',
+        'minimale_prijs (EUR)'         => 'Minimale Prijs',
+        'prijs_rond_m2 (EUR)'          => 'Prijs rond m2',
+        'sale_prijs_rond_m2 (EUR)'     => 'Sale Prijs rond m2',
+        'afbeelding'                   => 'Afbeelding',
+        'afbeelding_zonder_logo'       => 'Afbeelding zonder logo',
+        'materiaal'                    => 'Materiaal',
+        'loopvlak'                     => 'Loopvlak',
+        'poolhoogte'                   => 'Poolhoogte',
+        'productie_techniek'           => 'Productie techniek',
+        'randafwerking'                => 'Randafwerking',
+        'productieland'                => 'Productieland',
+        'garantie'                     => 'Garantie',
+        'kleuren'                      => 'Kleuren',
+        'patroon'                      => 'Patroon',
+        'gewicht'                      => 'Gewicht',
+        'onderhoudsadvies'             => 'Onderhoudsadvies',
+        'gebruik'                      => 'Gebruik',
+        'sorteer_volgorde'             => 'Sorteer volgorde',
+        'meta_titel'                   => 'Meta titel',
+        'meta_beschrijving'            => 'Meta beschrijving',
     ];
 
     /**
@@ -149,9 +149,9 @@ class FileBuffer
 
             $sheet->getStyle($cell)->applyFromArray([
                 'fill' => [
-                    'fillType' => Fill::FILL_SOLID,
-                    'startColor' => ['rgb' => '9c9c9c']
-                ]
+                    'fillType'   => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => '9c9c9c'],
+                ],
             ]);
 
             $column++;

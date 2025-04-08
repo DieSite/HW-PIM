@@ -10,7 +10,6 @@ use Webkul\Attribute\Database\Factories\AttributeFactory;
 use Webkul\Core\Eloquent\TranslatableModel;
 use Webkul\Core\Rules\BooleanString;
 use Webkul\Core\Rules\Decimal;
-use Webkul\Core\Rules\Slug;
 use Webkul\HistoryControl\Contracts\HistoryAuditable as HistoryContract;
 use Webkul\HistoryControl\Traits\HistoryTrait;
 use Webkul\Product\Validator\Rule\AttributeOptionRule;

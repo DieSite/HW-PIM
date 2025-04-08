@@ -193,7 +193,7 @@ return [
             'timeout'             => 60,
             'nice'                => 0,
         ],
-        
+
         'database-supervisor' => [
             'connection'          => 'database',
             'queue'               => ['default'],

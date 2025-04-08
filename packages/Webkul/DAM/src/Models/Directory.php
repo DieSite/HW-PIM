@@ -3,7 +3,6 @@
 namespace Webkul\DAM\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 use Kalnoy\Nestedset\NodeTrait;
 use Webkul\DAM\Contracts\Directory as DirectoryContract;
 use Webkul\DAM\Database\Eloquent\Builder;

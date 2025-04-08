@@ -5,7 +5,6 @@ namespace Webkul\Admin\Http\Requests;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\ValidationException;
-use Webkul\Core\Rules\Slug;
 use Webkul\Product\Repositories\ProductRepository;
 
 class ProductForm extends FormRequest

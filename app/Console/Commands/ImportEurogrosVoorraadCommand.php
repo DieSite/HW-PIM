@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Imports\EurogrosVoorraadImport;
 use App\Jobs\ImportVoorraadEurogrosJob;
 use Illuminate\Console\Command;
 

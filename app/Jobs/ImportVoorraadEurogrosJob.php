@@ -16,6 +16,7 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $path = 'private/eurogros/Voorraad_Eurogros.csv';
+
     public function handle(): void
     {
         if (! $this->pullFromSftp()) {

@@ -28,6 +28,6 @@ class ImportProductsJob implements ShouldQueue
 
     public function failed(\Throwable $exception)
     {
-        \Log::error('Import failed: ' . $exception->getMessage());
+        \Log::error('Import failed: '.$exception->getMessage());
     }
 }

@@ -4,7 +4,6 @@ namespace Webkul\DataTransfer\Jobs\Export\File;
 
 use Webkul\DataTransfer\Buffer\BufferInterface;
 use Webkul\DataTransfer\Buffer\FileBuffer;
-use PhpOffice\PhpSpreadsheet\Style\Color;
 
 /**
  * Puts items into a buffer and calculate headers during a flat file export

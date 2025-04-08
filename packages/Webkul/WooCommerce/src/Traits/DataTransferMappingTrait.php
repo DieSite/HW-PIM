@@ -93,7 +93,7 @@ trait DataTransferMappingTrait
             return [$woocommerceKey => $item[$unoPimKey]];
         })->collapse()->toArray();
     }
-    
+
     // TODO -> Remove this function and use new apiendpoint getProductWithSku to create or update product based on if it exists.
     protected function handleAfterApiRequest($item, $result, $attributeId = null, $mapping = null)
     {

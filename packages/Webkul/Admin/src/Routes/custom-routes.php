@@ -1,7 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CustomImportController;
+use Illuminate\Support\Facades\Route;
 
 Route::group(['middleware' => ['web', 'admin']], function () {
     Route::prefix('custom')->group(function () {
