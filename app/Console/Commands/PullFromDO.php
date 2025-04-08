@@ -86,13 +86,14 @@ class PullFromDO extends Command
         $assetIds = [];
         $this->withProgressBar($filesPath, function ($filePath) use (&$assetIds) {
             $info = pathinfo($filePath);
-            $asset = Asset::create([
+            $asset = Asset::createOrFirst([
+                'path' => $filePath,
+            ], [
                 'file_name' => $info['filename'],
                 'file_type' => $this->getFileType($filePath),
                 'file_size' => $this->storage->size($filePath),
                 'mime_type' => $this->storage->mimeType($filePath),
                 'extension' => \File::extension($filePath),
-                'path'      => $filePath,
             ]);
             $assetIds[] = $asset->id;
         });

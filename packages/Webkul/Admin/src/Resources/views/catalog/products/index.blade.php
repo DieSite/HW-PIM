@@ -145,6 +145,9 @@
                             <p class="text-gray-600 dark:text-gray-300">
                                 @{{ "@lang('admin::app.catalog.products.index.datagrid.id-value')".replace(':id', record.product_id) }}
                             </p>
+                            <p class="text-gray-600 dark:text-gray-300">
+                                @{{ record.name }}
+                            </p>
                             <p
                                 class="text-gray-600 dark:text-gray-300"
                             >
@@ -176,7 +179,7 @@
                     <!-- Status, Category, Type Columns -->
                     <div class="flex gap-x-4 justify-between items-center">
                         <div class="flex flex-col gap-1.5">
-                            
+
                         </div>
 
                         <div class="flex gap-1.5 items-center">
@@ -192,7 +195,7 @@
                         </div>
                     </div>
 
-                    
+
                 </div>
             </template>
 
@@ -280,7 +283,7 @@
 
                                         <x-admin::form.control-group.error control-name="type" />
                                     </x-admin::form.control-group>
-                                    
+
                                     @php
                                         $types = [];
                                         foreach($families as $family) {
@@ -289,11 +292,11 @@
                                                 'label' => ! empty($family->name) ? $family->name : '[' . $family->code . ']',
                                             ];
                                         }
-                                        
+
                                         $typesJson = json_encode($types);
 
                                     @endphp
-                                    
+
                                     <!-- Attribute Family Id -->
                                     <x-admin::form.control-group>
                                         <x-admin::form.control-group.label class="required">
@@ -309,7 +312,7 @@
                                             track-by="id"
                                             label-by="label"
                                         >
-                                            
+
                                         </x-admin::form.control-group.control>
 
                                         <x-admin::form.control-group.error control-name="attribute_family_id" />
