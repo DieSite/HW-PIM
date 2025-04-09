@@ -98,7 +98,9 @@ class PullFromDO extends Command
             $assetIds[] = $asset->id;
         });
 
-        $this->mappedWithDirectory($assetIds, $directory);
+        collect($assetIds)->chunk(500)->each(function ($chunk) use ($directory) {
+            $this->mappedWithDirectory($chunk, $directory);
+        });
     }
 
     private function getFileType($filePath): string
