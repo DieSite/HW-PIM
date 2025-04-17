@@ -55,6 +55,11 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
                 'products.status',
                 'products.type',
                 'products.values->common->productnaam as productnaam',
+                'products.values->common->voorraad_hw_5_korting as voorraad_hw_5_korting',
+                'products.values->common->voorraad_5_korting as voorraad_5_korting',
+                'products.values->common->voorraad_5_korting_handmatig as voorraad_5_korting_handmatig',
+                'products.values->common->voorraad_eurogros as voorraad_eurogros',
+                'products.values->common->productnaam as productnaam',
                 'parent_products.sku as parent',
                 DB::raw('(CASE WHEN '.$tablePrefix.'attribute_family_name.name IS NULL OR CHAR_LENGTH(TRIM('.$tablePrefix.'attribute_family_name.name)) < 1 THEN CONCAT("[", '.$tablePrefix.'af.code,"]") ELSE '.$tablePrefix.'attribute_family_name.name END) as attribute_family')
             );
@@ -83,6 +88,49 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
             'searchable' => true,
             'filterable' => true,
             'sortable'   => true,
+        ]);
+
+        $this->addColumn([
+            'index'      => 'voorraad_hw_5_korting',
+            'label'      => 'Voorraad (Experience center)',
+            'type'       => 'integer',
+            'searchable' => false,
+            'filterable' => false,
+            'sortable'   => false,
+        ]);
+
+        $this->addColumn([
+            'index'      => 'voorraad_5_korting',
+            'label'      => 'voorraad_5_korting',
+            'type'       => 'integer',
+            'searchable' => false,
+            'filterable' => false,
+            'sortable'   => false,
+        ]);
+        $this->addColumn([
+            'index'      => 'voorraad_5_korting_handmatig',
+            'label'      => 'voorraad_5_korting_handmatig',
+            'type'       => 'integer',
+            'searchable' => false,
+            'filterable' => false,
+            'sortable'   => false,
+        ]);
+        $this->addColumn([
+            'index'      => 'voorraad_eurogros',
+            'label'      => 'voorraad_eurogros',
+            'type'       => 'integer',
+            'searchable' => false,
+            'filterable' => false,
+            'sortable'   => false,
+        ]);
+
+        $this->addColumn([
+            'index'      => 'external_stock',
+            'label'      => 'Externe voorraad',
+            'type'       => 'integer',
+            'searchable' => false,
+            'filterable' => false,
+            'sortable'   => false,
         ]);
 
         $this->addColumn([

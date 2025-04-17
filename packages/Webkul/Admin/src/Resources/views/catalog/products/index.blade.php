@@ -40,10 +40,10 @@
 
         <template #header="{ columns, records, sortPage, selectAllRecords, applied, isLoading}">
             <template v-if="! isLoading">
-                <div class="row grid grid-cols-[2fr_1fr_1fr] grid-rows-1 items-center px-4 py-2.5 border-b bg-violet-50 dark:bg-cherry-900 dark:border-cherry-800 ">
+                <div class="row grid grid-cols-[2fr_1fr_1fr_1fr] grid-rows-1 items-center px-4 py-2.5 border-b bg-violet-50 dark:bg-cherry-900 dark:border-cherry-800 ">
                     <div
                         class="flex gap-2.5 items-center select-none"
-                        v-for="(columnGroup, index) in [['product_id', 'sku', 'attribute_family'], ['status', 'type']]"
+                        v-for="(columnGroup, index) in [['product_id', 'sku', 'attribute_family'], ['voorraad_hw_5_korting'], ['status', 'type']]"
                     >
                         @if ($hasPermission)
                             <label
@@ -119,7 +119,7 @@
         <template #body="{ columns, records, performAction, setCurrentSelectionMode, applied, isLoading }">
             <template v-if="! isLoading">
                 <div
-                    class="row grid grid-cols-[2fr_1fr_1fr] grid-rows-1 px-4 py-2.5 border-b dark:border-cherry-800  transition-all hover:bg-violet-50 hover:bg-opacity-30 dark:hover:bg-cherry-800"
+                    class="row grid grid-cols-[2fr_1fr_1fr_1fr] grid-rows-1 px-4 py-2.5 border-b dark:border-cherry-800  transition-all hover:bg-violet-50 hover:bg-opacity-30 dark:hover:bg-cherry-800"
                     v-for="record in records"
                 >
                     <!-- Name, SKU, Attribute Family Columns -->
@@ -152,6 +152,16 @@
                                 class="text-gray-600 dark:text-gray-300"
                             >
                                 @{{ "@lang('admin::app.catalog.products.index.datagrid.sku-value')".replace(':sku', record.sku) }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-1.5 overflow-hidden">
+                        <div class="flex flex-col gap-1.5">
+                            <p
+                                class="text-gray-600 dark:text-gray-300"
+                            >
+                                @{{ parseInt(record.voorraad_5_korting ?? 0) + parseInt(record.voorraad_5_korting_handmatig ?? 0) + parseInt(record.voorraad_eurogros ?? 0) }} (@{{ record.voorraad_hw_5_korting ?? 0 }})
                             </p>
                         </div>
                     </div>
