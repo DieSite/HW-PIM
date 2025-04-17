@@ -60,6 +60,8 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
                 'products.values->common->voorraad_5_korting_handmatig as voorraad_5_korting_handmatig',
                 'products.values->common->voorraad_eurogros as voorraad_eurogros',
                 'products.values->common->productnaam as productnaam',
+                'products.values->common->onderkleed as onderkleed',
+                'products.values->common->maat as maat',
                 'parent_products.sku as parent',
                 DB::raw('(CASE WHEN '.$tablePrefix.'attribute_family_name.name IS NULL OR CHAR_LENGTH(TRIM('.$tablePrefix.'attribute_family_name.name)) < 1 THEN CONCAT("[", '.$tablePrefix.'af.code,"]") ELSE '.$tablePrefix.'attribute_family_name.name END) as attribute_family')
             );

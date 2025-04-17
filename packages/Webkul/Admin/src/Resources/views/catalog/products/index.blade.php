@@ -145,6 +145,12 @@
                             <a :href="'/admin/catalog/products/edit/' + record.product_id" class="text-gray-600 dark:text-gray-300 underline">
                                 @{{ record.productnaam }}
                             </a>
+                            <p class="text-gray-600 dark:text-gray-300" v-if="record.maat && record.maat !== 'null'">
+                                @{{ record.maat }}
+                            </p>
+                            <p class="text-gray-600 dark:text-gray-300 capitalize" v-if="record.onderkleed">
+                                @{{ record.onderkleed.replace('_', ' ') }}
+                            </p>
                             <p class="text-gray-600 dark:text-gray-300">
                                 @{{ "@lang('admin::app.catalog.products.index.datagrid.id-value')".replace(':id', record.product_id) }}
                             </p>
@@ -161,7 +167,8 @@
                             <p
                                 class="text-gray-600 dark:text-gray-300"
                             >
-                                @{{ parseInt(record.voorraad_5_korting ?? 0) + parseInt(record.voorraad_5_korting_handmatig ?? 0) + parseInt(record.voorraad_eurogros ?? 0) }} (@{{ record.voorraad_hw_5_korting ?? 0 }})
+                                @{{ (Number.isInteger(record.voorraad_5_korting) ? record.voorraad_5_korting : 0) + (Number.isInteger(record.voorraad_5_korting_handmatig) ? record.voorraad_5_korting_handmatig : 0) + (Number.isInteger(record.voorraad_eurogros) ? record.voorraad_eurogros : 0) }}
+                                <span :class='{"text-white bg-green-600": record.voorraad_hw_5_korting > 0}'>(@{{ record.voorraad_hw_5_korting ?? 0 }})</span>
                             </p>
                         </div>
                     </div>
