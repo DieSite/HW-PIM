@@ -22,7 +22,7 @@
                         @lang('admin::app.catalog.products.edit.types.configurable.info')
                     </p>
                 </div>
-                
+
                 <!-- Add Buttons -->
                 <div class="flex gap-x-1 items-center justify-between w-full">
                     <div></div>
@@ -87,7 +87,7 @@
                                 @lang('admin::app.catalog.products.edit.types.configurable.create.title')
                             </p>
                         </x-slot>
-        
+
                         <!-- Modal Content -->
                         <x-slot:content>
                             <x-admin::form.control-group>
@@ -131,12 +131,12 @@
                                 </v-error-message>
                             </x-admin::form.control-group>
                         </x-slot>
-        
+
                         <!-- Modal Footer -->
                         <x-slot:footer>
                             <!-- Modal Submission -->
                             <div class="flex gap-x-2.5 items-center">
-                                <button 
+                                <button
                                     type="submit"
                                     class="primary-button"
                                 >
@@ -207,7 +207,7 @@
                                                     <x-admin::form.control-group.label>
                                                         @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-sku')
                                                     </x-admin::form.control-group.label>
-                        
+
                                                     <div class="relative">
                                                         <span class="absolute ltr:left-4 rtl:right-4 top-1/2 -translate-y-1/2 text-gray-500">
                                                             {{ core()->currencySymbol(core()->getBaseCurrencyCode()) }}
@@ -227,7 +227,7 @@
                                                     @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-btn')
                                                 </button>
                                             </div>
-                    
+
                                             <x-admin::form.control-group.error control-name="price" />
                                         </div>
                                     </template>
@@ -256,7 +256,7 @@
                                                     <x-admin::form.control-group.label>
                                                         @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-weight')
                                                     </x-admin::form.control-group.label>
-                        
+
                                                     <div class="relative">
                                                         <x-admin::form.control-group.control
                                                             type="text"
@@ -272,7 +272,7 @@
                                                     @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-btn')
                                                 </button>
                                             </div>
-                    
+
                                             <x-admin::form.control-group.error control-name="weight" />
                                         </div>
                                     </template>
@@ -299,7 +299,7 @@
                                                     @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-btn')
                                                 </button>
                                             </div>
-                    
+
                                             <x-admin::form.control-group.error control-name="name" />
                                         </div>
                                     </template>
@@ -338,7 +338,7 @@
                                                     @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-btn')
                                                 </button>
                                             </div>
-                    
+
                                             <x-admin::form.control-group.error control-name="name" />
                                         </div>
                                     </template>
@@ -459,9 +459,9 @@
                                 </template>
 
                                 <template v-if="selectedType == 'editName'">
-                                    <x-admin::form.control-group 
+                                    <x-admin::form.control-group
                                         class="flex-1 mb-0"
-                                        ::class="{ 
+                                        ::class="{
                                             'max-w-[115px]' : selectedType !== 'editName',
                                             '!mb-0': selectedType === 'editName'
                                         }"
@@ -493,9 +493,9 @@
                                 </template>
 
                                 <template v-if="selectedType == 'editSku'">
-                                    <x-admin::form.control-group 
+                                    <x-admin::form.control-group
                                         class="flex-1 mb-0"
-                                        ::class="{ 
+                                        ::class="{
                                             'max-w-[115px]' : selectedType !== 'editSku',
                                             '!mb-0': selectedType === 'editSku'
                                         }"
@@ -526,7 +526,7 @@
                                         </v-error-message>
                                     </x-admin::form.control-group>
                                 </template>
-                                
+
                                 <template v-if="selectedType == 'addImages'">
                                     <v-media-images
                                         name="images"
@@ -545,7 +545,7 @@
     </script>
 
     <!-- Variation Item Template -->
-    <script type="text/x-template" id="v-product-variation-item-template"> 
+    <script type="text/x-template" id="v-product-variation-item-template">
         <div class="flex gap-2.5 justify-between px-4 py-6 border-b border-slate-300 dark:border-gray-800">
 
             <!-- Information -->
@@ -605,6 +605,12 @@
 
                 <!-- Details -->
                 <div class="grid gap-1.5 place-content-start">
+                    <p class="text-gray-600 dark:text-gray-300" v-if="variant.values.common.maat">
+                        @{{ variant.values.common.maat }}
+                    </p>
+                    <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values.common.onderkleed">
+                        @{{ variant.values.common.onderkleed.replace('_', ' ') }}
+                    </p>
                     <p class="text-gray-600 dark:text-gray-300">
                         @{{ "@lang('admin::app.catalog.products.edit.types.configurable.sku')".replace(':sku', variant.sku) }}
                     </p>
@@ -696,7 +702,7 @@
                                             <x-admin::form.control-group.label class="required">
                                                 @lang('admin::app.catalog.products.edit.types.configurable.edit.sku')
                                             </x-admin::form.control-group.label>
-                
+
                                             <x-admin::form.control-group.control
                                                 type="text"
                                                 name="sku"
@@ -704,7 +710,7 @@
                                                 ::value="variant.sku"
                                                 :label="trans('admin::app.catalog.products.edit.types.configurable.edit.sku')"
                                             />
-                
+
                                             <x-admin::form.control-group.error control-name="sku" />
                                         </x-admin::form.control-group>
 
@@ -747,7 +753,7 @@
                                             @lang('admin::app.catalog.products.edit.types.configurable.edit.edit-info')
 
                                             <a
-                                                :href="'{{ route('admin.catalog.products.edit', ':id') }}'.replace(':id', variant.id)" 
+                                                :href="'{{ route('admin.catalog.products.edit', ':id') }}'.replace(':id', variant.id)"
                                                 class="inline-block text-violet-700 hover:text-violet-700 hover:underline"
                                                 target="_blank"
                                             >
