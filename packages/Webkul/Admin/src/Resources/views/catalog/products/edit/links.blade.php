@@ -5,7 +5,7 @@
 ])
 
 {!! view_render_event('unopim.admin.catalog.product.edit.form.links.before', ['product' => $product]) !!}
-    
+
 <v-product-links></v-product-links>
 
 {!! view_render_event('unopim.admin.catalog.product.edit.form.links.after', ['product' => $product]) !!}
@@ -34,7 +34,7 @@
                             >
                             </p>
                         </div>
-                        
+
                         <!-- Add Button -->
                         <div class="flex gap-x-1 items-center">
                             <div
@@ -45,7 +45,7 @@
                             </div>
                         </div>
                     </div>
-        
+
                     <!-- Product Listing -->
                     <div
                         class="grid"
@@ -69,16 +69,16 @@
                                     class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded overflow-hidden"
                                     :class="{'border border-dashed border-gray-300 dark:border-cherry-800 dark:invert dark:mix-blend-exclusion': ! product?.image, 'w-[60px]': product?.image}"
                                 >
-                                    <template v-if="! product?.image">
+                                    <template v-if="! product?.afbeelding">
                                         <img src="{{ unopim_asset('images/product-placeholders/front.svg') }}">
-                                    
+
                                         <p class="w-full absolute bottom-1.5 text-[6px] text-gray-400 text-center font-semibold">
                                             @lang('admin::app.catalog.products.edit.links.image-placeholder')
                                         </p>
                                     </template>
-                
+
                                     <template v-else>
-                                        <img :src="product?.image" class="w-full h-full object-cover object-top">
+                                        <img :src="product?.afbeelding" class="w-full h-full object-cover object-top">
                                     </template>
                                 </div>
 
@@ -204,7 +204,7 @@
                     const existingProducts = this.addedProducts[this.selectedType] || [];
                     const existingSkus = new Set(existingProducts.map(product => product.sku));
                     const newProducts = selectedProducts.filter(product => !existingSkus.has(product.sku));
-                    
+
                     if (newProducts.length > 0) {
                         this.addedProducts[this.selectedType] = [...existingProducts, ...newProducts];
                     }
