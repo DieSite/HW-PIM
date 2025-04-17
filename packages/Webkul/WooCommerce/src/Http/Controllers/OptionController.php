@@ -487,7 +487,7 @@ class OptionController extends Controller
         $page = request()->get('page');
         $query = request()->get('query') ?? '';
         $queryParams = request()->except(['page', 'query', 'entityName']);
-        $attributeTypes = ['image'];
+        $attributeTypes = ['image', 'asset'];
 
         $options = $this->getOptionsByParams($entityName, $page, $query, $queryParams, $attributeTypes);
         $currentLocaleCode = core()->getRequestedLocaleCode();
