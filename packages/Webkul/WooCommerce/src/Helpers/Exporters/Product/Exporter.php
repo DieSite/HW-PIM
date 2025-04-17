@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Attribute\Repositories\AttributeRepository;
 use Webkul\DataTransfer\Contracts\JobTrackBatch as JobTrackBatchContract;
@@ -138,7 +139,6 @@ class Exporter extends AbstractExporter
         protected ProductRepository $productRepository
     ) {
         parent::__construct($exportBatchRepository, $exportFileBuffer);
-
         $this->initAttributes();
     }
 
@@ -227,7 +227,7 @@ class Exporter extends AbstractExporter
         $this->enableSelect = ($this->credential['extras']['enableSelect'] ?? 0) == 1;
 
         /* Find attributeCodes using attributetypes */
-        $this->imageAttributeCodes = $this->getAttributeCodesFromType('image');
+        $this->imageAttributeCodes = $this->getAttributeCodesFromType('asset');
         $this->selectAttributeCodes = $this->getAttributeCodesFromType('select');
         $this->multiSelectVariation = $this->getAttributeCodesFromType('multiselect');
         $this->booleanVariation = $this->getAttributeCodesFromType('boolean');
@@ -530,7 +530,12 @@ class Exporter extends AbstractExporter
     protected function formatImageData($code, $value, $imagesToExport, $itemCode, $isVariant = false)
     {
         $getKey = array_search($code, $imagesToExport);
-        $imageUrl = $this->generateImageUrl($value);
+
+        $imageValues = str_contains($value, ',') ? explode(',', $value) : [$value];
+
+        foreach ($imageValues as $value) {
+            $imageUrl = $this->generateImageUrl($value);
+        }
 
         if (! $imageUrl) {
             return [];
@@ -553,6 +558,7 @@ class Exporter extends AbstractExporter
         $attributes = $this->formatAttributes($item['values']);
 
         $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
+
         $formatted = [
             'attributes' => [],
         ];
@@ -698,13 +704,20 @@ class Exporter extends AbstractExporter
 
     protected function generateImageUrl(string $image): string
     {
-        return Storage::url(str_replace(' ', '%20', $image));
+        $damAsset = \DB::table('dam_assets')->where('id', $image)->first();
+
+        if ($damAsset && !empty($damAsset->path)) {
+            $image = $damAsset->path;
+        }
+
+        return Storage::disk('private')->url(str_replace(' ', '%20', $image));
     }
 
     public function checkImagesExported($code, $imageUrl)
     {
         $imageName = $this->getImageName($imageUrl);
         $code = $code.'-'.$imageName;
+
         $imageMapping = $this->getDataTransferMapping($code, 'image');
 
         if (! $imageMapping) {
