@@ -668,7 +668,7 @@ class OptionController extends Controller
     {
         $translation = $option->translate($currentLocaleCode);
 
-        return $translation?->label ?? $translation?->name;
+        return $translation?->label ?? $translation?->name ?? $option->code;
     }
 
     /**
