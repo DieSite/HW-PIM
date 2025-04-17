@@ -122,7 +122,7 @@ return [
                     'copy'                          => 'Kopiëren',
                     'disable'                       => 'Uitzetten',
                     'id'                            => 'ID',
-                    'id-value'                      => 'ID - :id',
+                    'id-value'                      => 'ID: :id',
                     'image'                         => 'Afbeelding',
                     'mass-delete-success'           => 'Geselecteerde producten met succes verwijderd',
                     'mass-update-success'           => 'Geselecteerde producten met succes bijgewerkt',
@@ -133,7 +133,7 @@ return [
                     'qty'                           => 'Hoeveelheid',
                     'qty-value'                     => ':qty beschikbaar',
                     'sku'                           => 'Sku',
-                    'sku-value'                     => 'Sku - :sku',
+                    'sku-value'                     => 'Sku: :sku',
                     'status'                        => 'Status',
                     'type'                          => 'Type',
                     'update-status'                 => 'Update status',
@@ -225,7 +225,7 @@ return [
                             'name'            => 'Naam',
                             'price'           => 'Prijs',
                             'quantities'      => 'Hoeveelheid',
-                            'save-btn'        => 'Redden',
+                            'save-btn'        => 'Opslaan',
                             'sku'             => 'Sku',
                             'status'          => 'Toestand',
                             'title'           => 'Product',
@@ -1959,7 +1959,7 @@ return [
                 'general'        => 'Algemeen',
                 'name'           => 'Naam',
                 'permissions'    => 'Rechten',
-                'save-btn'       => 'Redden',
+                'save-btn'       => 'Opslaan',
                 'title'          => 'Nieuwe integratie',
             ],
 
@@ -1977,7 +1977,7 @@ return [
                 'generate-btn'   => 'Genereren',
                 're-secret-btn'  => 'Heer nieuwe Secret Key opnieuw genereren',
                 'permissions'    => 'Rechten',
-                'save-btn'       => 'Redden',
+                'save-btn'       => 'Opslaan',
                 'title'          => 'Integratie bewerken',
             ],
 
@@ -2115,9 +2115,9 @@ return [
             ],
 
             'filters' => [
-                'select'   => 'Uitkiezen',
+                'select'   => 'Selecteren',
                 'title'    => 'Breng filters aan',
-                'save'     => 'Redden',
+                'save'     => 'Filteren',
                 'dropdown' => [
                     'searchable' => [
                         'atleast-two-chars' => 'Typ minimaal 2 tekens ...',

@@ -54,6 +54,7 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
                 'products.id as product_id',
                 'products.status',
                 'products.type',
+                'products.values->common->productnaam as productnaam',
                 'parent_products.sku as parent',
                 DB::raw('(CASE WHEN '.$tablePrefix.'attribute_family_name.name IS NULL OR CHAR_LENGTH(TRIM('.$tablePrefix.'attribute_family_name.name)) < 1 THEN CONCAT("[", '.$tablePrefix.'af.code,"]") ELSE '.$tablePrefix.'attribute_family_name.name END) as attribute_family')
             );
@@ -63,6 +64,7 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
         $this->addFilter('sku', 'products.sku');
         $this->addFilter('status', 'products.status');
         $this->addFilter('type', 'products.type');
+        $this->addFilter('name', 'productnaam');
 
         return $queryBuilder;
     }
@@ -81,6 +83,16 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
             'searchable' => true,
             'filterable' => true,
             'sortable'   => true,
+        ]);
+
+        $this->addColumn([
+            'index'      => 'products.values->>"$.common.productnaam"',
+            'label'      => 'Productnaam',
+            'type'       => 'string',
+            'searchable' => true,
+            'filterable' => true,
+            'sortable'   => true,
+            'options'    => ['lowercase' => true]
         ]);
 
         $this->addColumn([
