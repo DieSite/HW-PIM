@@ -2,7 +2,6 @@
 
 namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Attribute\Repositories\AttributeRepository;
 use Webkul\DataTransfer\Contracts\JobTrackBatch as JobTrackBatchContract;
@@ -458,7 +457,10 @@ class Exporter extends AbstractExporter
             }
 
             if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
-                $imageAttrs[] = $this->formatImageData($code, $value, $imagesToExport, $item['code']);
+                $formatted = $this->formatImageData($code, $value, $imagesToExport, $item['code']);
+                foreach ($formatted as $image) {
+                    $imageAttrs[] = $image;
+                }
             } else {
                 if (! in_array($code, $this->mainAttributes)) {
                     $attributeMapping = $this->getDataTransferMapping($code, self::UNOPIM_ATTRIBUTE_ENTITY);
@@ -533,23 +535,26 @@ class Exporter extends AbstractExporter
 
         $imageValues = str_contains($value, ',') ? explode(',', $value) : [$value];
 
+        $images = [];
         foreach ($imageValues as $value) {
             $imageUrl = $this->generateImageUrl($value);
+
+            if (! $imageUrl) {
+                continue;
+            }
+
+            $imageId = $this->checkImagesExported($itemCode, $imageUrl);
+
+            if ($isVariant) {
+                $images[] = $imageId ? ['id' => $imageId] : ['src' => $imageUrl, 'name' => $this->getImageName($imageUrl)];
+            }
+
+            $images[] = $imageId
+                ? ['id' => $imageId, 'position' => $getKey]
+                : ['src' => $imageUrl, 'name' => $this->getImageName($imageUrl), 'position' => $getKey];
         }
 
-        if (! $imageUrl) {
-            return [];
-        }
-
-        $imageId = $this->checkImagesExported($itemCode, $imageUrl);
-
-        if ($isVariant) {
-            return $imageId ? ['id' => $imageId] : ['src' => $imageUrl, 'name' => $this->getImageName($imageUrl)];
-        }
-
-        return $imageId
-            ? ['id' => $imageId, 'position' => $getKey]
-            : ['src' => $imageUrl, 'name' => $this->getImageName($imageUrl), 'position' => $getKey];
+        return $images;
     }
 
     public function formatVariation($item, $superAttributes = [])
@@ -706,7 +711,7 @@ class Exporter extends AbstractExporter
     {
         $damAsset = \DB::table('dam_assets')->where('id', $image)->first();
 
-        if ($damAsset && !empty($damAsset->path)) {
+        if ($damAsset && ! empty($damAsset->path)) {
             $image = $damAsset->path;
         }
 
