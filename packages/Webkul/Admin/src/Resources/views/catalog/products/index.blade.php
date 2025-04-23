@@ -168,7 +168,7 @@
                                 class="text-gray-600 dark:text-gray-300"
                             >
                                 @{{ (Number.isInteger(record.voorraad_5_korting) ? record.voorraad_5_korting : 0) + (Number.isInteger(record.voorraad_5_korting_handmatig) ? record.voorraad_5_korting_handmatig : 0) + (Number.isInteger(record.voorraad_eurogros) ? record.voorraad_eurogros : 0) }}
-                                <span :class='{"text-white bg-green-600": record.voorraad_hw_5_korting > 0}'>(@{{ record.voorraad_hw_5_korting ?? 0 }})</span>
+                                <span :class='{"text-white bg-green-600": record.voorraad_hw_5_korting > 0}'>(@{{ Number.isInteger(record.voorraad_hw_5_korting) ? record.voorraad_hw_5_korting : 0 }})</span>
                             </p>
                         </div>
                     </div>
