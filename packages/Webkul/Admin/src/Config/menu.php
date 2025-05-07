@@ -156,4 +156,15 @@ return [
         'sort'   => 1,
         'icon'   => '',
     ],
+
+    /**
+     * Custom Bol Com Credentials
+     */
+    [
+        'key'        => 'custom_bolCom',
+        'name'       => 'Bol.com',
+        'route'      => 'admin.custom.bolCom.index',
+        'sort'       => 15,
+        'icon'       => 'icon-setting',
+    ],
 ];

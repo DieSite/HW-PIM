@@ -41,14 +41,20 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
         'sku',
         'parent_id',
         'status',
+        'bol_com_sync',
+        'bol_com_reference',
+        'bol_com_credential_id',
     ];
 
     /**
      * The attributes that should be cast.
      */
     protected $casts = [
-        'additional' => 'array',
-        'values'     => 'array',
+        'additional'            => 'array',
+        'values'                => 'array',
+        'bol_com_sync'          => 'boolean',
+        'bol_com_credential_id' => 'integer',
+        'bol_com_reference'     => 'string',
     ];
 
     /**

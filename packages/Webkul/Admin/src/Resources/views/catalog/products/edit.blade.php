@@ -49,10 +49,10 @@
 
             $currentLocale = core()->getRequestedLocale();
 
-            $currentLocale = $currentChannel->locales->contains($currentLocale) ? $currentLocale : $currentChannel->locales->first(); 
+            $currentLocale = $currentChannel->locales->contains($currentLocale) ? $currentLocale : $currentChannel->locales->first();
         @endphp
 
-        <!-- Channel and Locale Switcher -->
+            <!-- Channel and Locale Switcher -->
         <div class="flex  gap-4 justify-between items-center mt-7 max-md:flex-wrap">
             <div class="flex gap-x-1 items-center">
                 <!-- Channel Switcher -->
@@ -60,12 +60,12 @@
                     <!-- Dropdown Toggler -->
                     <x-slot:toggle>
                         <button
-                        type="button"
+                            type="button"
                             class="
                             flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow appearance-none transition-all hover:!bg-violet-50 dark:hover:!bg-cherry-900 text-gray-600 dark:!text-slate-50"
                         >
                             <span class="icon-channel   text-2xl"></span>
-                            
+
                             {{ ! empty($currentChannel->name) ? $currentChannel->name : '[' . $currentChannel->code . ']' }}
 
                             <input type="hidden" name="channel" value="{{ $currentChannel->code }}"/>
@@ -81,7 +81,7 @@
                                 href="?{{ Arr::query(['channel' => $channel->code, 'locale' => $currentLocale?->code]) }}"
                                 class="flex gap-2.5 px-5 py-2 text-base cursor-pointer hover:bg-violet-50 dark:hover:bg-cherry-800 dark:text-white"
                             >
-                            {{ ! empty($channel->name) ? $channel->name : '[' . $channel->code . ']' }}
+                                {{ ! empty($channel->name) ? $channel->name : '[' . $channel->code . ']' }}
                             </a>
                         @endforeach
                     </x-slot>
@@ -98,7 +98,7 @@
                             <span class="icon-language text-2xl"></span>
 
                             {{ $currentLocale?->name }}
-                            
+
                             <input type="hidden" name="locale" value="{{ $currentLocale?->code }}"/>
 
                             <span class="icon-chevron-down text-2xl"></span>
@@ -169,6 +169,59 @@
                 @endforeach
             </div>
             <div class="right-column flex flex-col gap-2 w-[360px] max-w-full max-sm:w-full">
+                <!-- Add Bol.com Integration Box -->
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                    <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
+                        Bol.com Integratie
+                    </p>
+
+                    <div class="mb-2.5">
+                        <label class="flex gap-1 items-center mb-2.5 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                name="bol_com_sync"
+                                value="1"
+                                class="form-checkbox"
+                                {{ $product->bol_com_sync ? 'checked' : '' }}
+                                onchange="document.getElementById('bol_com_credential_id').disabled = !this.checked"
+                            >
+                            <span class="text-xs text-gray-600 dark:text-gray-300 font-medium">
+                Sync met Bol.com
+            </span>
+                        </label>
+
+                        <!-- Credentials Dropdown -->
+                        <div class="mt-3">
+                            <label for="bol_com_credential_id"
+                                   class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
+                                Bol.com Credentials
+                            </label>
+                            <select
+                                id="bol_com_credential_id"
+                                name="bol_com_credential_id"
+                                class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                {{ !$product->bol_com_sync ? 'disabled' : '' }}
+                            >
+                                <option value="">Select Credentials</option>
+                                @foreach (app('App\Services\BolComProductService')->getCredentialsOptions() as $credentialId => $credentialName)
+                                    <option
+                                        value="{{ $credentialId }}"
+                                        {{ $product->bol_com_credential_id == $credentialId ? 'selected' : '' }}
+                                    >
+                                        {{ $credentialName }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        @if($product->bol_com_reference)
+                            <p class="text-xs text-gray-600 dark:text-gray-300 mt-3">
+                                Bol.com Reference: {{ $product->bol_com_reference }}
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
                 <!-- Categories View Blade File -->
                 @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])
 

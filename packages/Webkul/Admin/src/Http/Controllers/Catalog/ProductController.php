@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
+use App\Services\BolComProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -32,7 +33,8 @@ class ProductController extends Controller
     public function __construct(
         protected AttributeFamilyRepository $attributeFamilyRepository,
         protected ProductRepository $productRepository,
-        protected ProductValuesValidator $valuesValidator
+        protected ProductValuesValidator $valuesValidator,
+        protected BolComProductService $bolComProductService
     ) {}
 
     /**
@@ -158,17 +160,18 @@ class ProductController extends Controller
     /**
      * Update the specified resource in storage.
      *
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function update(ProductForm $request, int $id)
     {
         Event::dispatch('catalog.product.update.before', $id);
 
+        $product = $this->productRepository->find($id);
+        $previousSyncState = $product->bol_com_sync ?? false;
+
         $configurableValues = [];
 
         $data = $request->all();
-
-        $product = $this->productRepository->find($id);
 
         foreach (($product?->parent?->super_attributes ?? []) as $attr) {
             $attrCode = $attr->code;
@@ -210,17 +213,33 @@ class ProductController extends Controller
             throw $e;
         }
 
-        $product = $this->productRepository->update($data, $id);
+        try {
+            $product = $this->productRepository->update($data, $id);
 
-        Event::dispatch('catalog.product.update.after', $product);
+            $this->bolComProductService->syncProduct($product, $previousSyncState);
 
-        session()->flash('success', trans('admin::app.catalog.products.update-success'));
+            Event::dispatch('catalog.product.update.after', $product);
 
-        return redirect()->route('admin.catalog.products.edit', [
-            'id'      => $id,
-            'channel' => core()->getRequestedChannelCode(),
-            'locale'  => core()->getRequestedLocaleCode(),
-        ]);
+            $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
+            $product->bol_com_credential_id = $request->has('bol_com_sync') ? $request->input('bol_com_credential_id') : null;
+            $product->save();
+
+            session()->flash('success', trans('admin::app.catalog.products.update-success'));
+
+            return redirect()->route('admin.catalog.products.edit', [
+                'id'      => $id,
+                'channel' => core()->getRequestedChannelCode(),
+                'locale'  => core()->getRequestedLocaleCode(),
+            ]);
+        } catch (\Exception $e) {
+            if (str_contains($e->getMessage(), 'Failed to sync with Bol.com')) {
+                session()->flash('error', $e->getMessage());
+            } else {
+                session()->flash('error', trans('admin::app.catalog.products.update-error'));
+            }
+
+            return redirect()->back()->withInput();
+        }
     }
 
     /**
