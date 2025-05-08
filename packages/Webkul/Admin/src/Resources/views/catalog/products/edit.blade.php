@@ -176,47 +176,70 @@
                     </p>
 
                     <div class="mb-2.5">
-                        <label class="flex gap-1 items-center mb-2.5 cursor-pointer select-none">
+                        @php
+                            $hasEan = !empty($product->values['common']['ean'] ?? '');
+                            $eanValue = $product->values['common']['ean'] ?? '';
+                            $bolSyncDisabled = !$hasEan;
+                        @endphp
+
+                            <!-- Bol.com Integration Checkbox -->
+                        <label class="flex gap-1 items-center mb-2.5 {{ $bolSyncDisabled ? 'opacity-50' : 'cursor-pointer' }} select-none">
                             <input
                                 type="checkbox"
                                 name="bol_com_sync"
+                                id="bol_com_sync"
                                 value="1"
                                 class="form-checkbox"
                                 {{ $product->bol_com_sync ? 'checked' : '' }}
-                                onchange="document.getElementById('bol_com_credential_id').disabled = !this.checked"
+                                {{ $bolSyncDisabled ? 'disabled' : '' }}
+                                onchange="toggleBolComCredentials(this); toggleDeleteWarning(this);"
                             >
                             <span class="text-xs text-gray-600 dark:text-gray-300 font-medium">
-                Sync met Bol.com
-            </span>
+        Sync met Bol.com
+    </span>
                         </label>
 
+                        @if($product->bol_com_reference)
+                            <div id="bol_com_delete_warning" class="hidden text-xs text-orange-500 dark:text-orange-400 mt-1 mb-2 p-2 bg-orange-50 dark:bg-opacity-10 border border-orange-200 dark:border-orange-800 rounded">
+                                <strong>Let op:</strong> Bij het uitschakelen van de Bol.com synchronisatie en opslaan wordt dit product verwijderd van Bol.com.
+                            </div>
+                        @endif
+
+                        @if($bolSyncDisabled)
+                            <p class="text-xs text-red-500 dark:text-red-400 mt-1 mb-2">
+                                Een EAN code is vereist voor Bol.com synchronisatie.
+                            </p>
+                        @endif
+
                         <!-- Credentials Dropdown -->
-                        <div class="mt-3">
-                            <label for="bol_com_credential_id"
-                                   class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
-                                Bol.com Credentials
-                            </label>
-                            <select
-                                id="bol_com_credential_id"
-                                name="bol_com_credential_id"
-                                class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                {{ !$product->bol_com_sync ? 'disabled' : '' }}
-                            >
-                                <option value="">Select Credentials</option>
-                                @foreach (app('App\Services\BolComProductService')->getCredentialsOptions() as $credentialId => $credentialName)
-                                    <option
-                                        value="{{ $credentialId }}"
-                                        {{ $product->bol_com_credential_id == $credentialId ? 'selected' : '' }}
-                                    >
-                                        {{ $credentialName }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
+                        @if(!$bolSyncDisabled)
+                            <div class="mt-3">
+                                <label for="bol_com_credential_id"
+                                       class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
+                                    Bol.com Credentials
+                                </label>
+                                <select
+                                    id="bol_com_credential_id"
+                                    name="bol_com_credential_id"
+                                    class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                    {{ !$product->bol_com_sync ? 'disabled' : '' }}
+                                >
+                                    <option value="">Select Credentials</option>
+                                    @foreach (app('App\Services\BolComProductService')->getCredentialsOptions() as $credentialId => $credentialName)
+                                        <option
+                                            value="{{ $credentialId }}"
+                                            {{ $product->bol_com_credential_id == $credentialId ? 'selected' : '' }}
+                                        >
+                                            {{ $credentialName }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
 
                         @if($product->bol_com_reference)
                             <p class="text-xs text-gray-600 dark:text-gray-300 mt-3">
-                                Bol.com Reference: {{ $product->bol_com_reference }}
+                                Bol.com Referentie: <br>{{ $product->bol_com_reference }}
                             </p>
                         @endif
                     </div>
@@ -246,3 +269,23 @@
 
     {!! view_render_event('unopim.admin.catalog.product.edit.after', ['product' => $product]) !!}
 </x-admin::layouts.with-history>
+
+<script>
+    function toggleBolComCredentials(checkbox) {
+        document.getElementById('bol_com_credential_id').disabled = !checkbox.checked;
+    }
+
+    function toggleDeleteWarning(checkbox) {
+        const warningElement = document.getElementById('bol_com_delete_warning');
+        if (warningElement) {
+            warningElement.style.display = checkbox.checked ? 'none' : 'block';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkbox = document.getElementById('bol_com_sync');
+        if (checkbox && !checkbox.checked) {
+            toggleDeleteWarning(checkbox);
+        }
+    });
+</script>

@@ -6,7 +6,29 @@
                 Bol.com Credentials
             </h1>
 
-            <div>
+            <div class="flex gap-3">
+                <!-- Bulk Sync Form -->
+                <form method="POST" action="{{ route('admin.custom.bolCom.bulkSync') }}" class="flex items-center gap-2">
+                    @csrf
+                    <select
+                        name="credential_id"
+                        class="border border-gray-300 dark:border-gray-700 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500 dark:bg-cherry-900 dark:text-white"
+                    >
+                        <option value="">Select Credentials</option>
+                        @foreach($credentials->where('is_active', true) as $credential)
+                            <option value="{{ $credential->id }}">{{ $credential->name }}</option>
+                        @endforeach
+                    </select>
+                    <button
+                        type="submit"
+                        class="secondary-button flex items-center gap-1.5"
+                        title="Sync all products with an EAN to Bol.com"
+                    >
+                        <i class="icon-refresh text-lg"></i>
+                        Bulk Sync Products
+                    </button>
+                </form>
+
                 <a href="{{ route('admin.custom.bolCom.create') }}" class="primary-button">
                     <span class="flex items-center gap-1.5">
                         <i class="icon-plus text-xl"></i>

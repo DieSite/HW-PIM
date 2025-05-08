@@ -28,21 +28,21 @@ class BolComProductService
                     $this->deleteProductFromBolCom($product, $apiClient);
                 }
 
-                return;
+                return null;
             }
 
             if (! $product->bol_com_credential_id) {
                 Log::warning('No Bol.com credential selected for product sync', ['product_id' => $product->id]);
 
-                return;
+                return null;
             }
 
             $apiClient = new BolApiClient($product->bol_com_credential_id);
 
             if (! $previousSyncState || ! $product->bol_com_reference) {
-                $this->createProductOnBolCom($product, $apiClient);
+                return $this->createProductOnBolCom($product, $apiClient);
             } else {
-                $this->updateProductOnBolCom($product, $apiClient);
+                return $this->updateProductOnBolCom($product, $apiClient);
             }
         } catch (Exception $e) {
             Log::error('Failed to sync product with Bol.com', [
@@ -62,54 +62,128 @@ class BolComProductService
     {
         $data = $this->buildProductData($product);
 
-        $response = $apiClient->post('/retailer/offers', $data);
+        return $apiClient->post('/retailer/offers', $data);
 
-        if (! empty($response['entityId'])) {
-            $product->bol_com_reference = $response['entityId'];
-            $this->productRepository->update(['bol_com_reference' => $response['entityId']], $product->id);
-
-            Log::info('Product created on Bol.com', [
-                'product_id'    => $product->id,
-                'bol_reference' => $response['entityId'],
-            ]);
-        }
     }
 
+    /**
+     * @throws GuzzleException
+     */
+    /**
+     * @throws GuzzleException
+     */
     protected function updateProductOnBolCom(Product $product, BolApiClient $apiClient)
     {
-        $data = $this->buildProductData($product);
+        $this->updateProductPrice($product, $apiClient);
+        $this->updateProductStock($product, $apiClient);
+        $this->updateProductDetails($product, $apiClient);
 
-        $apiClient->put('/retailer/offers/'.$product->bol_com_reference, $data);
+        return true;
+    }
 
-        Log::info('Product updated on Bol.com', [
-            'product_id'    => $product->id,
-            'bol_reference' => $product->bol_com_reference,
-        ]);
+    /**
+     * @throws GuzzleException
+     */
+    protected function updateProductPrice(Product $product, BolApiClient $apiClient)
+    {
+        $priceData = $product->values['common']['prijs'] ?? [];
+        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
+        $price = (float) number_format($price, 2, '.', '');
+
+        $data = [
+            'pricing' => [
+                'bundlePrices' => [
+                    [
+                        'quantity'  => 1,
+                        'unitPrice' => $price,
+                    ],
+                ],
+            ],
+        ];
+
+        return $apiClient->put('/retailer/offers/'.$product->bol_com_reference.'/price', $data);
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    protected function updateProductStock(Product $product, BolApiClient $apiClient)
+    {
+        $stockData = $product->values['common'] ?? [];
+
+        $stockSources = [
+            'voorraad_eurogros',
+            'voorraad_5_korting',
+            'voorraad_5_korting_handmatig',
+            'voorraad_hw_5_korting',
+            'uitverkoop_15_korting',
+        ];
+
+        $stock = 0;
+        foreach ($stockSources as $source) {
+            $stock += (int) ($stockData[$source] ?? 0);
+        }
+
+        $data = [
+            'amount'            => $stock,
+            'managedByRetailer' => true,
+        ];
+
+        return $apiClient->put('/retailer/offers/'.$product->bol_com_reference.'/stock', $data);
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    protected function updateProductDetails(Product $product, BolApiClient $apiClient)
+    {
+        $title = $product->values['common']['productnaam'];
+
+        $data = [
+            'onHoldByRetailer'    => false,
+            'unknownProductTitle' => $title,
+            'fulfilment'          => [
+                'method'       => 'FBR',
+                'deliveryCode' => '1-8d',
+            ],
+        ];
+
+        return $apiClient->put('/retailer/offers/'.$product->bol_com_reference, $data);
     }
 
     protected function deleteProductFromBolCom(Product $product, BolApiClient $apiClient)
     {
         $apiClient->delete('/retailer/offers/'.$product->bol_com_reference);
 
-        $this->productRepository->update([
-            'bol_com_reference' => null,
-        ], $product->id);
-
-        Log::info('Product deleted from Bol.com', [
-            'product_id'             => $product->id,
-            'previous_bol_reference' => $product->bol_com_reference,
-        ]);
+        $product->bol_com_reference = null;
+        $product->bol_com_sync = false;
+        $product->bol_com_credential_id = null;
+        $product->save();
     }
 
     protected function buildProductData(Product $product)
     {
-        $ean = $product->values['common']['ean'];
-        $sku = $product->sku;
-        $title = $product->values['common']['productnaam'];
-        $priceData = $product->values['common']['prijs'] ?? [];
-        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
+        $data = $product->values['common'] ?? [];
 
-        $stock = (int) $product->values['common']['voorraad_eurogros'];
+        $ean = $data['ean'];
+        $title = $data['productnaam'];
+        $sku = $product->sku;
+        $priceData = $data['prijs'] ?? [];
+        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
+        $price = (float) number_format($price, 2, '.', '');
+
+        $stockSources = [
+            'voorraad_eurogros',
+            'voorraad_5_korting',
+            'voorraad_5_korting_handmatig',
+            'voorraad_hw_5_korting',
+            'uitverkoop_15_korting',
+        ];
+
+        $stock = 0;
+        foreach ($stockSources as $source) {
+            $stock += (int) ($data[$source] ?? 0);
+        }
 
         return [
             'ean'              => $ean,
@@ -123,7 +197,7 @@ class BolComProductService
                 'bundlePrices' => [
                     [
                         'quantity'  => 1,
-                        'unitPrice' => 219.00, //TODO prijs fixen
+                        'unitPrice' => $price,
                     ],
                 ],
             ],

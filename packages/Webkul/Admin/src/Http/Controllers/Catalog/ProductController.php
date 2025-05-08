@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
+use App\Jobs\SyncProductWithBolComJob;
 use App\Services\BolComProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
@@ -216,7 +217,11 @@ class ProductController extends Controller
         try {
             $product = $this->productRepository->update($data, $id);
 
-            $this->bolComProductService->syncProduct($product, $previousSyncState);
+            $ean = $product->values['common']['ean'] ?? null;
+
+            if ($ean !== null) {
+                SyncProductWithBolComJob::dispatch($product, $previousSyncState);
+            }
 
             Event::dispatch('catalog.product.update.after', $product);
 

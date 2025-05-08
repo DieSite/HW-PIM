@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Clients\BolApiClient;
+use App\Jobs\BulkSyncProductsWithBolComJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -142,6 +143,29 @@ class CustomBolComController extends Controller
             return redirect()
                 ->route('admin.custom.bolCom.index')
                 ->with('error', 'Connection test failed: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Bulk sync products with Bol.com.
+     */
+    public function bulkSync(Request $request)
+    {
+        $request->validate([
+            'credential_id' => 'required|exists:bol_com_credentials,id',
+        ]);
+
+        try {
+            BulkSyncProductsWithBolComJob::dispatch(50, null, $request->credential_id)
+                ->onQueue('bol-com-sync');
+
+            return redirect()
+                ->route('admin.custom.bolCom.index')
+                ->with('success', 'Bulk sync has been initiated. Products with an EAN code will be synced with Bol.com.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->route('admin.custom.bolCom.index')
+                ->with('error', 'Failed to start bulk sync: '.$e->getMessage());
         }
     }
 }

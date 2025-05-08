@@ -6,6 +6,7 @@ use App\Helpers\BolComAuthenticationHelper;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Facades\Log;
 
 class BolApiClient
 {
@@ -26,6 +27,7 @@ class BolApiClient
 
     /**
      * Constructor
+     *
      * @throws Exception
      */
     public function __construct($connectionId = null, $skipCache = false)
@@ -77,6 +79,7 @@ class BolApiClient
 
     /**
      * Make an HTTP request to the Bol.com API
+     *
      * @throws Exception|GuzzleException
      */
     protected function request($method, $endpoint, $options = [])
@@ -88,8 +91,6 @@ class BolApiClient
             $response = $this->client->request($method, $this->baseUrl.$endpoint, array_merge([
                 'headers' => $headers,
             ], $options));
-
-            dd($response->getBody()->getContents());
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (Exception $e) {

@@ -20,5 +20,6 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::put('bolCom/{id}', [CustomBolComController::class, 'update'])->name('admin.custom.bolCom.update');
         Route::delete('bolCom/{id}', [CustomBolComController::class, 'destroy'])->name('admin.custom.bolCom.destroy');
         Route::get('bolCom/{id}/test', [CustomBolComController::class, 'test'])->name('admin.custom.bolCom.test');
+        Route::post('/bolCom/bulk-sync', [CustomBolComController::class, 'bulkSync'])->name('admin.custom.bolCom.bulkSync');
     });
 });
