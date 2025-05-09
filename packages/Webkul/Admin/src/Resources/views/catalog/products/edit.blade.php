@@ -172,7 +172,7 @@
                 <!-- Add Bol.com Integration Box -->
                 <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
-                        Bol.com Integratie
+                        Bol.com
                     </p>
 
                     <div class="mb-2.5">
@@ -195,11 +195,11 @@
                                 onchange="toggleBolComCredentials(this); toggleDeleteWarning(this);"
                             >
                             <span class="text-xs text-gray-600 dark:text-gray-300 font-medium">
-        Sync met Bol.com
-    </span>
+                                Sync met Bol.com
+                            </span>
                         </label>
 
-                        @if($product->bol_com_reference)
+                        @if(isset($product->bolComCredentials->first()->pivot->reference) && $product->bolComCredentials->first()->pivot->reference)
                             <div id="bol_com_delete_warning" class="hidden text-xs text-orange-500 dark:text-orange-400 mt-1 mb-2 p-2 bg-orange-50 dark:bg-opacity-10 border border-orange-200 dark:border-orange-800 rounded">
                                 <strong>Let op:</strong> Bij het uitschakelen van de Bol.com synchronisatie en opslaan wordt dit product verwijderd van Bol.com.
                             </div>
@@ -211,36 +211,93 @@
                             </p>
                         @endif
 
-                        <!-- Credentials Dropdown -->
+                        <!-- Credentials Checkboxes -->
                         @if(!$bolSyncDisabled)
                             <div class="mt-3">
-                                <label for="bol_com_credential_id"
-                                       class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
-                                    Bol.com Credentials
+                                <label class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
+                                    Accounts
                                 </label>
-                                <select
-                                    id="bol_com_credential_id"
-                                    name="bol_com_credential_id"
-                                    class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                    {{ !$product->bol_com_sync ? 'disabled' : '' }}
-                                >
-                                    <option value="">Select Credentials</option>
+                                <div class="p-2 border border-gray-300 rounded-md dark:border-gray-700 dark:bg-gray-900 max-h-40 overflow-y-auto">
                                     @foreach (app('App\Services\BolComProductService')->getCredentialsOptions() as $credentialId => $credentialName)
-                                        <option
-                                            value="{{ $credentialId }}"
-                                            {{ $product->bol_com_credential_id == $credentialId ? 'selected' : '' }}
-                                        >
-                                            {{ $credentialName }}
-                                        </option>
+                                        <div class="flex items-center mb-1 last:mb-0">
+                                            <input
+                                                type="checkbox"
+                                                id="bol_com_credential_{{ $credentialId }}"
+                                                name="bol_com_credentials[]"
+                                                value="{{ $credentialId }}"
+                                                class="form-checkbox mr-2"
+                                                {{ !$product->bol_com_sync ? 'disabled' : '' }}
+                                                {{ $product->bolComCredentials->contains('id', $credentialId) ? 'checked' : '' }}
+                                            >
+                                            <label for="bol_com_credential_{{ $credentialId }}" class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+                                                {{ $credentialName }}
+                                            </label>
+                                        </div>
                                     @endforeach
-                                </select>
+                                </div>
                             </div>
                         @endif
 
-                        @if($product->bol_com_reference)
-                            <p class="text-xs text-gray-600 dark:text-gray-300 mt-3">
-                                Bol.com Referentie: <br>{{ $product->bol_com_reference }}
-                            </p>
+                        <!-- Delivery Time Dropdown -->
+                        @if(!$bolSyncDisabled)
+                            <div class="mt-3">
+                                <label for="bol_com_delivery_code"
+                                       class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
+                                    Levertijd
+                                </label>
+                                @php
+                                    $deliveryCode = isset($product->bolComCredentials->first()->pivot->delivery_code)
+                                        ? $product->bolComCredentials->first()->pivot->delivery_code
+                                        : '';
+                                @endphp
+
+                                <select
+                                    id="bol_com_delivery_code"
+                                    name="bol_com_delivery_code"
+                                    class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                    {{ !$product->bol_com_sync ? 'disabled' : '' }}
+                                    required
+                                >
+                                    <option value="">Selecteer levertijd</option>
+                                    <option value="24uurs-12" {{ $deliveryCode == '24uurs-12' ? 'selected' : '' }}>24 uur - 12</option>
+                                    <option value="24uurs-13" {{ $deliveryCode == '24uurs-13' ? 'selected' : '' }}>24 uur - 13</option>
+                                    <option value="24uurs-14" {{ $deliveryCode == '24uurs-14' ? 'selected' : '' }}>24 uur - 14</option>
+                                    <option value="24uurs-15" {{ $deliveryCode == '24uurs-15' ? 'selected' : '' }}>24 uur - 15</option>
+                                    <option value="24uurs-16" {{ $deliveryCode == '24uurs-16' ? 'selected' : '' }}>24 uur - 16</option>
+                                    <option value="24uurs-17" {{ $deliveryCode == '24uurs-17' ? 'selected' : '' }}>24 uur - 17</option>
+                                    <option value="24uurs-18" {{ $deliveryCode == '24uurs-18' ? 'selected' : '' }}>24 uur - 18</option>
+                                    <option value="24uurs-19" {{ $deliveryCode == '24uurs-19' ? 'selected' : '' }}>24 uur - 19</option>
+                                    <option value="24uurs-20" {{ $deliveryCode == '24uurs-20' ? 'selected' : '' }}>24 uur - 20</option>
+                                    <option value="24uurs-21" {{ $deliveryCode == '24uurs-21' ? 'selected' : '' }}>24 uur - 21</option>
+                                    <option value="24uurs-22" {{ $deliveryCode == '24uurs-22' ? 'selected' : '' }}>24 uur - 22</option>
+                                    <option value="24uurs-23" {{ $deliveryCode == '24uurs-23' ? 'selected' : '' }}>24 uur - 23</option>
+                                    <option value="1-2d" {{ $deliveryCode == '1-2d' ? 'selected' : '' }}>1-2 dagen</option>
+                                    <option value="2-3d" {{ $deliveryCode == '2-3d' ? 'selected' : '' }}>2-3 dagen</option>
+                                    <option value="3-5d" {{ $deliveryCode == '3-5d' ? 'selected' : '' }}>3-5 dagen</option>
+                                    <option value="4-8d" {{ $deliveryCode == '4-8d' ? 'selected' : '' }}>4-8 dagen</option>
+                                    <option value="1-8d" {{ $deliveryCode == '1-8d' ? 'selected' : '' }}>1-8 dagen</option>
+                                    <option value="MijnLeverBelofte" {{ $deliveryCode == 'MijnLeverBelofte' ? 'selected' : '' }}>Mijn Lever Belofte</option>
+                                    <option value="VVB" {{ $deliveryCode == 'VVB' ? 'selected' : '' }}>VVB</option>
+                                </select>
+                                <div id="delivery_code_error" class="text-xs text-red-500 mt-1 hidden">
+                                    Selecteer een levertijd.
+                                </div>
+                            </div>
+                        @endif
+
+                        @if($product->bolComCredentials->isNotEmpty())
+                            <div class="mt-3">
+                                <p class="text-xs text-gray-600 dark:text-gray-300 font-medium">Bol.com Referenties:</p>
+                                <div class="mt-1">
+                                    @foreach($product->bolComCredentials as $credential)
+                                        @if($credential->pivot->reference)
+                                            <p class="text-xs text-gray-600 dark:text-gray-300 mb-1">
+                                                {{ $credential->pivot->reference }} <span class="text-gray-500">({{ $credential->name }})</span>
+                                            </p>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -272,20 +329,43 @@
 
 <script>
     function toggleBolComCredentials(checkbox) {
-        document.getElementById('bol_com_credential_id').disabled = !checkbox.checked;
+        const credentialCheckboxes = document.querySelectorAll('input[name="bol_com_credentials[]"]');
+        credentialCheckboxes.forEach(credBox => {
+            credBox.disabled = !checkbox.checked;
+
+            if (!checkbox.checked) {
+                credBox.checked = false;
+            }
+        });
+
+        const deliveryCodeSelect = document.getElementById('bol_com_delivery_code');
+        if (deliveryCodeSelect) {
+            deliveryCodeSelect.disabled = !checkbox.checked;
+        }
     }
 
     function toggleDeleteWarning(checkbox) {
         const warningElement = document.getElementById('bol_com_delete_warning');
         if (warningElement) {
-            warningElement.style.display = checkbox.checked ? 'none' : 'block';
+            if (checkbox.checked) {
+                warningElement.classList.add('hidden');
+            } else {
+                warningElement.classList.remove('hidden');
+            }
         }
     }
 
     document.addEventListener('DOMContentLoaded', function() {
         const checkbox = document.getElementById('bol_com_sync');
-        if (checkbox && !checkbox.checked) {
+        if (checkbox) {
             toggleDeleteWarning(checkbox);
+
+            if (checkbox.checked) {
+                const deliveryCodeSelect = document.getElementById('bol_com_delivery_code');
+                if (deliveryCodeSelect) {
+                    deliveryCodeSelect.setAttribute('required', 'required');
+                }
+            }
         }
     });
 </script>

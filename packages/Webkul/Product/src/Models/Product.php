@@ -2,6 +2,7 @@
 
 namespace Webkul\Product\Models;
 
+use App\Models\BolComCredential;
 use Exception;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,8 +43,6 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
         'parent_id',
         'status',
         'bol_com_sync',
-        'bol_com_reference',
-        'bol_com_credential_id',
     ];
 
     /**
@@ -335,5 +334,12 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
             'additional_data' => $this->additional_data,
             'image'           => $image,
         ];
+    }
+
+    public function bolComCredentials(): BelongsToMany
+    {
+        return $this->belongsToMany(BolComCredential::class, 'product_bol_com_credentials')
+            ->withPivot('delivery_code', 'reference')
+            ->withTimestamps();
     }
 }

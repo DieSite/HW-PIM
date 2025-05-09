@@ -33,9 +33,6 @@ class BolComAuthenticationHelper
 
         if ($credentialsId) {
             $this->loadCredentials($credentialsId);
-        } else {
-            $this->clientId = config('bolcom.client_id');
-            $this->clientSecret = config('bolcom.client_secret');
         }
     }
 

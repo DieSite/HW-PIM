@@ -40,11 +40,10 @@ class BulkSyncProductsWithBolComJob implements ShouldQueue
         $query = $productRepository->getModel()->newQuery()
             ->whereJsonDoesntContain('values->common->ean', null)
             ->whereJsonDoesntContain('values->common->ean', '')
-            ->where(function ($query) {
-                $query->whereNull('bol_com_credential_id')
-                    ->orWhere('bol_com_credential_id', $this->credentialId);
-            })
-            ->where('bol_com_sync', false);
+            ->where('bol_com_sync', true)
+            ->whereHas('bolComCredentials', function ($query) {
+                $query->where('bol_com_credentials.id', $this->credentialId);
+            });
 
         if ($this->productIds) {
             $query->whereIn('id', $this->productIds);
@@ -59,7 +58,6 @@ class BulkSyncProductsWithBolComJob implements ShouldQueue
         }
 
         $products = $productRepository->getModel()->whereIn('id', $productIds)->get();
-
         foreach ($products as $product) {
             $product->bol_com_credential_id = $this->credentialId;
             $product->bol_com_sync = true;
@@ -71,12 +69,13 @@ class BulkSyncProductsWithBolComJob implements ShouldQueue
                 continue;
             }
 
-            SyncProductWithBolComJob::dispatch($product, true);
+            $credential = $product->bolComCredentials()->where('bol_com_credentials.id', $this->credentialId)->first();
+
+            SyncProductWithBolComJob::dispatch($product, $credential, true);
         }
 
         if ($query->count() > $totalProducts) {
-            self::dispatch($this->batchSize, null, $this->credentialId)
-                ->onQueue('bol-com-sync');
+            self::dispatch($this->batchSize, null, $this->credentialId);
         }
     }
 }

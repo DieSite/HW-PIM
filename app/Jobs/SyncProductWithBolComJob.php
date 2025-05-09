@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Clients\BolApiClient;
+use App\Models\BolComCredential;
 use App\Services\BolComProductService;
 use Exception;
 use GuzzleHttp\Exception\GuzzleException;
@@ -34,8 +35,10 @@ class SyncProductWithBolComJob implements ShouldQueue
      */
     public function __construct(
         protected Product $product,
+        protected BolComCredential $bolComCredential,
         protected bool $previousSyncState = false,
-        protected ?string $processId = null
+        protected ?string $processId = null,
+        protected bool $unchecked = false
     ) {}
 
     /**
@@ -46,20 +49,26 @@ class SyncProductWithBolComJob implements ShouldQueue
     public function handle(BolComProductService $bolComProductService, BolApiClient $apiClient, ProductRepository $productRepository)
     {
         try {
+            if ($this->unchecked == true) {
+                $bolComProductService->syncProduct($this->product, $this->bolComCredential, $this->previousSyncState, true);
+            }
+
             if ($this->processId !== null) {
                 $this->checkProcessStatus($apiClient, $productRepository);
 
                 return;
             }
 
-            $response = $bolComProductService->syncProduct($this->product, $this->previousSyncState);
+            $apiClient->setCredential($this->bolComCredential);
+
+            $response = $bolComProductService->syncProduct($this->product, $this->bolComCredential, $this->previousSyncState);
 
             if ($response === null) {
                 return;
             }
 
             if (! empty($response['processStatusId']) && $response['status'] !== 'SUCCESS') {
-                self::dispatch($this->product, $this->previousSyncState, $response['processStatusId'])
+                self::dispatch($this->product, $this->bolComCredential, $this->previousSyncState, $response['processStatusId'])
                     ->delay(now()->addSeconds(30));
             }
         } catch (Exception $e) {
@@ -81,6 +90,8 @@ class SyncProductWithBolComJob implements ShouldQueue
      */
     protected function checkProcessStatus(BolApiClient $apiClient, ProductRepository $productRepository): void
     {
+        $apiClient->setCredential($this->bolComCredential);
+
         $response = $apiClient->get('/shared/process-status/'.$this->processId);
 
         if (! isset($response['status'])) {
@@ -89,14 +100,17 @@ class SyncProductWithBolComJob implements ShouldQueue
 
         switch ($response['status']) {
             case 'PENDING':
-                self::dispatch($this->product, $this->previousSyncState, $this->processId)
+                self::dispatch($this->product, $this->bolComCredential, $this->previousSyncState, $this->processId)
                     ->delay(now()->addSeconds(30));
                 break;
 
             case 'SUCCESS':
                 if (! empty($response['entityId'])) {
                     $product = $productRepository->find($this->product->id);
-                    $product->bol_com_reference = $response['entityId'];
+                    $product->bolComCredentials()->updateExistingPivot(
+                        $this->bolComCredential->id,
+                        ['reference' => $response['entityId']]
+                    );
                     $product->save();
                 }
                 break;

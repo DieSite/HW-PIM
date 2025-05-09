@@ -3,10 +3,10 @@
 namespace App\Clients;
 
 use App\Helpers\BolComAuthenticationHelper;
+use App\Models\BolComCredential;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use Illuminate\Support\Facades\Log;
 
 class BolApiClient
 {
@@ -30,11 +30,27 @@ class BolApiClient
      *
      * @throws Exception
      */
-    public function __construct($connectionId = null, $skipCache = false)
+    public function __construct($credentialIdOrObject = null, $skipCache = false)
     {
         $this->client = new Client;
-        $this->authHelper = new BolComAuthenticationHelper($connectionId, $skipCache);
         $this->baseUrl = config('bolcom.api_url');
+
+        if ($credentialIdOrObject instanceof BolComCredential) {
+            $this->setCredential($credentialIdOrObject);
+        } elseif ($credentialIdOrObject) {
+            $this->authHelper = new BolComAuthenticationHelper($credentialIdOrObject, $skipCache);
+        } else {
+            $this->authHelper = null;
+        }
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function setCredential(BolComCredential $credential)
+    {
+        $this->authHelper = new BolComAuthenticationHelper($credential->id, false);
+        return $this;
     }
 
     /**

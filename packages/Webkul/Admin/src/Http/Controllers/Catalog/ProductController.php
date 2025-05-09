@@ -3,6 +3,7 @@
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
 use App\Jobs\SyncProductWithBolComJob;
+use App\Models\BolComCredential;
 use App\Services\BolComProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
@@ -218,16 +219,49 @@ class ProductController extends Controller
             $product = $this->productRepository->update($data, $id);
 
             $ean = $product->values['common']['ean'] ?? null;
+            $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
+            $deliveryCode = $request->has('bol_com_sync') ? $request->input('bol_com_delivery_code') : null;
+
+            $selectedCredentialIds = $request->has('bol_com_sync')
+                ? $request->input('bol_com_credentials', [])
+                : [];
+
+            $selectedCredentials = BolComCredential::whereIn('id', $selectedCredentialIds)->get();
+
+            $credentialsToDelete = $product->bolComCredentials()
+                ->when(! $request->has('bol_com_sync'), function ($query) {
+                    return $query->whereNotNull('reference');
+                }, function ($query) use ($selectedCredentialIds) {
+                    return $query->whereNotIn('bol_com_credentials.id', $selectedCredentialIds)
+                        ->whereNotNull('reference');
+                })
+                ->get();
+
+            if ($request->has('bol_com_sync') && $request->has('bol_com_credentials')) {
+                $syncData = [];
+                foreach ($selectedCredentialIds as $credentialId) {
+                    $syncData[$credentialId] = [
+                        'delivery_code' => $deliveryCode,
+                    ];
+                }
+                $product->bolComCredentials()->sync($syncData);
+            }
+
+            $product->saveQuietly();
+
+            if ($ean !== null && $product->bol_com_sync) {
+                foreach ($selectedCredentials as $credential) {
+                    SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState);
+                }
+            }
 
             if ($ean !== null) {
-                SyncProductWithBolComJob::dispatch($product, $previousSyncState);
+                foreach ($credentialsToDelete as $credential) {
+                    SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState, null, true);
+                }
             }
 
             Event::dispatch('catalog.product.update.after', $product);
-
-            $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
-            $product->bol_com_credential_id = $request->has('bol_com_sync') ? $request->input('bol_com_credential_id') : null;
-            $product->save();
 
             session()->flash('success', trans('admin::app.catalog.products.update-success'));
 

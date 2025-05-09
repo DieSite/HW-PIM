@@ -93,7 +93,6 @@ class CustomBolComController extends Controller
             'updated_at' => now(),
         ];
 
-        // Only update the client secret if it's provided
         if ($request->filled('client_secret')) {
             $updateData['client_secret'] = $validated['client_secret'];
         }
@@ -156,16 +155,15 @@ class CustomBolComController extends Controller
         ]);
 
         try {
-            BulkSyncProductsWithBolComJob::dispatch(50, null, $request->credential_id)
-                ->onQueue('bol-com-sync');
+            BulkSyncProductsWithBolComJob::dispatch(50, null, $request->credential_id);
 
             return redirect()
                 ->route('admin.custom.bolCom.index')
-                ->with('success', 'Bulk sync has been initiated. Products with an EAN code will be synced with Bol.com.');
+                ->with('success', 'Bulk sync gestart.');
         } catch (\Exception $e) {
             return redirect()
                 ->route('admin.custom.bolCom.index')
-                ->with('error', 'Failed to start bulk sync: '.$e->getMessage());
+                ->with('error', 'Bulk sync mislukt: '.$e->getMessage());
         }
     }
 }

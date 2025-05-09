@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Clients\BolApiClient;
+use App\Models\BolComCredential;
 use Exception;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\DB;
@@ -18,31 +19,37 @@ class BolComProductService
      * @throws GuzzleException
      * @throws Exception
      */
-    public function syncProduct(Product $product, $previousSyncState = false)
+    public function syncProduct(Product $product, BolComCredential $bolComCredential, $previousSyncState = false, $unchecked = false)
     {
         try {
+            $apiClient = new BolApiClient;
+            $apiClient->setCredential($bolComCredential);
+
+            $pivotData = $product->bolComCredentials()
+                ->where('bol_com_credentials.id', $bolComCredential->id)
+                ->first();
+
+            $reference = $pivotData ? $pivotData->pivot->reference : null;
+            $deliveryCode = $pivotData ? $pivotData->pivot->delivery_code : '1-8d';
+
+            if ($unchecked) {
+                $this->deleteProductFromBolCom($product, $apiClient, $reference, $bolComCredential);
+                return null;
+            }
+
             if (! $product->bol_com_sync) {
-                if ($previousSyncState && $product->bol_com_reference) {
-                    $credentialId = $product->bol_com_credential_id ?: $this->getCredentialsId();
-                    $apiClient = new BolApiClient($credentialId);
-                    $this->deleteProductFromBolCom($product, $apiClient);
+                if ($previousSyncState && $reference) {
+                    $this->deleteProductFromBolCom($product, $apiClient, $reference, $bolComCredential);
+                    $product->bolComCredentials()->detach($bolComCredential->id);
                 }
 
                 return null;
             }
 
-            if (! $product->bol_com_credential_id) {
-                Log::warning('No Bol.com credential selected for product sync', ['product_id' => $product->id]);
-
-                return null;
-            }
-
-            $apiClient = new BolApiClient($product->bol_com_credential_id);
-
-            if (! $previousSyncState || ! $product->bol_com_reference) {
-                return $this->createProductOnBolCom($product, $apiClient);
+            if (! $previousSyncState || ! $reference) {
+                return $this->createProductOnBolCom($product, $apiClient, $deliveryCode);
             } else {
-                return $this->updateProductOnBolCom($product, $apiClient);
+                return $this->updateProductOnBolCom($product, $apiClient, $reference, $deliveryCode);
             }
         } catch (Exception $e) {
             Log::error('Failed to sync product with Bol.com', [
@@ -58,9 +65,9 @@ class BolComProductService
     /**
      * @throws GuzzleException
      */
-    protected function createProductOnBolCom(Product $product, BolApiClient $apiClient)
+    protected function createProductOnBolCom(Product $product, BolApiClient $apiClient, $deliveryCode)
     {
-        $data = $this->buildProductData($product);
+        $data = $this->buildProductData($product, $deliveryCode);
 
         return $apiClient->post('/retailer/offers', $data);
 
@@ -72,11 +79,11 @@ class BolComProductService
     /**
      * @throws GuzzleException
      */
-    protected function updateProductOnBolCom(Product $product, BolApiClient $apiClient)
+    protected function updateProductOnBolCom(Product $product, BolApiClient $apiClient, $reference, $deliveryCode)
     {
-        $this->updateProductPrice($product, $apiClient);
-        $this->updateProductStock($product, $apiClient);
-        $this->updateProductDetails($product, $apiClient);
+        $this->updateProductPrice($product, $apiClient, $reference);
+        $this->updateProductStock($product, $apiClient, $reference);
+        $this->updateProductDetails($product, $apiClient, $reference, $deliveryCode);
 
         return true;
     }
@@ -84,7 +91,7 @@ class BolComProductService
     /**
      * @throws GuzzleException
      */
-    protected function updateProductPrice(Product $product, BolApiClient $apiClient)
+    protected function updateProductPrice(Product $product, BolApiClient $apiClient, $reference)
     {
         $priceData = $product->values['common']['prijs'] ?? [];
         $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
@@ -101,13 +108,13 @@ class BolComProductService
             ],
         ];
 
-        return $apiClient->put('/retailer/offers/'.$product->bol_com_reference.'/price', $data);
+        return $apiClient->put('/retailer/offers/'.$reference.'/price', $data);
     }
 
     /**
      * @throws GuzzleException
      */
-    protected function updateProductStock(Product $product, BolApiClient $apiClient)
+    protected function updateProductStock(Product $product, BolApiClient $apiClient, $reference)
     {
         $stockData = $product->values['common'] ?? [];
 
@@ -129,13 +136,13 @@ class BolComProductService
             'managedByRetailer' => true,
         ];
 
-        return $apiClient->put('/retailer/offers/'.$product->bol_com_reference.'/stock', $data);
+        return $apiClient->put('/retailer/offers/'.$reference.'/stock', $data);
     }
 
     /**
      * @throws GuzzleException
      */
-    protected function updateProductDetails(Product $product, BolApiClient $apiClient)
+    protected function updateProductDetails(Product $product, BolApiClient $apiClient, $reference, $deliveryCode)
     {
         $title = $product->values['common']['productnaam'];
 
@@ -144,24 +151,21 @@ class BolComProductService
             'unknownProductTitle' => $title,
             'fulfilment'          => [
                 'method'       => 'FBR',
-                'deliveryCode' => '1-8d',
+                'deliveryCode' => $deliveryCode,
             ],
         ];
 
-        return $apiClient->put('/retailer/offers/'.$product->bol_com_reference, $data);
+        return $apiClient->put('/retailer/offers/'.$reference, $data);
     }
 
-    protected function deleteProductFromBolCom(Product $product, BolApiClient $apiClient)
+    protected function deleteProductFromBolCom(Product $product, BolApiClient $apiClient, $reference, BolComCredential $bolComCredential)
     {
-        $apiClient->delete('/retailer/offers/'.$product->bol_com_reference);
+        $apiClient->delete('/retailer/offers/'.$reference);
 
-        $product->bol_com_reference = null;
-        $product->bol_com_sync = false;
-        $product->bol_com_credential_id = null;
-        $product->save();
+        $product->bolComCredentials()->detach($bolComCredential->id);
     }
 
-    protected function buildProductData(Product $product)
+    protected function buildProductData(Product $product, $deliveryCode)
     {
         $data = $product->values['common'] ?? [];
 
@@ -207,7 +211,7 @@ class BolComProductService
             ],
             'fulfilment' => [
                 'method'       => 'FBR',
-                'deliveryCode' => '1-8d',
+                'deliveryCode' => $deliveryCode,
             ],
         ];
     }
@@ -226,6 +230,7 @@ class BolComProductService
         $credentials = DB::table('bol_com_credentials')
             ->select('id', 'name')
             ->orderBy('name')
+            ->where('is_active', 1)
             ->get();
 
         $options = [];
