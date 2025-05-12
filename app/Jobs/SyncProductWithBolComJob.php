@@ -38,7 +38,7 @@ class SyncProductWithBolComJob implements ShouldQueue
         protected BolComCredential $bolComCredential,
         protected bool $previousSyncState = false,
         protected ?string $processId = null,
-        protected bool $unchecked = false
+        protected bool $unchecked = false,
     ) {}
 
     /**
@@ -54,7 +54,7 @@ class SyncProductWithBolComJob implements ShouldQueue
             }
 
             if ($this->processId !== null) {
-                $this->checkProcessStatus($apiClient, $productRepository);
+                $this->checkProcessStatus($apiClient, $productRepository, $bolComProductService);
 
                 return;
             }
@@ -88,7 +88,7 @@ class SyncProductWithBolComJob implements ShouldQueue
      *
      * @throws Exception|GuzzleException
      */
-    protected function checkProcessStatus(BolApiClient $apiClient, ProductRepository $productRepository): void
+    protected function checkProcessStatus(BolApiClient $apiClient, ProductRepository $productRepository, ?BolComProductService $bolComProductService = null): void
     {
         $apiClient->setCredential($this->bolComCredential);
 
@@ -112,6 +112,10 @@ class SyncProductWithBolComJob implements ShouldQueue
                         ['reference' => $response['entityId']]
                     );
                     $product->save();
+
+                    $offer = $apiClient->get('/retailer/offers/'.$response['entityId']);
+
+                    $bolComProductService->sendSuccessMail($this->product, $offer, $this->bolComCredential);
                 }
                 break;
 

@@ -42,14 +42,14 @@ services:
     depends_on:
       - unopim-mysql
 
-  unopim-mailpit:
-    image: 'axllent/mailpit:latest'
-    container_name: unopim-mailpit
-    networks:
-        - diesite
-    restart: "no"
-    ports:
-      - "8025:8025"
+#  unopim-mailpit:
+#    image: 'axllent/mailpit:latest'
+#    container_name: unopim-mailpit
+#    networks:
+#        - diesite
+#    restart: "no"
+#    ports:
+#      - "8025:8025"
 
 networks:
     diesite:

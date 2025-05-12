@@ -3,11 +3,13 @@
 namespace App\Services;
 
 use App\Clients\BolApiClient;
+use App\Mail\BolComSyncSuccess;
 use App\Models\BolComCredential;
 use Exception;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
 
@@ -34,6 +36,7 @@ class BolComProductService
 
             if ($unchecked) {
                 $this->deleteProductFromBolCom($product, $apiClient, $reference, $bolComCredential);
+
                 return null;
             }
 
@@ -190,8 +193,8 @@ class BolComProductService
         }
 
         return [
-            'ean'              => $ean,
-            'condition'        => [
+            'ean'       => $ean,
+            'condition' => [
                 'name' => 'NEW',
             ],
             'reference'           => $sku,
@@ -239,5 +242,16 @@ class BolComProductService
         }
 
         return $options;
+    }
+
+    public function sendSuccessMail(product $product, array $offer, bolComCredential $bolComCredential)
+    {
+        $recipients = config('bolcom.email_recipients', []);
+
+        if (empty($recipients)) {
+            return;
+        }
+
+        Mail::to($recipients)->send(new BolComSyncSuccess($product, $offer, $bolComCredential));
     }
 }
