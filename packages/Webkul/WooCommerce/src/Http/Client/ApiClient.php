@@ -200,8 +200,10 @@ class ApiClient
         if (! empty($body) && gettype($body) != 'integer' && gettype($body) != 'boolean') {
             $response = $body;
             $response['code'] = $code;
+            \Log::info('1');
         } else {
             $response = ['code' => $code];
+            \Log::info('2');
         }
 
         return $response;
