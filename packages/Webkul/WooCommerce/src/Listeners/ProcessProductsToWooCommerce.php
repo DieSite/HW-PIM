@@ -90,10 +90,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $productData = $this->formatData($this->batch);
 
         // Check if product exists via SKU
-        $existingProduct = $this->connectorService->requestApiAction('getProductWithSku', [], ['sku' => $productData['sku']]);
-
         $existingProduct = $this->connectorService->requestApiAction(
-            'getProductWithSku',
+            'products',
             [],
             ['sku' => $productData['sku']]
         );
