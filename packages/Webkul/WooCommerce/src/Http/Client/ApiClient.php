@@ -185,11 +185,10 @@ class ApiClient
     protected function createResponse()
     {
         // Get response data.
+
         $rawBody = \curl_exec($this->ch);
 
         $code = \curl_getinfo($this->ch, CURLINFO_HTTP_CODE);
-
-        \Log::info('Raw body: '.$rawBody);;
 
         try {
             $body = json_decode($rawBody, true);
