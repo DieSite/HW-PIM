@@ -190,13 +190,14 @@ class ApiClient
 
         $code = \curl_getinfo($this->ch, CURLINFO_HTTP_CODE);
 
-        \Log::info("Body: $rawBody");
         try {
             $body = json_decode($rawBody, true);
         } catch (\Exception $e) {
             \Log::error($e->getMessage());
             $body = [];
         }
+
+        var_dump($body);
 
         if (! empty($body) && gettype($body) != 'integer' && gettype($body) != 'boolean') {
             $response = array_merge(['code' => $code], $body);
