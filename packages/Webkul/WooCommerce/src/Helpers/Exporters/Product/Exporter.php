@@ -9,6 +9,7 @@ use Webkul\DataTransfer\Helpers\Export as ExportHelper;
 use Webkul\DataTransfer\Helpers\Exporters\AbstractExporter;
 use Webkul\DataTransfer\Jobs\Export\File\FlatItemBuffer as FileExportFileBuffer;
 use Webkul\DataTransfer\Repositories\JobTrackBatchRepository;
+use Webkul\DataTransfer\Services\JobLogger;
 use Webkul\Product\Repositories\ProductRepository;
 use Webkul\WooCommerce\Repositories\AttributeMappingRepository;
 use Webkul\WooCommerce\Repositories\CredentialRepository;
@@ -139,6 +140,8 @@ class Exporter extends AbstractExporter
     ) {
         parent::__construct($exportBatchRepository, $exportFileBuffer);
         $this->initAttributes();
+
+        $this->setLogger(JobLogger::make("UpdateExport-$this->id"));
     }
 
     /**
