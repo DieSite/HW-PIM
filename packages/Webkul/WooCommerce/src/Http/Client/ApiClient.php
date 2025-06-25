@@ -146,11 +146,6 @@ class ApiClient
             $url = $this->url.$endpoint;
         }
 
-        if (str_contains($endpoint, '/products?sku=')) {
-            $this->url = str_replace('v2', 'v3', $this->url);
-            $url = $this->url.$endpoint;
-        }
-
         // Setup authentication.
         $this->authenticate($url, $method, $parameters, $headers, $holdEndPoint);
         // Setup method.
@@ -195,9 +190,11 @@ class ApiClient
 
         $code = \curl_getinfo($this->ch, CURLINFO_HTTP_CODE);
 
+        \Log::info("Body: $rawBody");
         try {
             $body = json_decode($rawBody, true);
         } catch (\Exception $e) {
+            \Log::error($e->getMessage());
             $body = [];
         }
 
