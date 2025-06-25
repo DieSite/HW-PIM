@@ -89,16 +89,12 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
         $productData = $this->formatData($this->batch);
 
-        Log::info('SKU '.$productData['sku']);
-
         // Check if product exists via SKU
         $existingProduct = $this->connectorService->requestApiAction(
             'getProductWithSku',
             [],
             ['sku' => $productData['sku']]
         );
-
-        Log::info('Existing Product: '.json_encode($existingProduct));
 
         if (! isset($existingProduct[0])) {
             $result = $this->connectorService->requestApiAction(
