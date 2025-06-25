@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Http\Client;
 
+use AWS\CRT\Log;
 use Illuminate\Http\Client\Response;
 use Webkul\WooCommerce\Traits\RestApiEndpointsTrait;
 
@@ -203,6 +204,9 @@ class ApiClient
             \Log::info('1');
         } else {
             $response = ['code' => $code];
+            \Log::info(!empty($body));
+            \Log::info(gettype($body) != 'integer');
+            \Log::info(gettype($body) != 'boolean');
             \Log::info('2');
         }
 
