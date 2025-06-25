@@ -146,6 +146,8 @@ class ApiClient
             $url = $this->url.$endpoint;
         }
 
+        \Log::info("URL: $url");
+
         // Setup authentication.
         $this->authenticate($url, $method, $parameters, $headers, $holdEndPoint);
         // Setup method.
