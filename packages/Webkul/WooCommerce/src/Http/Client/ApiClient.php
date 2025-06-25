@@ -146,7 +146,10 @@ class ApiClient
             $url = $this->url.$endpoint;
         }
 
-        \Log::info("URL: $url");
+        if ($endpoint === 'getProductWithSku') {
+            $this->url = str_replace('v2', 'v3', $this->url);
+            $url = $this->url.$endpoint;
+        }
 
         // Setup authentication.
         $this->authenticate($url, $method, $parameters, $headers, $holdEndPoint);
