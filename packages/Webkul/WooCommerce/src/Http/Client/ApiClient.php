@@ -196,9 +196,7 @@ class ApiClient
             \Log::error($e->getMessage());
             $body = [];
         }
-
-        var_dump($body);
-
+π
         if (! empty($body) && gettype($body) != 'integer' && gettype($body) != 'boolean') {
             $response = array_merge(['code' => $code], $body);
         } else {
