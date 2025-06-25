@@ -139,9 +139,8 @@ class Exporter extends AbstractExporter
         protected ProductRepository $productRepository
     ) {
         parent::__construct($exportBatchRepository, $exportFileBuffer);
-        $this->initAttributes();
-
         $this->setLogger(JobLogger::make("UpdateExport-$this->id"));
+        $this->initAttributes();
     }
 
     /**
