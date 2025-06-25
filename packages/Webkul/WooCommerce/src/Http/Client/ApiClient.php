@@ -204,6 +204,7 @@ class ApiClient
             \Log::info('1');
         } else {
             $response = ['code' => $code];
+            \Log::info(curl_getinfo($this->ch, CURLINFO_EFFECTIVE_URL));
             \Log::info($rawBody);
             \Log::info(gettype($body) != 'integer');
             \Log::info(gettype($body) != 'boolean');
