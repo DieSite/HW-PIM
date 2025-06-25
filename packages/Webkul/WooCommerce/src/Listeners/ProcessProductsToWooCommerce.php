@@ -91,10 +91,12 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
         // Check if product exists via SKU
         $existingProduct = $this->connectorService->requestApiAction(
-            'products',
+            'getProductWithSku',
             [],
             ['sku' => $productData['sku']]
         );
+
+        Log::info("getProductWithSku \n ".json_encode($existingProduct));
 
         if (! isset($existingProduct[0])) {
             $result = $this->connectorService->requestApiAction(
