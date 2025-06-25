@@ -146,7 +146,7 @@ class ApiClient
             $url = $this->url.$endpoint;
         }
 
-        if ($endpoint === 'getProductWithSku') {
+        if (str_contains($endpoint, '/products?sku=')) {
             $this->url = str_replace('v2', 'v3', $this->url);
             $url = $this->url.$endpoint;
         }
