@@ -197,6 +197,8 @@ class ApiClient
             $body = [];
         }
 
+        \Log::info("BODY: " . json_encode($body));
+
         if (! empty($body) && gettype($body) != 'integer' && gettype($body) != 'boolean') {
             $response = array_merge(['code' => $code], $body);
         } else {
