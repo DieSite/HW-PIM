@@ -46,14 +46,22 @@ class AttributeFamily extends TranslatableModel implements AttributeFamilyContra
     /**
      * Get all the attributes for the attribute groups.
      */
-    public function customAttributes()
+    public function customAttributes($productType = null)
     {
-        return (AttributeProxy::modelClass())::join('attribute_group_mappings', 'attributes.id', '=', 'attribute_group_mappings.attribute_id')
+        $builder = (AttributeProxy::modelClass())::join('attribute_group_mappings', 'attributes.id', '=', 'attribute_group_mappings.attribute_id')
             ->join('attribute_family_group_mappings', 'attribute_group_mappings.attribute_family_group_id', '=', 'attribute_family_group_mappings.id')
             ->join('attribute_groups', 'attribute_family_group_mappings.attribute_group_id', '=', 'attribute_groups.id')
             ->join('attribute_families', 'attribute_family_group_mappings.attribute_family_id', '=', 'attribute_families.id')
-            ->where('attribute_families.id', $this->id)
-            ->select('attributes.*', 'attribute_groups.id as group_id');
+            ->where('attribute_families.id', $this->id);
+
+        if (!is_null($productType)) {
+            $builder = $builder->where(function ($query) use ($productType) {
+                $query->where('visible_on', $productType)
+                    ->orWhere('visible_on', '');
+            });
+        }
+
+        return $builder->select('attributes.*', 'attribute_groups.id as group_id');
     }
 
     /**

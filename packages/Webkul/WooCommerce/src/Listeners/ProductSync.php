@@ -2,14 +2,16 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
 
 class ProductSync
 {
     public function __construct(protected ProductRepository $productRepository) {}
 
-    public function syncProductToWooCommerce($product)
+    public function syncProductToWooCommerce(Product $product)
     {
+        $product->load(['parent', 'variants']);
         ProcessProductsToWooCommerce::dispatch($product->toArray());
     }
 

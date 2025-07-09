@@ -2,6 +2,8 @@
 
 namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Attribute\Repositories\AttributeRepository;
 use Webkul\DataTransfer\Contracts\JobTrackBatch as JobTrackBatchContract;
@@ -384,11 +386,19 @@ class Exporter extends AbstractExporter
 
         $duplicateAttributes = $attributes;
 
+        Log::debug(print_r($this->wrapper, true));
+
         /* main attributes */
         foreach ($this->mappingFields as $name => $field) {
             if (is_array($duplicateAttributes) && array_key_exists($field, $duplicateAttributes)) {
                 if (! empty($this->wrapper[$name])) {
-                    $formatted[$this->wrapper[$name]][strtolower($name)] = (string) $duplicateAttributes[$field];
+                    $value = is_array($duplicateAttributes[$field]) ? Arr::first($duplicateAttributes[$field]) : $duplicateAttributes[$field];
+                    if ($this->wrapper[$name] === 'meta_data') {
+                        $formatted[$this->wrapper[$name]][] = ['key' => strtolower($name), 'value' => (string) $value];
+                    } else {
+                        $formatted[$this->wrapper[$name]][strtolower($name)] = (string) $value;
+                    }
+
                 } else {
                     $attribute = $this->attributes[$field] ?? [];
                     if ($attribute['type'] == 'price') {
@@ -440,7 +450,90 @@ class Exporter extends AbstractExporter
 
         $this->formatAdditionalData($formatted, $attributes, $imagesToExport, $item);
 
+        $voorraadEurogros = $item['values']['common']['voorraad_eurogros'] ?? 0;
+        $voorraadDeMunk = $item['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
+        $voorraadHW = $item['values']['common']['voorraad_hw_5_korting'] ?? 0;
+
+        $formatted['manage_stock'] = true;
+        $formatted['stock_quantity'] = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
+        $formatted['stock_status'] = $formatted['stock_quantity'] > 0 ? 'instock' : 'outofstock';
+
+        if (isset($item['parent_id'])) {
+            $formatted['parent_id'] = $item['parent_id'];
+
+            foreach ($formatted['attributes'] as &$attribute) {
+                $attribute['option'] = $attribute['options'][0];
+                unset($attribute['variation']);
+                unset($attribute['visible']);
+                unset($attribute['options']);
+            }
+        } else {
+            $onderkleed = collect();
+            $maat = collect();
+            foreach (Arr::get($item, 'variants', []) as $variant) {
+                $onderkleed->push(...Arr::wrap(Arr::get($variant, 'values.common.onderkleed', [])));
+                $maat->push(...Arr::wrap(Arr::get($variant, 'values.common.maat', [])));
+            }
+
+            $attributeMapping = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
+            $formatted['attributes'][] = [
+                'id'        => $attributeMapping[0]['externalId'],
+                'visible'   => true,
+                'variation' => true,
+                'options'   => $maat->unique()->toArray(),
+            ];
+
+            $attributeMapping = $this->getDataTransferMapping('onderkleed', self::UNOPIM_ATTRIBUTE_ENTITY);
+            $formatted['attributes'][] = [
+                'id'        => $attributeMapping[0]['externalId'],
+                'visible'   => true,
+                'variation' => true,
+                'options'   => $onderkleed->unique()->toArray(),
+            ];
+
+            Log::debug(print_r($item, true));;
+
+            $tags = $this->getTags($item);
+            if (!is_null($tags)) {
+                $formatted['tags'] = $tags;
+            }
+        }
+
+//        \Log::debug(print_r($formatted, true));
+
         return $formatted;
+    }
+
+    private function getTags(array $item): ?array
+    {
+        $isUitverkoop = false;
+        $isVoorraadkorting = false;
+
+        foreach (Arr::get($item, 'variants', []) as $variant) {
+            Log::debug(print_r($variant, true));;
+            if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
+                $isUitverkoop = true;
+                break;
+            }
+
+            $voorraadEurogros = $variant['values']['common']['voorraad_eurogros'] ?? 0;
+            $voorraadDeMunk = $variant['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
+            $voorraadHW = $variant['values']['common']['voorraad_hw_5_korting'] ?? 0;
+
+            $stock = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
+
+            if ($stock > 0) {
+                $isVoorraadkorting = true;
+            }
+        }
+
+        if ($isUitverkoop) {
+            return [['id' =>1582]];
+        } elseif ($isVoorraadkorting) {
+            return [['id' => 1392]];
+        } else {
+            return null;
+        }
     }
 
     protected function formatAdditionalData(&$formatted, $attributes, $imagesToExport, $item)
@@ -747,8 +840,19 @@ class Exporter extends AbstractExporter
     }
 
     protected $wrapper = [
-        'Length' => 'dimensions',
-        'width'  => 'dimensions',
-        'height' => 'dimensions',
+        'Length'                => 'dimensions',
+        'width'                 => 'dimensions',
+        'height'                => 'dimensions',
+        '_bol_ean'              => 'meta_data',
+        '_expected_week'        => 'meta_data',
+        'maximale_breedte'      => 'meta_data',
+        'maximale_lengte'       => 'meta_data',
+        'maximale_diagonaal'    => 'meta_data',
+        'prijs_per_m'           => 'meta_data',
+        'sale_prijs_per_m'      => 'meta_data',
+        'prijs_rond_per_m'      => 'meta_data',
+        'sale_prijs_rond_per_m' => 'meta_data',
+        '_yoast_wpseo_title'    => 'meta_data',
+        '_yoast_wpseo_metadesc' => 'meta_data',
     ];
 }

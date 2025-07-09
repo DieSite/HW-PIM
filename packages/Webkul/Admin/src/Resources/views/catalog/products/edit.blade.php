@@ -303,7 +303,9 @@
                 </div>
 
                 <!-- Categories View Blade File -->
+                @if($product->type !== 'simple')
                 @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])
+
 
                 @includeIf('admin::catalog.products.edit.types.' . $product->type)
 
@@ -313,6 +315,7 @@
                     'crossSellAssociations' => $product->values['associations']['cross_sells'] ?? [],
                     'relatedAssociations'   => $product->values['associations']['related_products'] ?? [],
                 ])
+                @endif
 
                 <!-- Include Product Type Additional Blade Files If Any -->
                 @foreach ($product->getTypeInstance()->getAdditionalViews() as $view)

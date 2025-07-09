@@ -149,6 +149,10 @@ class ConfigurableProductController extends ProductController
 
             Event::dispatch('catalog.product.update.after', $product);
 
+            foreach ($product->variants as $variant) {
+                Event::dispatch('catalog.product.update.after', $variant);
+            }
+
             return $this->successResponse(
                 trans('admin::app.catalog.products.update-success'),
                 Response::HTTP_OK

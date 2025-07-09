@@ -30,14 +30,22 @@ class AttributeGroup extends TranslatableModel implements AttributeGroupContract
     /**
      * Get all the attribute groups.
      */
-    public function customAttributes($familyId)
+    public function customAttributes($familyId, $productType = null)
     {
-        return (AttributeProxy::modelClass())::join('attribute_group_mappings', 'attributes.id', '=', 'attribute_group_mappings.attribute_id')
+        $builder = (AttributeProxy::modelClass())::join('attribute_group_mappings', 'attributes.id', '=', 'attribute_group_mappings.attribute_id')
             ->join('attribute_family_group_mappings', 'attribute_group_mappings.attribute_family_group_id', '=', 'attribute_family_group_mappings.id')
             ->join('attribute_groups', 'attribute_family_group_mappings.attribute_group_id', '=', 'attribute_groups.id')
             ->where('attribute_family_group_mappings.attribute_group_id', $this->id)
-            ->where('attribute_family_group_mappings.attribute_family_id', $familyId)
-            ->orderBy('attribute_group_mappings.position', 'asc')
+            ->where('attribute_family_group_mappings.attribute_family_id', $familyId);
+
+        if (! is_null($productType)) {
+            $builder = $builder->where(function ($query) use ($productType) {
+                $query->where('visible_on', $productType)
+                    ->orWhere('visible_on', '');
+            });
+        }
+
+        return $builder->orderBy('attribute_group_mappings.position', 'asc')
             ->select('attributes.*', 'attribute_groups.id as group_id')->get();
     }
 

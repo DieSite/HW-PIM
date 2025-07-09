@@ -553,13 +553,13 @@ abstract class AbstractType
         }
 
         if (! $group) {
-            return $this->product->attribute_family->customAttributes()->whereNotIn(
+            return $this->product->attribute_family->customAttributes($this->product->type)->whereNotIn(
                 'attributes.code',
                 $this->skipAttributes
             )->get();
         }
 
-        return $group->customAttributes($this->product->attribute_family->id)->whereNotIn('code', $this->skipAttributes);
+        return $group->customAttributes($this->product->attribute_family->id, $this->product->type)->whereNotIn('code', $this->skipAttributes);
     }
 
     /**

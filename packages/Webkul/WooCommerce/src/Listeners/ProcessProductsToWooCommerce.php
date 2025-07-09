@@ -8,6 +8,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Webkul\DataTransfer\Models\JobTrack;
+use Webkul\Product\Repositories\ProductRepository;
 use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
 use Webkul\WooCommerce\Services\WooCommerceService;
@@ -89,6 +91,67 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
         $productData = $this->formatData($this->batch);
 
+        if (isset($productData['parent_id'])) {
+            $this->processToVariation($productData);
+        } else {
+            $this->processToParentProduct($productData);
+        }
+    }
+
+    protected function formatData($batchData)
+    {
+        return $this->exporter->formatData($batchData);
+    }
+
+    private function processToVariation(array $productData)
+    {
+        Log::info('Processing to variation');
+        $productRepository = app(ProductRepository::class);
+        $parent = $productRepository->find($productData['parent_id']);
+
+        $parentProduct = $this->connectorService->requestApiAction(
+            'getProductWithSku',
+            [],
+            ['sku' => $parent->sku]
+        );
+
+        if (! isset($parentProduct[0])) {
+            Log::error('Parent product not found.');
+
+            return;
+        }
+
+        $existingProduct = $this->connectorService->requestApiAction(
+            'getVariation',
+            [],
+            ['sku' => $productData['sku'], 'product' => $parentProduct[0]['id']]
+        );
+
+        if (! isset($existingProduct[0])) {
+            $result = $this->connectorService->requestApiAction(
+                self::ACTION_ADD_VARIATION,
+                $productData,
+                ['credential' => $this->credential['id'], 'product' => $parentProduct[0]['id']]
+            );
+        } else {
+            $result = $this->connectorService->requestApiAction(
+                self::ACTION_UPDATE_VARIATION,
+                $productData,
+                ['credential' => $this->credential['id'], 'product' => $parentProduct[0]['id'], 'id' => $existingProduct[0]['id']]
+            );
+        }
+
+        if ($result['code'] == 200) {
+            Log::info("Product updated successfully \n ".json_encode($result));
+        } elseif ($result['code'] == 201) {
+            Log::info("Product created successfully \n ".json_encode($result));
+        } else {
+            Log::error('Error occured '.json_encode($result));
+        }
+    }
+
+    private function processToParentProduct(array $productData)
+    {
         // Check if product exists via SKU
         $existingProduct = $this->connectorService->requestApiAction(
             'getProductWithSku',
@@ -119,8 +182,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
     }
 
-    protected function formatData($batchData)
+    public function displayName()
     {
-        return $this->exporter->formatData($batchData);
+        return self::class.'-'.$this->batch['sku'];
     }
 }

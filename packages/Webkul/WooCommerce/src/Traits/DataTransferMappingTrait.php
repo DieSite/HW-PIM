@@ -24,7 +24,7 @@ trait DataTransferMappingTrait
 
         $this->credential = $this->credentialRepository->find($this->jobFilters[self::STORE_URL_FILTER]);
 
-        if (! $this->credential?->active) {
+        if (! is_array($this->credential) || ! $this->credential['active']) {
             $this->jobLogger->warning(trans('woocommerce::app.data-transfer.exports.error.invalid'));
 
             $this->export->state = ExportHelper::STATE_FAILED;
@@ -68,13 +68,16 @@ trait DataTransferMappingTrait
 
     protected function createDataTransferMapping($code, $externalId, $relatedId = null, $entityName = null)
     {
+        if (! isset($this->export)) {
+            return;
+        }
         $mappingData = [
             'entityType'    => $entityName ?? self::UNOPIM_ENTITY_NAME,
             'code'          => $code,
             'externalId'    => $externalId,
             'relatedId'     => $relatedId ?? null,
             'jobInstanceId' => $this->export?->id ?? null,
-            'apiUrl'        => $this->credential?->shopUrl,
+            'apiUrl'        => is_array($this->credential) ? $this->credential['shopUrl'] : null,
         ];
 
         $this->dataTransferMappingRepository->create($mappingData);
@@ -154,7 +157,7 @@ trait DataTransferMappingTrait
                         $allResults = $this->connectorService->requestApiAction(
                             self::ACTION_GET,
                             [],
-                            ['search' => $item['code'], 'credential' => $this->credential->id]
+                            ['search' => $item['code'], 'credential' => $this->credential['id']]
                         );
                     }
 
@@ -253,11 +256,11 @@ trait DataTransferMappingTrait
         $optionMapping = $this->getDataTransferMapping($value, $entityName);
 
         if ($optionMapping) {
-            $result = $this->connectorService->requestApiAction('updateOption', $formattedData, array_merge($attributeId, ['id' => $optionMapping[0]['externalId'], 'credential' => $this->credential->id]));
+            $result = $this->connectorService->requestApiAction('updateOption', $formattedData, array_merge($attributeId, ['id' => $optionMapping[0]['externalId'], 'credential' => $this->credential['id']]));
 
             $this->handleAttributeOption($value, $result, $attributeId, $optionMapping);
         } else {
-            $result = $this->connectorService->requestApiAction('addOption', $formattedData, array_merge($attributeId, ['credential' => $this->credential->id]));
+            $result = $this->connectorService->requestApiAction('addOption', $formattedData, array_merge($attributeId, ['credential' => $this->credential['id']]));
 
             $this->handleAttributeOption($value, $result, $attributeId);
         }
@@ -302,7 +305,7 @@ trait DataTransferMappingTrait
             'externalId'          => $id,
             'relatedId'           => $productId,
             'jobInstanceId'       => $exportId,
-            'apiUrl'              => $this->credential?->shopUrl,
+            'apiUrl'              => is_array($this->credential) ? $this->credential['shopUrl'] : null,
         ];
 
         $this->dataTransferMappingRepository->create($mappingData);
