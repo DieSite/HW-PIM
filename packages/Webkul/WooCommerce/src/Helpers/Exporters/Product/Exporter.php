@@ -426,7 +426,7 @@ class Exporter extends AbstractExporter
             }
         }
 
-        $formatted['virtual'] = empty($formatted['weight']);
+        $formatted['virtual'] = false;
 
         /* categories */
         $categories = collect($attributes['categories'] ?? [])->reject(fn ($code) => strtolower($code) === 'uncategorized')->map(function ($code) {
