@@ -457,6 +457,7 @@ class Exporter extends AbstractExporter
         $formatted['manage_stock'] = true;
         $formatted['stock_quantity'] = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
         $formatted['stock_status'] = $formatted['stock_quantity'] > 0 ? 'instock' : 'outofstock';
+        $formatted['backorders'] = 'yes';
 
         if (isset($item['parent_id'])) {
             $formatted['parent_id'] = $item['parent_id'];
@@ -475,31 +476,55 @@ class Exporter extends AbstractExporter
                 $maat->push(...Arr::wrap(Arr::get($variant, 'values.common.maat', [])));
             }
 
-            $attributeMapping = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
+            $attributeMappingMaat = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
             $formatted['attributes'][] = [
-                'id'        => $attributeMapping[0]['externalId'],
+                'id'        => $attributeMappingMaat[0]['externalId'],
                 'visible'   => true,
                 'variation' => true,
                 'options'   => $maat->unique()->toArray(),
             ];
 
-            $attributeMapping = $this->getDataTransferMapping('onderkleed', self::UNOPIM_ATTRIBUTE_ENTITY);
+            $attributeMappingOnderkleed = $this->getDataTransferMapping('onderkleed', self::UNOPIM_ATTRIBUTE_ENTITY);
             $formatted['attributes'][] = [
-                'id'        => $attributeMapping[0]['externalId'],
+                'id'        => $attributeMappingOnderkleed[0]['externalId'],
                 'visible'   => true,
                 'variation' => true,
                 'options'   => $onderkleed->unique()->toArray(),
             ];
 
-            Log::debug(print_r($item, true));;
+            $maat = $maat->sort(function ($a, $b) {
+                // Controleer eerst of een van beide waarden numeriek is
+                $aIsNumeric = is_numeric($a[0]);
+                $bIsNumeric = is_numeric($b[0]);
+
+                // Als een waarde numeriek is en de andere niet,
+                // dan komt de niet-numerieke waarde eerst
+                if ($aIsNumeric && ! $bIsNumeric) {
+                    return 1;
+                }
+                if (! $aIsNumeric && $bIsNumeric) {
+                    return -1;
+                }
+
+                // Als beide waarden van hetzelfde type zijn (beide numeriek of beide niet-numeriek)
+                // dan gebruiken we een normale stringvergelijking
+                return strcasecmp($a, $b);
+            });
+
+            $formatted['default_attributes'] = [
+                ['id' => $attributeMappingMaat[0]['externalId'], 'option' => $maat->first()],
+                ['id' => $attributeMappingOnderkleed[0]['externalId'], 'option' => $onderkleed->first()],
+            ];
+
+            Log::debug(print_r($formatted, true));
 
             $tags = $this->getTags($item);
-            if (!is_null($tags)) {
+            if (! is_null($tags)) {
                 $formatted['tags'] = $tags;
             }
         }
 
-//        \Log::debug(print_r($formatted, true));
+        //        \Log::debug(print_r($formatted, true));
 
         return $formatted;
     }
@@ -510,7 +535,7 @@ class Exporter extends AbstractExporter
         $isVoorraadkorting = false;
 
         foreach (Arr::get($item, 'variants', []) as $variant) {
-            Log::debug(print_r($variant, true));;
+            Log::debug(print_r($variant, true));
             if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
                 $isUitverkoop = true;
                 break;
