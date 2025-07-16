@@ -49,11 +49,13 @@ class ProductController extends Controller
         if (request()->ajax()) {
 
             // Make sure our filters are in lowercase, as that makes the input easier
-            $filters = request()->input('filters');
-            $filters['all'] = collect($filters['all'])
-                ->map(fn ($filter) => strtolower($filter))
-                ->toArray();
-            request()->query->set('filters', $filters);
+            if (request()->has('filters')) {
+                $filters = request()->input('filters');
+                $filters['all'] = collect($filters['all'])
+                    ->map(fn($filter) => strtolower($filter))
+                    ->toArray();
+                request()->query->set('filters', $filters);
+            }
 
             return app(ProductDataGrid::class)->toJson();
         }
