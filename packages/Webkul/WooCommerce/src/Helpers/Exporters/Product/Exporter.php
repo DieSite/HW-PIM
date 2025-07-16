@@ -453,10 +453,11 @@ class Exporter extends AbstractExporter
         $formatted['stock_status'] = $formatted['stock_quantity'] > 0 ? 'instock' : 'outofstock';
         $formatted['backorders'] = 'yes';
 
-        Log::debug("Full item: {item}", ['item' => $item]);
 
         if (isset($item['parent_id'])) {
             $formatted['parent_id'] = $item['parent_id'];
+            $formatted['maat'] = $item['values']['common']['maat'];
+            $formatted['onderkleed'] = $item['values']['common']['onderkleed'];
 
             foreach ($formatted['attributes'] as &$attribute) {
                 if (! isset($attribute['option'])) {
