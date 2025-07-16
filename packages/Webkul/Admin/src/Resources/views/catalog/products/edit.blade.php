@@ -33,6 +33,15 @@
                     >
                         @lang('admin::app.account.edit.back-btn')
                     </a>
+                    
+                    @if(!is_null($product->parent))
+                        <a
+                            href="{{ route('admin.catalog.products.edit', ['id' => $product->parent_id]) }}"
+                            class="secondary-button"
+                        >
+                            Naar hoofdproduct
+                        </a>
+                    @endif
 
                     <!-- Save Button -->
                     <button class="primary-button">
