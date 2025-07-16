@@ -578,6 +578,11 @@ class Exporter extends AbstractExporter
         foreach ($attributes as $code => $value) {
             $attribute = $this->attributes[$code] ?? [];
 
+            if (is_null($value)) {
+                Log::debug("Value for attribute $code is null. Skipping.");
+                continue;
+            }
+
             if ($attribute && $attribute['type'] == 'boolean') {
                 if ($value === true) {
                     $value = 'Yes';
