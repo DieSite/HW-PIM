@@ -440,12 +440,6 @@ class Exporter extends AbstractExporter
 
         $formatted['categories'] = $categories;
 
-        /* other attributes */
-        $variantAttributesKeys = ! empty($item['super_attributes']) ? array_column($item['super_attributes'], 'code') : [];
-        $variantAttris = array_combine($variantAttributesKeys, array_fill(0, count($variantAttributesKeys), ''));
-
-        $attributes = array_merge($attributes, $variantAttris);
-
         $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
 
         $this->formatAdditionalData($formatted, $attributes, $imagesToExport, $item);
