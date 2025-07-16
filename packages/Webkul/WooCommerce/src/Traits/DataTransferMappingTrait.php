@@ -70,15 +70,12 @@ trait DataTransferMappingTrait
 
     protected function createDataTransferMapping($code, $externalId, $relatedId = null, $entityName = null)
     {
-        if (! isset($this->export)) {
-            return;
-        }
         $mappingData = [
             'entityType'    => $entityName ?? self::UNOPIM_ENTITY_NAME,
             'code'          => $code,
             'externalId'    => $externalId,
             'relatedId'     => $relatedId ?? null,
-            'jobInstanceId' => $this->export?->id ?? null,
+            'jobInstanceId' => $this->export?->id ?? 0,
             'apiUrl'        => is_array($this->credential) ? $this->credential['shopUrl'] : $this->credential->shopUrl,
         ];
 
@@ -250,10 +247,13 @@ trait DataTransferMappingTrait
                 'slug' => $this->connectorService->convertToCode($value),
             ];
         } else {
+            \Log::warning('Error creating option, make sure the custom attribute is exported to the woocommerce first using attribute export job.');
             $this->jobLogger->log('warning', 'Error creating option, make sure the custom attribute is exported to the woocommerce first using attribute export job.');
 
             return;
         }
+
+        \Log::debug('formattedData ', $formattedData);
 
         $optionMapping = $this->getDataTransferMapping($value, $entityName);
 
@@ -270,7 +270,7 @@ trait DataTransferMappingTrait
 
     protected function handleAttributeOption($code, $result, $attributeId, $mapping = null)
     {
-        $resourceId = $result['id'] ?? null;
+        $resourceId = $result['id'] ?? $result['data']['resource_id'] ?? null;
         if ($mapping) {
             $this->updateDataTransferMappingByCode($code, $mapping[0]);
         } else {

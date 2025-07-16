@@ -386,8 +386,6 @@ class Exporter extends AbstractExporter
 
         $duplicateAttributes = $attributes;
 
-        Log::debug(print_r($this->wrapper, true));
-
         /* main attributes */
         foreach ($this->mappingFields as $name => $field) {
             if (is_array($duplicateAttributes) && array_key_exists($field, $duplicateAttributes)) {
@@ -402,7 +400,7 @@ class Exporter extends AbstractExporter
                 } else {
                     $attribute = $this->attributes[$field] ?? [];
                     if ($attribute['type'] == 'price') {
-                        $formatted[$name] = $duplicateAttributes[$field][$this->currency];
+                        $formatted[$name] = number_format($duplicateAttributes[$field][$this->currency], 2);
                     } else {
                         $formatted[$name] = $duplicateAttributes[$field];
                     }
@@ -453,22 +451,19 @@ class Exporter extends AbstractExporter
         $formatted['stock_status'] = $formatted['stock_quantity'] > 0 ? 'instock' : 'outofstock';
         $formatted['backorders'] = 'yes';
 
-
         if (isset($item['parent_id'])) {
             $formatted['parent_id'] = $item['parent_id'];
-            $formatted['maat'] = $item['values']['common']['maat'];
-            $formatted['onderkleed'] = $item['values']['common']['onderkleed'];
 
-            foreach ($formatted['attributes'] as &$attribute) {
-                if (! isset($attribute['option'])) {
-                    continue;
-                }
-
-                $attribute['option'] = $attribute['options'][0];
-                unset($attribute['variation']);
-                unset($attribute['visible']);
-                unset($attribute['options']);
-            }
+            //            foreach ($formatted['attributes'] as &$attribute) {
+            //                if (! isset($attribute['option'])) {
+            //                    continue;
+            //                }
+            //
+            //                $attribute['option'] = $attribute['options'][0];
+            //                unset($attribute['variation']);
+            //                unset($attribute['visible']);
+            //                unset($attribute['options']);
+            //            }
         } else {
             $onderkleed = collect();
             $maat = collect();
@@ -527,15 +522,13 @@ class Exporter extends AbstractExporter
                 ['id' => $attributeMappingOnderkleed[0]['externalId'], 'option' => $onderkleed->first()],
             ];
 
-            Log::debug(print_r($formatted, true));
-
             $tags = $this->getTags($item);
             if (! is_null($tags)) {
                 $formatted['tags'] = $tags;
             }
         }
 
-        //        \Log::debug(print_r($formatted, true));
+        Log::debug('Formatted', ['formatted' => $formatted]);
 
         return $formatted;
     }
@@ -546,7 +539,6 @@ class Exporter extends AbstractExporter
         $isVoorraadkorting = false;
 
         foreach (Arr::get($item, 'variants', []) as $variant) {
-            Log::debug(print_r($variant, true));
             if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
                 $isUitverkoop = true;
                 break;
@@ -564,7 +556,7 @@ class Exporter extends AbstractExporter
         }
 
         if ($isUitverkoop) {
-            return [['id' =>1582]];
+            return [['id' => 1582]];
         } elseif ($isVoorraadkorting) {
             return [['id' => 1392]];
         } else {
@@ -576,16 +568,19 @@ class Exporter extends AbstractExporter
     {
         $customAttrs = [];
         $imageAttrs = [];
+        $priceArray = ['regular_price', 'sale_price', 'price'];
+
+        Log::debug('Formatted START', $formatted);
+        Log::debug('Formatted Attributes', $attributes);
+
         foreach ($attributes as $code => $value) {
             $attribute = $this->attributes[$code] ?? [];
 
-            if ($attribute && $attribute['type'] === 'price' && is_array($value)) {
+            if ($attribute && $attribute['type'] == 'price' && ! in_array($code, $priceArray)) {
                 $value = $value[$this->currency];
             }
 
             if (is_null($value)) {
-                Log::debug("Value for attribute $code is null. Skipping.");
-
                 continue;
             }
 
@@ -608,11 +603,22 @@ class Exporter extends AbstractExporter
                     if (isset($this->customAttributes)) {
                         if (! in_array($code, $this->selectAttributeCodes) && ! in_array($code, $this->multiSelectVariation) && ! in_array($code, $this->booleanVariation)) {
                             if (in_array($code, $this->customAttributes)) {
-                                Log::debug('Value: {value} with attribute {attribute}', ['value' => $value, 'attribute' => $attribute]);
+
+                                if (isset($item['parent_id']) && in_array($code, ['maat', 'onderkleed'])) {
+                                    $customAttrs[] = [
+                                        'id'     => $attributeMapping[0]['externalId'],
+                                        'option' => $value,
+                                    ];
+
+                                    continue;
+                                }
+
+                                Log::debug('Value: {value} with attribute {attribute}', ['code' => $code, 'value' => $value, 'attribute' => $attribute]);
                                 $optionValueMapping = $this->getDataTransferMapping($value, self::ATTRIBUTE_OPTION_ENTITY_NAME);
 
                                 if (! $optionValueMapping) {
                                     $this->createOptions($code, $value, $this->locale, self::ATTRIBUTE_OPTION_ENTITY_NAME);
+                                    $optionValueMapping = $this->getDataTransferMapping($value, self::ATTRIBUTE_OPTION_ENTITY_NAME);
                                 }
 
                                 if ($attributeMapping && $optionValueMapping) {
@@ -624,6 +630,8 @@ class Exporter extends AbstractExporter
                                     ];
 
                                     $customAttrs[] = $customAttr;
+
+                                    continue;
                                 }
                             }
                         }
@@ -640,6 +648,15 @@ class Exporter extends AbstractExporter
                     if (! empty($attributeMapping[0]['externalId'])) {
                         $variantAttributes = []; // Super attributes disabled
                         $variation = ! empty($variantAttributes) && in_array($code, $variantAttributes);
+
+                        if (isset($item['parent_id']) && in_array($code, ['maat', 'onderkleed'])) {
+                            $customAttrs[] = [
+                                'id'     => $attributeMapping[0]['externalId'],
+                                'option' => $value,
+                            ];
+
+                            continue;
+                        }
 
                         $customAttr = [
                             'id'        => $attributeMapping[0]['externalId'],
