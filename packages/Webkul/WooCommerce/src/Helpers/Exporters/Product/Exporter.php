@@ -588,6 +588,10 @@ class Exporter extends AbstractExporter
                 continue;
             }
 
+            if ( $attribute['type'] === 'price' && is_array($value) ) {
+                $value = $value[$this->currency];
+            }
+
             if ($attribute && $attribute['type'] == 'boolean') {
                 if ($value === true) {
                     $value = 'Yes';
