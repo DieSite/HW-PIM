@@ -171,29 +171,29 @@ class ProductController extends Controller
         $product = $this->productRepository->find($id);
         $previousSyncState = $product->bol_com_sync ?? false;
 
-        $configurableValues = [];
+//        $configurableValues = [];
 
         $data = $request->all();
 
-        foreach (($product?->parent?->super_attributes ?? []) as $attr) {
-            $attrCode = $attr->code;
+//        foreach (($product?->parent?->super_attributes ?? []) as $attr) {
+//            $attrCode = $attr->code;
+//
+//            $configurableValues[$attrCode] = $data['values']['common'][$attrCode];
+//        }
 
-            $configurableValues[$attrCode] = $data['values']['common'][$attrCode];
-        }
-
-        if (! empty($configurableValues) && $product->parent_id) {
-            $isUnique = $this->productRepository->isUniqueVariantForProduct(
-                productId: $product->parent_id,
-                configAttributes: $configurableValues,
-                variantId: $id
-            );
-
-            if (! $isUnique) {
-                session()->flash('warning', trans('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists'));
-
-                return back()->withInput();
-            }
-        }
+//        if (! empty($configurableValues) && $product->parent_id) {
+//            $isUnique = $this->productRepository->isUniqueVariantForProduct(
+//                productId: $product->parent_id,
+//                configAttributes: $configurableValues,
+//                variantId: $id
+//            );
+//
+//            if (! $isUnique) {
+//                session()->flash('warning', trans('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists'));
+//
+//                return back()->withInput();
+//            }
+//        }
 
         try {
             $this->valuesValidator->validate(data: $data[AbstractType::PRODUCT_VALUES_KEY], productId: $id);
@@ -430,6 +430,8 @@ class ProductController extends Controller
      */
     public function checkVariantUniqueness(): JsonResponse
     {
+        return new JsonResponse([]);
+
         $variantAttributes = request()->get('variantAttributes');
 
         $data = request()->except('variantAttributes');

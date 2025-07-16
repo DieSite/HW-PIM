@@ -471,9 +471,11 @@ class Exporter extends AbstractExporter
         } else {
             $onderkleed = collect();
             $maat = collect();
+            $maatgroep = collect();
             foreach (Arr::get($item, 'variants', []) as $variant) {
                 $onderkleed->push(...Arr::wrap(Arr::get($variant, 'values.common.onderkleed', [])));
                 $maat->push(...Arr::wrap(Arr::get($variant, 'values.common.maat', [])));
+                $maatgroep->push(...Arr::wrap(Arr::get($variant, 'values.common.maatgroep', [])));
             }
 
             $attributeMappingMaat = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
@@ -490,6 +492,14 @@ class Exporter extends AbstractExporter
                 'visible'   => true,
                 'variation' => true,
                 'options'   => $onderkleed->unique()->toArray(),
+            ];
+
+            $attributeMappingMaatgroep = $this->getDataTransferMapping('maatgroep', self::UNOPIM_ATTRIBUTE_ENTITY);
+            $formatted['attributes'][] = [
+                'id'        => $attributeMappingMaatgroep[0]['externalId'],
+                'visible'   => true,
+                'variation' => false,
+                'options'   => $maatgroep->unique()->toArray(),
             ];
 
             $maat = $maat->sort(function ($a, $b) {
@@ -616,7 +626,7 @@ class Exporter extends AbstractExporter
                     }
 
                     if (! empty($attributeMapping[0]['externalId'])) {
-                        $variantAttributes = ! empty($item['super_attributes']) ? array_column($item['super_attributes'], 'code') : [];
+                        $variantAttributes = []; // Super attributes disabled
                         $variation = ! empty($variantAttributes) && in_array($code, $variantAttributes);
 
                         $customAttr = [

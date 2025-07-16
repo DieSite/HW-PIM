@@ -24,7 +24,9 @@ trait DataTransferMappingTrait
 
         $this->credential = $this->credentialRepository->find($this->jobFilters[self::STORE_URL_FILTER]);
 
-        if (! is_array($this->credential) || ! $this->credential['active']) {
+        \Log::debug(print_r($this->credential, true));
+
+        if (! $this->credential?->active && (! is_array($this->credential) || ! $this->credential['active'])) {
             $this->jobLogger->warning(trans('woocommerce::app.data-transfer.exports.error.invalid'));
 
             $this->export->state = ExportHelper::STATE_FAILED;
@@ -77,7 +79,7 @@ trait DataTransferMappingTrait
             'externalId'    => $externalId,
             'relatedId'     => $relatedId ?? null,
             'jobInstanceId' => $this->export?->id ?? null,
-            'apiUrl'        => is_array($this->credential) ? $this->credential['shopUrl'] : null,
+            'apiUrl'        => is_array($this->credential) ? $this->credential['shopUrl'] : $this->credential->shopUrl,
         ];
 
         $this->dataTransferMappingRepository->create($mappingData);

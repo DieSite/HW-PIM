@@ -606,7 +606,7 @@
                 <!-- Details -->
                 <div class="grid gap-1.5 place-content-start">
                     <p class="text-gray-600 dark:text-gray-300" v-if="variant.values.common.maat">
-                        @{{ variant.values.common.maat }}
+                        @{{ variant.values.common.maatgroep }} <br/><span class="text-xs text-gray-400">(exact: @{{ variant.values.common.maat }})</span>
                     </p>
                     <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values.common.onderkleed">
                         @{{ variant.values.common.onderkleed.replace('_', ' ') }}
@@ -634,14 +634,14 @@
                             Default
                         </span>
 
-                        <p class="text-gray-600 dark:text-gray-300">
-                            <span
-                                class="after:content-[',_'] last:after:content-['']"
-                                v-for='(attribute, index) in attributes'
-                            >
-                                @{{ attribute.name + ': ' + optionName(attribute, variant?.values?.common[attribute.code]) }}
-                            </span>
-                        </p>
+{{--                        <p class="text-gray-600 dark:text-gray-300">--}}
+{{--                            <span--}}
+{{--                                class="after:content-[',_'] last:after:content-['']"--}}
+{{--                                v-for='(attribute, index) in attributes'--}}
+{{--                            >--}}
+{{--                                @{{ attribute.name + ': ' + optionName(attribute, variant?.values?.common[attribute.code]) }}--}}
+{{--                            </span>--}}
+{{--                        </p>--}}
                     </div>
                 </div>
             </div>
@@ -816,11 +816,11 @@
 
                     let configurableValues = {};
 
-                    if (filteredVariants.length) {
-                        this.$emitter.emit('add-flash', { type: 'warning', message: "@lang('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists')" });
+                    {{--if (filteredVariants.length) {--}}
+                    {{--    this.$emitter.emit('add-flash', { type: 'warning', message: "@lang('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists')" });--}}
 
-                        return;
-                    }
+                    {{--    return;--}}
+                    {{--}--}}
 
                     for (const attribute of this.superAttributes) {
                         configurableValues[attribute.code] = params[attribute.code];
