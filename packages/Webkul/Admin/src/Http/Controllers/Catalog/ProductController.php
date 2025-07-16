@@ -47,6 +47,14 @@ class ProductController extends Controller
     public function index()
     {
         if (request()->ajax()) {
+
+            // Make sure our filters are in lowercase, as that makes the input easier
+            $filters = request()->input('filters');
+            $filters['all'] = collect($filters['all'])
+                ->map(fn ($filter) => strtolower($filter))
+                ->toArray();
+            request()->query->set('filters', $filters);
+
             return app(ProductDataGrid::class)->toJson();
         }
 
@@ -171,29 +179,29 @@ class ProductController extends Controller
         $product = $this->productRepository->find($id);
         $previousSyncState = $product->bol_com_sync ?? false;
 
-//        $configurableValues = [];
+        //        $configurableValues = [];
 
         $data = $request->all();
 
-//        foreach (($product?->parent?->super_attributes ?? []) as $attr) {
-//            $attrCode = $attr->code;
-//
-//            $configurableValues[$attrCode] = $data['values']['common'][$attrCode];
-//        }
+        //        foreach (($product?->parent?->super_attributes ?? []) as $attr) {
+        //            $attrCode = $attr->code;
+        //
+        //            $configurableValues[$attrCode] = $data['values']['common'][$attrCode];
+        //        }
 
-//        if (! empty($configurableValues) && $product->parent_id) {
-//            $isUnique = $this->productRepository->isUniqueVariantForProduct(
-//                productId: $product->parent_id,
-//                configAttributes: $configurableValues,
-//                variantId: $id
-//            );
-//
-//            if (! $isUnique) {
-//                session()->flash('warning', trans('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists'));
-//
-//                return back()->withInput();
-//            }
-//        }
+        //        if (! empty($configurableValues) && $product->parent_id) {
+        //            $isUnique = $this->productRepository->isUniqueVariantForProduct(
+        //                productId: $product->parent_id,
+        //                configAttributes: $configurableValues,
+        //                variantId: $id
+        //            );
+        //
+        //            if (! $isUnique) {
+        //                session()->flash('warning', trans('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists'));
+        //
+        //                return back()->withInput();
+        //            }
+        //        }
 
         try {
             $this->valuesValidator->validate(data: $data[AbstractType::PRODUCT_VALUES_KEY], productId: $id);
@@ -262,7 +270,7 @@ class ProductController extends Controller
             }
 
             Event::dispatch('catalog.product.update.after', $product);
-            if (!is_null($product->parent)) {
+            if (! is_null($product->parent)) {
                 Event::dispatch('catalog.product.update.after', $product->parent);
             }
 
