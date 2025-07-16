@@ -606,6 +606,7 @@ class Exporter extends AbstractExporter
                     if (isset($this->customAttributes)) {
                         if (! in_array($code, $this->selectAttributeCodes) && ! in_array($code, $this->multiSelectVariation) && ! in_array($code, $this->booleanVariation)) {
                             if (in_array($code, $this->customAttributes)) {
+                                Log::debug("Value: {value}", ['value' => $value]);
                                 $optionValueMapping = $this->getDataTransferMapping($value, self::ATTRIBUTE_OPTION_ENTITY_NAME);
 
                                 if (! $optionValueMapping) {
