@@ -26,14 +26,15 @@ class UpdateAllProducts extends Command
     /**
      * Execute the console command.
      */
-    public function handle(ProductRepository $productRepository)
+    public function handle()
     {
-
-        foreach ($productRepository->whereNull('parent_id')->get() as $parent) {
-            Event::dispatch('catalog.product.update.after', $parent);
-            foreach ($parent->variants as $variant) {
-                Event::dispatch('catalog.product.update.after', $variant);
+        Product::whereNull('parent_id')->chunk(1000, function ($parents) {
+            foreach($parents as $parent) {
+                Event::dispatch('catalog.product.update.after', $parent);
+                foreach ($parent->variants as $variant) {
+                    Event::dispatch('catalog.product.update.after', $variant);
+                }
             }
-        }
+        })
     }
 }
