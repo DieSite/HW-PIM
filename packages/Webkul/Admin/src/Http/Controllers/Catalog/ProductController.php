@@ -278,6 +278,8 @@ class ProductController extends Controller
                 session()->flash('error', trans('admin::app.catalog.products.update-error'));
             }
 
+            Log::error($e);
+
             return redirect()->back()->withInput();
         }
     }
