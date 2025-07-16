@@ -35,6 +35,6 @@ class UpdateAllProducts extends Command
                     Event::dispatch('catalog.product.update.after', $variant);
                 }
             }
-        })
+        });
     }
 }
