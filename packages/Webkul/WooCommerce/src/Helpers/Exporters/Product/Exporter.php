@@ -440,6 +440,12 @@ class Exporter extends AbstractExporter
 
         $formatted['categories'] = $categories;
 
+        /* other attributes */
+        $variantAttributesKeys = ! empty($item['super_attributes']) ? array_column($item['super_attributes'], 'code') : [];
+        $variantAttris = array_combine($variantAttributesKeys, array_fill(0, count($variantAttributesKeys), ''));
+
+        $attributes = array_merge($attributes, $variantAttris);
+
         $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
 
         $this->formatAdditionalData($formatted, $attributes, $imagesToExport, $item);
@@ -576,14 +582,14 @@ class Exporter extends AbstractExporter
         foreach ($attributes as $code => $value) {
             $attribute = $this->attributes[$code] ?? [];
 
+            if ($attribute && $attribute['type'] === 'price' && is_array($value)) {
+                $value = $value[$this->currency];
+            }
+
             if (is_null($value)) {
                 Log::debug("Value for attribute $code is null. Skipping.");
 
                 continue;
-            }
-
-            if ($attribute && $attribute['type'] === 'price' && is_array($value)) {
-                $value = $value[$this->currency];
             }
 
             if ($attribute && $attribute['type'] == 'boolean') {
