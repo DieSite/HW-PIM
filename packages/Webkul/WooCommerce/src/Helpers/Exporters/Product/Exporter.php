@@ -463,6 +463,10 @@ class Exporter extends AbstractExporter
             $formatted['parent_id'] = $item['parent_id'];
 
             foreach ($formatted['attributes'] as &$attribute) {
+                if (!isset($attribute['option'])) {
+                    continue;
+                }
+
                 $attribute['option'] = $attribute['options'][0];
                 unset($attribute['variation']);
                 unset($attribute['visible']);
