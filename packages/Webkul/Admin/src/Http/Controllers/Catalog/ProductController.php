@@ -16,6 +16,7 @@ use Webkul\Admin\Http\Requests\MassUpdateRequest;
 use Webkul\Admin\Http\Requests\ProductForm;
 use Webkul\Attribute\Repositories\AttributeFamilyRepository;
 use Webkul\Product\Helpers\ProductType;
+use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
 use Webkul\Product\Type\AbstractType;
 use Webkul\Product\Validator\ProductValuesValidator;
@@ -52,7 +53,7 @@ class ProductController extends Controller
             if (request()->has('filters')) {
                 $filters = request()->input('filters');
                 $filters['all'] = collect($filters['all'])
-                    ->map(fn($filter) => strtolower($filter))
+                    ->map(fn ($filter) => strtolower($filter))
                     ->toArray();
                 request()->query->set('filters', $filters);
             }
@@ -254,11 +255,14 @@ class ProductController extends Controller
             Event::dispatch('catalog.product.update.after', $product);
             if (! is_null($product->parent)) {
                 Event::dispatch('catalog.product.update.after', $product->parent);
+                $this->copyStockValues($product);
             }
 
             foreach ($product->variants as $variant) {
                 Event::dispatch('catalog.product.update.after', $variant);
             }
+
+
 
             session()->flash('success', trans('admin::app.catalog.products.update-success'));
 
@@ -437,5 +441,49 @@ class ProductController extends Controller
         }
 
         return new JsonResponse([]);
+    }
+
+    private function copyStockValues(Product $product)
+    {
+        if (is_null($product->parent)) {
+            return;
+        }
+
+        $underrug = $product->values['common']['onderkleed'] ?? null;
+
+        Log::debug("Underrug: $underrug");
+
+        if (is_null($underrug)) {
+            return;
+        }
+
+        $otherUnderrug = match ($underrug) {
+            'Zonder onderkleed' => 'Met onderkleed',
+            default             => 'Zonder onderkleed',
+        };
+
+        Log::debug("Underrug: $otherUnderrug");
+
+        $size = $product->values['common']['maat'] ?? null;
+
+        $stockEurogros = $product->values['common']['voorraad_eurogros'] ?? 0;
+        $stockDeMunk = $product->values['common']['voorraad_5_korting_handmatig'] ?? 0;
+        $stockHW = $product->values['common']['voorraad_hw_5_korting'] ?? 0;
+        $stockSale = $product->values['common']['uitverkoop_15_korting'] ?? 0;
+
+        // Get other inverse of onderkleed
+
+        $parent = $product->parent;
+        $otherRug = $parent->variants()->where('values->common->maat', $size)->where('values->common->onderkleed', $otherUnderrug)->first();
+        $otherRugValues = $otherRug->values;
+        $otherRugValues['common']['voorraad_eurogros'] = $stockEurogros;
+        $otherRugValues['common']['voorraad_5_korting_handmatig'] = $stockDeMunk;
+        $otherRugValues['common']['voorraad_hw_5_korting'] = $stockHW;
+        $otherRugValues['common']['uitverkoop_15_korting'] = $stockSale;
+        $otherRug->values = $otherRugValues;
+        $saved = $otherRug->save();
+        Log::debug("Saved: $saved");
+
+        Event::dispatch('catalog.product.update.after', $otherRug);
     }
 }
