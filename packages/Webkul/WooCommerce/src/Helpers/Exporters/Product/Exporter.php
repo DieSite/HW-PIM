@@ -463,7 +463,7 @@ class Exporter extends AbstractExporter
             $formatted['parent_id'] = $item['parent_id'];
 
             foreach ($formatted['attributes'] as &$attribute) {
-                if (!isset($attribute['option'])) {
+                if (! isset($attribute['option'])) {
                     continue;
                 }
 
@@ -584,6 +584,7 @@ class Exporter extends AbstractExporter
 
             if (is_null($value)) {
                 Log::debug("Value for attribute $code is null. Skipping.");
+
                 continue;
             }
 
@@ -606,7 +607,7 @@ class Exporter extends AbstractExporter
                     if (isset($this->customAttributes)) {
                         if (! in_array($code, $this->selectAttributeCodes) && ! in_array($code, $this->multiSelectVariation) && ! in_array($code, $this->booleanVariation)) {
                             if (in_array($code, $this->customAttributes)) {
-                                Log::debug("Value: {value}", ['value' => $value]);
+                                Log::debug('Value: {value} with attribute {attribute}', ['value' => $value, 'attribute' => $attribute]);
                                 $optionValueMapping = $this->getDataTransferMapping($value, self::ATTRIBUTE_OPTION_ENTITY_NAME);
 
                                 if (! $optionValueMapping) {
