@@ -183,26 +183,6 @@ class ProductController extends Controller
 
         $data = $request->all();
 
-        //        foreach (($product?->parent?->super_attributes ?? []) as $attr) {
-        //            $attrCode = $attr->code;
-        //
-        //            $configurableValues[$attrCode] = $data['values']['common'][$attrCode];
-        //        }
-
-        //        if (! empty($configurableValues) && $product->parent_id) {
-        //            $isUnique = $this->productRepository->isUniqueVariantForProduct(
-        //                productId: $product->parent_id,
-        //                configAttributes: $configurableValues,
-        //                variantId: $id
-        //            );
-        //
-        //            if (! $isUnique) {
-        //                session()->flash('warning', trans('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists'));
-        //
-        //                return back()->withInput();
-        //            }
-        //        }
-
         try {
             $this->valuesValidator->validate(data: $data[AbstractType::PRODUCT_VALUES_KEY], productId: $id);
         } catch (ValidationException $e) {
