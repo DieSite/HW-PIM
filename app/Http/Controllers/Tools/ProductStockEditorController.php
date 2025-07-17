@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tools;
 
 use App\Http\Controllers\Controller;
+use App\Services\ProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -81,6 +82,7 @@ class ProductStockEditorController extends Controller
             $product->save();
 
             Event::dispatch('catalog.product.update.after', $product);
+            app(ProductService::class)->copyStockValuesOnderkleed($product);
         }
 
         $parents = $productRepository->findWhereIn('id', $parents);
