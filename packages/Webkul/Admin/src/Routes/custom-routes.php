@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
+use App\Http\Controllers\Tools\ProductStockEditorController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['middleware' => ['web', 'admin']], function () {
@@ -12,6 +13,11 @@ Route::group(['middleware' => ['web', 'admin']], function () {
 });
 
 Route::group(['middleware' => ['web', 'admin']], function () {
+    Route::prefix('tools')->group(function () {
+        Route::get('stock', [ProductStockEditorController::class, 'index'])->name('admin.tools.product-stock-editor.index');
+        Route::post('stock', [ProductStockEditorController::class, 'update'])->name('admin.tools.product-stock-editor.post');
+    });
+
     Route::prefix('custom')->group(function () {
         Route::get('bolCom', [CustomBolComController::class, 'index'])->name('admin.custom.bolCom.index');
         Route::get('bolCom/create', [CustomBolComController::class, 'create'])->name('admin.custom.bolCom.create');

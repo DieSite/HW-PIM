@@ -157,6 +157,20 @@ return [
         'icon'   => '',
     ],
 
+    [
+        'key'        => 'tools',
+        'name'       => 'Tools',
+        'route'      => 'admin.tools.product-stock-editor.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.product-stock-editor',
+        'name'       => 'Productvoorraad updaten',
+        'route'      => 'admin.tools.product-stock-editor.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
+    ],
+
     /**
      * Custom Bol Com Credentials
      */

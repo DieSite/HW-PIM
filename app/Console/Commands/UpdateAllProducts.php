@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Event;
 use Webkul\Product\Models\Product;
-use Webkul\Product\Repositories\ProductRepository;
 
 class UpdateAllProducts extends Command
 {
@@ -32,7 +31,7 @@ class UpdateAllProducts extends Command
         $this->output->progressStart($amount);
 
         Product::whereNull('parent_id')->chunk(100, function ($parents) {
-            foreach($parents as $parent) {
+            foreach ($parents as $parent) {
                 Event::dispatch('catalog.product.update.after', $parent);
                 foreach ($parent->variants as $variant) {
                     Event::dispatch('catalog.product.update.after', $variant);
