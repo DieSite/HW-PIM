@@ -32,7 +32,7 @@ class ProductStockEditorController extends Controller
             })
             ->where('values->common->maat', '!=', 'Maatwerk')
             ->where('values->common->maat', '!=', 'Rond Maatwerk')
-            ->paginate(perPage: 250)
+            ->paginate(perPage: 249)
             ->through(function ($product) {
                 if ($product->voorraad_eurogros === 'null' || $product->voorraad_eurogros === '0') {
                     $product->voorraad_eurogros = '';
