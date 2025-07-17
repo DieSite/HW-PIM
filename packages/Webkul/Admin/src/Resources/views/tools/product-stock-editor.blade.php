@@ -51,6 +51,9 @@
 
                     <!-- Content -->
                     <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+
+                        <x-admin::flash-group />
+
                         <div class="overflow-x-auto overflow-y-auto">
                             <x-admin::table class="w-full text-left border-collapse">
                                 <x-admin::table.thead>

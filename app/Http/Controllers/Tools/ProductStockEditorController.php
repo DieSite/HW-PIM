@@ -32,7 +32,7 @@ class ProductStockEditorController extends Controller
             })
             ->where('values->common->maat', '!=', 'Maatwerk')
             ->where('values->common->maat', '!=', 'Rond Maatwerk')
-            ->paginate(perPage: 250)
+            ->paginate(perPage: 10)
             ->through(function ($product) {
                 if ($product->voorraad_eurogros === 'null' || $product->voorraad_eurogros === '0') {
                     $product->voorraad_eurogros = '';
@@ -61,7 +61,7 @@ class ProductStockEditorController extends Controller
 
     public function update(Request $request, ProductRepository $productRepository)
     {
-        $productData = $request->input('product');
+        $productData = $request->input('product', []);
         $products = $productRepository->findWhereIn('id', array_keys($productData));
         $parents = [];
         foreach ($products as $product) {
@@ -88,6 +88,13 @@ class ProductStockEditorController extends Controller
             Event::dispatch('catalog.product.update.after', $parent);
         }
 
-        return response()->redirectToRoute('admin.tools.product-stock-editor.index', ['page' => $request->input('next_page'), 'brand' => $request->input('brand')]);
+        if ( $request->has('next_page') ){
+            session()->flash('info', 'Producten bijgewerkt. Ga verder met de volgende producten.');
+            return response()->redirectToRoute('admin.tools.product-stock-editor.index', ['page' => $request->input('next_page'), 'brand' => $request->input('brand')]);
+        } else {
+            session()->flash('success', 'Producten bijgewerkt. Je hebt alle producten gehad.');
+            return response()->redirectToRoute('admin.tools.product-stock-editor.index', ['page' => 1]);
+        }
+
     }
 }
