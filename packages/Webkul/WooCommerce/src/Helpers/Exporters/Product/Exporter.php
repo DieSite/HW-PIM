@@ -598,7 +598,6 @@ class Exporter extends AbstractExporter
             }
 
             if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
-                Log::debug('Exporting images: {mediaExport}', ['mediaExport' => $this->mediaExport]);
                 $formatted = $this->formatImageData($code, $value, $imagesToExport, $item['code']);
                 foreach ($formatted as $image) {
                     $imageAttrs[] = $image;
@@ -692,6 +691,8 @@ class Exporter extends AbstractExporter
         if ($imageAttrs) {
             $formatted['images'] = $imageAttrs;
         }
+
+        Log::debug("Formatted END", ['formatted' => $formatted]);
     }
 
     protected function formatImageData($code, $value, $imagesToExport, $itemCode, $isVariant = false)
