@@ -85,6 +85,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->exporter->locale = $quickSettings['quick_locale'];
         $this->exporter->channel = $quickSettings['quick_channel'];
         $this->exporter->currency = $quickSettings['quick_currency'];
+        $this->exporter->setMediaExport(true);
 
         // Prepare product data
         $this->batch['code'] = $this->batch['sku'];

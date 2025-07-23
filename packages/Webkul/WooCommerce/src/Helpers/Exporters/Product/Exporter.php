@@ -160,6 +160,11 @@ class Exporter extends AbstractExporter
         $this->id = $this->credential?->id;
     }
 
+    public function setMediaExport(bool $value)
+    {
+        $this->mediaExport = $value;
+    }
+
     /**
      * Load all attributes to use later
      */
@@ -593,6 +598,7 @@ class Exporter extends AbstractExporter
             }
 
             if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
+                Log::debug('Exporting images: {mediaExport}', ['mediaExport' => $this->mediaExport]);
                 $formatted = $this->formatImageData($code, $value, $imagesToExport, $item['code']);
                 foreach ($formatted as $image) {
                     $imageAttrs[] = $image;
