@@ -175,6 +175,25 @@ class Exporter extends AbstractExporter
 
         $response = $this->connectorService->requestApiAction(self::ACTION_ADD, $payload, ['credential' => $this->credential->id]);
 
+        if ($response['code'] === 400) {
+            $response = $this->connectorService->requestApiAction(self::ACTION_GET, [], ['credential' => $this->credential->id]);
+
+            foreach ($response as $attribute) {
+                if (! is_array($attribute)) {
+                    continue;
+                }
+                $externalSlug = $attribute['slug'];
+                $ourSlug = "pa_$rawData[code]";
+
+                if ($externalSlug === $ourSlug) {
+                    return [
+                        'code' => 200,
+                        'id'   => $attribute['id'],
+                    ];
+                }
+            }
+        }
+
         return $response;
     }
 

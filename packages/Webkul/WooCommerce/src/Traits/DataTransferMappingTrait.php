@@ -24,8 +24,6 @@ trait DataTransferMappingTrait
 
         $this->credential = $this->credentialRepository->find($this->jobFilters[self::STORE_URL_FILTER]);
 
-        \Log::debug(print_r($this->credential, true));
-
         if (! $this->credential?->active && (! is_array($this->credential) || ! $this->credential['active'])) {
             $this->jobLogger->warning(trans('woocommerce::app.data-transfer.exports.error.invalid'));
 
@@ -187,7 +185,10 @@ trait DataTransferMappingTrait
                     $this->updateDataTransferMappingByCode($item['code'], $mapping[0]);
                 } else {
                     $relatedId = isset($result['parent']) && $result['parent'] > 0 ? $result['parent'] : null;
-                    $this->createDataTransferMapping($item['code'], $result['id'], $relatedId);
+                    if (isset($result['id'])) {
+                        $this->createDataTransferMapping($item['code'], $result['id'], $relatedId);
+                    }
+
                 }
 
                 $images = ! empty($result['images']) ? $result['images'] : null;
@@ -253,7 +254,6 @@ trait DataTransferMappingTrait
             return;
         }
 
-        \Log::debug('formattedData ', $formattedData);
 
         $optionMapping = $this->getDataTransferMapping($value, $entityName);
 
