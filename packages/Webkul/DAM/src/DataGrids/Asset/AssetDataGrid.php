@@ -2,6 +2,8 @@
 
 namespace Webkul\DAM\DataGrids\Asset;
 
+use Cache;
+use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\DB;
 use Webkul\DAM\Helpers\AssetHelper;
 use Webkul\DAM\Http\Controllers\FileController;
@@ -70,6 +72,35 @@ class AssetDataGrid extends DataGrid
         ];
 
         return $queryBuilder;
+    }
+
+    public function processRequestedPagination($requestedPagination): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        $perPage = $requestedPagination['per_page'] ?? $this->itemsPerPage;
+        $currentPage = $requestedPagination['page'] ?? 1;
+
+        $total = Cache::remember(
+            'asset_datagrid_count_'.$this->queryBuilder->toSql().serialize($this->queryBuilder->getBindings()),
+            CarbonInterval::day(),
+            function () {
+                return $this->queryBuilder->getCountForPagination();
+            }
+        );
+
+        $results = $this->queryBuilder
+            ->forPage($currentPage, $perPage)
+            ->get();
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $results,
+            $total,
+            $perPage,
+            $currentPage,
+            [
+                'path'     => \Illuminate\Pagination\Paginator::resolveCurrentPath(),
+                'pageName' => 'page',
+            ]
+        );
     }
 
     /**
