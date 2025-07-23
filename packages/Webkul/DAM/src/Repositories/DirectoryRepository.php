@@ -2,6 +2,7 @@
 
 namespace Webkul\DAM\Repositories;
 
+use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Core\Eloquent\Repository;
 use Webkul\DAM\Models\Directory;
@@ -184,7 +185,11 @@ class DirectoryRepository extends Repository
     {
         return $id
             ? $this->model->where('id', '=', $id)->with(['assets', 'assets.directories'])->get()->toTree()
-            : $this->model->with(['assets', 'assets.directories'])->get()->toTree();
+            : $this->model->with(['assets' => function ($query) {
+                $query->limit(25);
+            }, 'assets.directories' => function ($query) {
+                $query->limit(25);
+            }])->get()->toTree();
     }
 
     /**
