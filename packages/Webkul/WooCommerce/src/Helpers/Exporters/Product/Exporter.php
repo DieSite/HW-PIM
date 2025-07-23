@@ -881,7 +881,7 @@ class Exporter extends AbstractExporter
             $image = $damAsset->path;
         }
 
-        return Storage::disk('private')->url(str_replace(' ', '%20', $image));
+        return Storage::disk('private')->url($image);
     }
 
     public function checkImagesExported($code, $imageUrl)
