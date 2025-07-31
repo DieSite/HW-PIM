@@ -23,6 +23,8 @@
                                 <option value="{{ route('admin.tools.product-stock-editor.index', ['brand' => $brand]) }}" @selected($brand === $current_brand)>{{ $brand }}</option>
                             @endforeach
                         </select>
+
+                        <input @class('px-3') @keyup.enter="doSearch()" v-model="search" placeholder="Zoeken op titel">
                     </div>
 
                     <div v-if="products.current_page === products.last_page" class="flex gap-x-2.5 items-center">
@@ -43,6 +45,7 @@
                             Updaten en naar volgende pagina (pagina <span v-text="products.current_page"></span> van <span v-text="products.last_page"></span>)
                         </button>
                         <input type="hidden" name="next_page" :value="products.current_page + 1">
+                        <input type="hidden" name="search" :value="search">
                     </div>
                 </div>
 
@@ -169,6 +172,32 @@
                 template: '#v-product-stock-editor-template',
 
                 props: ['products'],
+
+                data() {
+                    return {
+                        search: '',
+                    };
+                },
+
+                created() {
+                    const url = new URL(window.location.href);
+                    const querySearch = url.searchParams.get('search');
+                    if (querySearch !== null) {
+                        this.search = querySearch;
+                    }
+                },
+
+                methods: {
+                    doSearch() {
+                        const url = new URL(window.location.href);
+                        if (this.search.length > 0) {
+                            url.searchParams.set('search', this.search);
+                        } else {
+                            url.searchParams.delete('search');
+                        }
+                        window.location.href = url.toString();
+                    }
+                }
             });
         </script>
     @endPushOnce

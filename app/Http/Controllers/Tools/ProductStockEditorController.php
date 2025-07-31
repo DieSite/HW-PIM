@@ -15,7 +15,7 @@ class ProductStockEditorController extends Controller
     {
         $data = [];
 
-        $data['products'] = $productRepository->select([
+        $builder = $productRepository->select([
             'id',
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.productnaam'), '') as productnaam"),
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.maat'), '') as maat"),
@@ -25,15 +25,23 @@ class ProductStockEditorController extends Controller
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.uitverkoop_15_korting'), '') as uitverkoop_15_korting"),
         ])->whereNotNull('parent_id')
             ->where('values->common->onderkleed', 'Zonder onderkleed')
-            ->whereExists(function ($query) {
+            ->where('values->common->maat', '!=', 'Maatwerk')
+            ->where('values->common->maat', '!=', 'Rond Maatwerk');
+
+        if (request()->has('brand')) {
+            $builder = $builder->whereExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('products as parent')
                     ->whereColumn('products.parent_id', 'parent.id')
                     ->where('parent.values->common->merk', request()->input('brand'));
-            })
-            ->where('values->common->maat', '!=', 'Maatwerk')
-            ->where('values->common->maat', '!=', 'Rond Maatwerk')
-            ->paginate(perPage: 249)
+            });
+        }
+
+        if (request()->has('search')) {
+            $builder = $builder->where('values->common->productnaam', 'LIKE', '%' . request()->input('search') . '%');
+        }
+
+        $data['products'] = $builder->paginate(perPage: 249)
             ->through(function ($product) {
                 if ($product->voorraad_eurogros === 'null' || $product->voorraad_eurogros === '0') {
                     $product->voorraad_eurogros = '';
@@ -74,10 +82,10 @@ class ProductStockEditorController extends Controller
             $parents[$product->parent_id] = $product->parent_id;
 
             $values = $product->values;
-            $values['common']['voorraad_eurogros'] = (int) $data['voorraad_eurogros'];
-            $values['common']['voorraad_5_korting_handmatig'] = (int) $data['voorraad_5_korting_handmatig'];
-            $values['common']['voorraad_hw_5_korting'] = (int) $data['voorraad_hw_5_korting'];
-            $values['common']['uitverkoop_15_korting'] = (int) $data['uitverkoop_15_korting'];
+            $values['common']['voorraad_eurogros'] = (int)$data['voorraad_eurogros'];
+            $values['common']['voorraad_5_korting_handmatig'] = (int)$data['voorraad_5_korting_handmatig'];
+            $values['common']['voorraad_hw_5_korting'] = (int)$data['voorraad_hw_5_korting'];
+            $values['common']['uitverkoop_15_korting'] = (int)$data['uitverkoop_15_korting'];
             $product->values = $values;
             $product->save();
 
@@ -90,9 +98,13 @@ class ProductStockEditorController extends Controller
             Event::dispatch('catalog.product.update.after', $parent);
         }
 
-        if ( $request->has('next_page') ){
+        if ($request->has('next_page')) {
             session()->flash('info', 'Producten bijgewerkt. Ga verder met de volgende producten.');
-            return response()->redirectToRoute('admin.tools.product-stock-editor.index', ['page' => $request->input('next_page'), 'brand' => $request->input('brand')]);
+            $data = ['page' => $request->input('next_page'), 'brand' => $request->input('brand')];
+            if ( $request->has('search') ) {
+                $data['search'] = $request->input('search');
+            }
+            return response()->redirectToRoute('admin.tools.product-stock-editor.index', $data);
         } else {
             session()->flash('success', 'Producten bijgewerkt. Je hebt alle producten gehad.');
             return response()->redirectToRoute('admin.tools.product-stock-editor.index', ['page' => 1]);
