@@ -142,7 +142,7 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
             'searchable' => true,
             'filterable' => true,
             'sortable'   => true,
-            'options'    => ['lowercase' => true]
+            'options'    => ['lowercase' => true],
         ]);
 
         $this->addColumn([

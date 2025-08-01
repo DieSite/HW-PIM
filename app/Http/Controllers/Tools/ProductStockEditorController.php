@@ -38,7 +38,7 @@ class ProductStockEditorController extends Controller
         }
 
         if (request()->has('search')) {
-            $builder = $builder->where('values->common->productnaam', 'LIKE', '%' . request()->input('search') . '%');
+            $builder = $builder->where('values->common->productnaam', 'LIKE', '%'.request()->input('search').'%');
         }
 
         $data['products'] = $builder->paginate(perPage: 249)
@@ -82,10 +82,10 @@ class ProductStockEditorController extends Controller
             $parents[$product->parent_id] = $product->parent_id;
 
             $values = $product->values;
-            $values['common']['voorraad_eurogros'] = (int)$data['voorraad_eurogros'];
-            $values['common']['voorraad_5_korting_handmatig'] = (int)$data['voorraad_5_korting_handmatig'];
-            $values['common']['voorraad_hw_5_korting'] = (int)$data['voorraad_hw_5_korting'];
-            $values['common']['uitverkoop_15_korting'] = (int)$data['uitverkoop_15_korting'];
+            $values['common']['voorraad_eurogros'] = (int) $data['voorraad_eurogros'];
+            $values['common']['voorraad_5_korting_handmatig'] = (int) $data['voorraad_5_korting_handmatig'];
+            $values['common']['voorraad_hw_5_korting'] = (int) $data['voorraad_hw_5_korting'];
+            $values['common']['uitverkoop_15_korting'] = (int) $data['uitverkoop_15_korting'];
             $product->values = $values;
             $product->save();
 
@@ -101,12 +101,14 @@ class ProductStockEditorController extends Controller
         if ($request->has('next_page')) {
             session()->flash('info', 'Producten bijgewerkt. Ga verder met de volgende producten.');
             $data = ['page' => $request->input('next_page'), 'brand' => $request->input('brand')];
-            if ( $request->has('search') ) {
+            if ($request->has('search')) {
                 $data['search'] = $request->input('search');
             }
+
             return response()->redirectToRoute('admin.tools.product-stock-editor.index', $data);
         } else {
             session()->flash('success', 'Producten bijgewerkt. Je hebt alle producten gehad.');
+
             return response()->redirectToRoute('admin.tools.product-stock-editor.index', ['page' => 1]);
         }
 

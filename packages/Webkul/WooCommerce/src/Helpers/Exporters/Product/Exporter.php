@@ -458,17 +458,6 @@ class Exporter extends AbstractExporter
 
         if (isset($item['parent_id'])) {
             $formatted['parent_id'] = $item['parent_id'];
-
-            //            foreach ($formatted['attributes'] as &$attribute) {
-            //                if (! isset($attribute['option'])) {
-            //                    continue;
-            //                }
-            //
-            //                $attribute['option'] = $attribute['options'][0];
-            //                unset($attribute['variation']);
-            //                unset($attribute['visible']);
-            //                unset($attribute['options']);
-            //            }
         } else {
             $onderkleed = collect();
             $maat = collect();
@@ -692,7 +681,7 @@ class Exporter extends AbstractExporter
             $formatted['images'] = $imageAttrs;
         }
 
-        Log::debug("Formatted END", ['formatted' => $formatted]);
+        Log::debug('Formatted END', ['formatted' => $formatted]);
     }
 
     protected function formatImageData($code, $value, $imagesToExport, $itemCode, $isVariant = false)

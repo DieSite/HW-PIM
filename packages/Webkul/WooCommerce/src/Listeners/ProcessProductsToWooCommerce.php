@@ -8,7 +8,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Webkul\DataTransfer\Models\JobTrack;
 use Webkul\Product\Repositories\ProductRepository;
 use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
@@ -92,7 +91,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
         $productData = $this->formatData($this->batch);
 
-        if (!isset($productData['sku'])) {
+        if (! isset($productData['sku'])) {
             Log::debug('Product data', ['product_data' => $productData]);
         }
 

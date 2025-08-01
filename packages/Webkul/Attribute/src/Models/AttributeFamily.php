@@ -54,7 +54,7 @@ class AttributeFamily extends TranslatableModel implements AttributeFamilyContra
             ->join('attribute_families', 'attribute_family_group_mappings.attribute_family_id', '=', 'attribute_families.id')
             ->where('attribute_families.id', $this->id);
 
-        if (!is_null($productType)) {
+        if (! is_null($productType)) {
             $builder = $builder->where(function ($query) use ($productType) {
                 $query->where('visible_on', $productType)
                     ->orWhere('visible_on', '');

@@ -28,4 +28,4 @@ class CreateBolComCredentialsTable extends Migration
     {
         Schema::dropIfExists('bol_com_credentials');
     }
-};
+}

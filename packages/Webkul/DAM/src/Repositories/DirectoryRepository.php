@@ -2,7 +2,6 @@
 
 namespace Webkul\DAM\Repositories;
 
-use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Core\Eloquent\Repository;
 use Webkul\DAM\Models\Directory;

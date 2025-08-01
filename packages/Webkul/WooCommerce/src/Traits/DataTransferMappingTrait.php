@@ -254,7 +254,6 @@ trait DataTransferMappingTrait
             return;
         }
 
-
         $optionMapping = $this->getDataTransferMapping($value, $entityName);
 
         if ($optionMapping) {

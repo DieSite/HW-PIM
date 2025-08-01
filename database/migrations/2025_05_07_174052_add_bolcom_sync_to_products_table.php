@@ -33,4 +33,4 @@ class AddBolComSyncToProductsTable extends Migration
             $table->dropColumn(['bol_com_sync', 'bol_com_reference', 'bol_com_credential_id']);
         });
     }
-};
+}

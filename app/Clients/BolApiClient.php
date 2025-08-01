@@ -50,6 +50,7 @@ class BolApiClient
     public function setCredential(BolComCredential $credential)
     {
         $this->authHelper = new BolComAuthenticationHelper($credential->id, false);
+
         return $this;
     }
 

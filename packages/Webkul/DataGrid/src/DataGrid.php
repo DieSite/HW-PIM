@@ -235,9 +235,9 @@ abstract class DataGrid
                             ->filter(fn ($column) => $column->searchable && $column->type !== ColumnTypeEnum::BOOLEAN->value)
                             ->each(function ($column) use ($scopeQueryBuilder, $value) {
                                 if (isset($column->options['lowercase'])) {
-                                    return $scopeQueryBuilder->orWhereRaw('LOWER('.$column->getDatabaseColumnName().')' . ' LIKE ' . '\'%' . $value . '%\'');
+                                    return $scopeQueryBuilder->orWhereRaw('LOWER('.$column->getDatabaseColumnName().')'.' LIKE '.'\'%'.$value.'%\'');
                                 } else {
-                                    return $scopeQueryBuilder->orWhere($column->getDatabaseColumnName(), 'LIKE', '%' . $value . '%');
+                                    return $scopeQueryBuilder->orWhere($column->getDatabaseColumnName(), 'LIKE', '%'.$value.'%');
                                 }
                             });
                     }
