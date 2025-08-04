@@ -616,6 +616,13 @@ class Exporter extends AbstractExporter
                                 }
 
                                 if ($attributeMapping && $optionValueMapping) {
+                                    if ($code === 'kleuren') {
+                                        if (str_contains($value, '|')) {
+                                            $value = explode('|', $value);
+                                        } else {
+                                            $value = explode(', ', $value);
+                                        }
+                                    }
                                     $customAttr = [
                                         'id'        => $attributeMapping[0]['externalId'],
                                         'visible'   => true,
