@@ -169,6 +169,12 @@ return [
         'route'      => 'admin.tools.product-stock-editor.index',
         'sort'       => 14,
         'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.product-hw-stock-editor',
+        'name'       => 'Showroom voorraad updaten',
+        'route'      => 'admin.tools.product-hw-stock-editor.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
     ],
 
     /**
