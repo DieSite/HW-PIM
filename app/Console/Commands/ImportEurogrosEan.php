@@ -104,7 +104,8 @@ class ImportEurogrosEan extends Command
 
         $values = $product->values;
 
-        return " | Product {$values['common']['productnaam']} - {$values['common']['maat']} gevonden voor EAN";
+        $maat = $values['common']['maat'] ?? '';
+        return " | Product {$values['common']['productnaam']} - ($maat) gevonden voor EAN";
     }
 
     private function maatMap(string $eurgrosMaat): ?string
