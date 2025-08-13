@@ -175,6 +175,11 @@ return [
         'route'      => 'admin.tools.product-hw-stock-editor.index',
         'sort'       => 14,
         'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.download-eurogros-voorraadlijst',
+        'name'       => 'Eurogros vooraadlijst downloaden',
+        'route'      => 'admin.tools.eurgros.vooraadlijst',
+        'sort'       => 14,
     ],
 
     /**

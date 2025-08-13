@@ -109,7 +109,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
     private function processToVariation(array $productData)
     {
-        Log::info('Processing to variation');
+        Log::debug('Processing to variation');
         $productRepository = app(ProductRepository::class);
         $parent = $productRepository->find($productData['parent_id']);
 
@@ -120,7 +120,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         );
 
         if (! isset($parentProduct[0])) {
-            Log::error('Parent product not found.');
+            Log::debug('Parent product not found.');
 
             return;
         }
@@ -178,9 +178,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         if ($result['code'] == 200) {
-            Log::info("Product updated successfully \n ".json_encode($result));
+            Log::debug("Product updated successfully \n ".json_encode($result));
         } elseif ($result['code'] == 201) {
-            Log::info("Product created successfully \n ".json_encode($result));
+            Log::debug("Product created successfully \n ".json_encode($result));
         } else {
             Log::error('Error occured'.json_encode($result));
         }
