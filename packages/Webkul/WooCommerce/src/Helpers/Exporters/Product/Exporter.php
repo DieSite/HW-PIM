@@ -533,11 +533,6 @@ class Exporter extends AbstractExporter
         $isVoorraadkorting = false;
 
         foreach (Arr::get($item, 'variants', []) as $variant) {
-            if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
-                $isUitverkoop = true;
-                break;
-            }
-
             $voorraadEurogros = $variant['values']['common']['voorraad_eurogros'] ?? 0;
             $voorraadDeMunk = $variant['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
             $voorraadHW = $variant['values']['common']['voorraad_hw_5_korting'] ?? 0;
@@ -546,6 +541,12 @@ class Exporter extends AbstractExporter
 
             if ($stock > 0) {
                 $isVoorraadkorting = true;
+
+                if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
+                    $isUitverkoop = true;
+                    $isVoorraadkorting = false;
+                    break;
+                }
             }
         }
 
