@@ -41,7 +41,7 @@ class ImportEurogrosEan extends Command
 
         $header = null;
         $progressBar = $this->output->createProgressBar($count);
-        Storage::disk('local')->put('eurogros-ean.log', "");
+        Storage::disk('local')->put('eurogros-ean.log', '');
         while (($data = fgetcsv($stream, separator: ';')) !== false) {
             if ($header === null) {
                 $header = $data;
@@ -62,7 +62,7 @@ class ImportEurogrosEan extends Command
 
             if (is_null($onzeMaat)) {
                 $progressBar->advance();
-                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean): unknown maat $maat");
+                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean): unknown maat $maat{$this->findByEan($ean)}");
 
                 continue;
             }
@@ -76,7 +76,7 @@ class ImportEurogrosEan extends Command
 
             if ($rugs->count() != 2) {
                 $progressBar->advance();
-                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean, $kleur, $onzeMaat): {$rugs->count()} rugs found");
+                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean, $kleur, $onzeMaat): {$rugs->count()} rugs found{$this->findByEan($ean)}");
 
                 continue;
             }
@@ -92,6 +92,19 @@ class ImportEurogrosEan extends Command
 
             $progressBar->advance();
         }
+    }
+
+    private function findByEan(string $ean): string
+    {
+        $productRepository = app(ProductRepository::class);
+        $product = $productRepository->findOneByField('values->common->ean', $ean);
+        if (is_null($product)) {
+            return '';
+        }
+
+        $values = $product->values;
+
+        return " | Product {$values['common']['productnaam']} - {$values['common']['maat']} gevonden voor EAN";
     }
 
     private function maatMap(string $eurgrosMaat): ?string
