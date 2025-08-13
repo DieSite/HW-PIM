@@ -605,8 +605,14 @@
 
                 <!-- Details -->
                 <div class="grid gap-1.5 place-content-start">
-                    <p class="text-gray-600 dark:text-gray-300" v-if="variant.values.common.maat">
-                        @{{ variant.values.common.maatgroep }} <br/><span class="text-xs text-gray-400">(exact: @{{ variant.values.common.maat }})</span>
+                    <div
+                        class="mt-1 text-red-600 bg-red-200 text-xs italic border border-red-500 rounded-md p-1 text-center"
+                        v-if="!variant.values.common.prijs"
+                    >
+                        Heeft geen prijs
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-300" v-if="variant.values.common.maat || variant.values.common.maatgroep">
+                        @{{ variant.values.common.maatgroep }} <br/><span class="text-xs text-gray-400" v-if="variant.values.common.maat">(exact: @{{ variant.values.common.maat }})</span>
                     </p>
                     <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values.common.onderkleed">
                         @{{ variant.values.common.onderkleed.replace('_', ' ') }}
