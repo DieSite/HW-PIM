@@ -82,10 +82,20 @@ class ProductStockEditorController extends Controller
             $parents[$product->parent_id] = $product->parent_id;
 
             $values = $product->values;
+            if (
+                ((int) $values['common']['voorraad_eurogros']) === ((int) $data['voorraad_eurogros'])
+                && ((int) $values['common']['voorraad_5_korting_handmatig']) === ((int) $data['voorraad_5_korting_handmatig'])
+                && ((int) $values['common']['voorraad_hw_5_korting']) === ((int) $data['voorraad_hw_5_korting'])
+                && ((int) $values['common']['uitverkoop_15_korting']) === ((int) $data['uitverkoop_15_korting'])
+            ) {
+                continue;
+            }
+
             $values['common']['voorraad_eurogros'] = (int) $data['voorraad_eurogros'];
             $values['common']['voorraad_5_korting_handmatig'] = (int) $data['voorraad_5_korting_handmatig'];
             $values['common']['voorraad_hw_5_korting'] = (int) $data['voorraad_hw_5_korting'];
             $values['common']['uitverkoop_15_korting'] = (int) $data['uitverkoop_15_korting'];
+
             $product->values = $values;
             $product->save();
 

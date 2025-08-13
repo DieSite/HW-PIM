@@ -58,6 +58,11 @@ class ProductHWStockEditorController extends Controller
             $parents[$product->parent_id] = $product->parent_id;
 
             $values = $product->values;
+
+            if (((int)$values['common']['voorraad_hw_5_korting']) === ((int)$data['voorraad_hw_5_korting'])) {
+                continue;
+            }
+
             $values['common']['voorraad_hw_5_korting'] = (int) $data['voorraad_hw_5_korting'];
             $product->values = $values;
             $product->save();
