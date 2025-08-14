@@ -450,6 +450,7 @@ class Exporter extends AbstractExporter
         $voorraadEurogros = $item['values']['common']['voorraad_eurogros'] ?? 0;
         $voorraadDeMunk = $item['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
         $voorraadHW = $item['values']['common']['voorraad_hw_5_korting'] ?? 0;
+        $uitverkoop = $item['values']['common']['uitverkoop_15_korting'] ?? 0;
 
         $formatted['manage_stock'] = true;
         $formatted['stock_quantity'] = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
@@ -458,6 +459,9 @@ class Exporter extends AbstractExporter
 
         if (isset($item['parent_id'])) {
             $formatted['parent_id'] = $item['parent_id'];
+            $meta = $formatted['meta_data'] ?? [];
+            $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
+            $formatted['meta_data'] = $meta;
         } else {
             $onderkleed = collect();
             $maat = collect();
