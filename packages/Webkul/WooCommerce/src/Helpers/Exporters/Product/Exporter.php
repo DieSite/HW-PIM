@@ -489,7 +489,7 @@ class Exporter extends AbstractExporter
                 'id'        => $attributeMappingOnderkleed[0]['externalId'],
                 'visible'   => true,
                 'variation' => true,
-                'options'   => $onderkleed->unique()->toArray(),
+                'options'   => $onderkleed->unique()->sortDesc(SORT_NATURAL)->toArray(),
             ];
 
             $attributeMappingMaatgroep = $this->getDataTransferMapping('maatgroep', self::UNOPIM_ATTRIBUTE_ENTITY);
