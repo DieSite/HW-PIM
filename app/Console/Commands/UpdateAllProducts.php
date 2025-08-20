@@ -27,7 +27,7 @@ class UpdateAllProducts extends Command
      */
     public function handle()
     {
-        $builder = Product::where('values->common->uitverkoop_15_korting', '1')->whereNull('parent_id');
+        $builder = Product::where('values->common->uitverkoop_15_korting', '1');
         $amount = $builder->count();
         $this->output->progressStart($amount);
 
