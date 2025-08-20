@@ -31,11 +31,14 @@ class UpdateAllProducts extends Command
         $amount = $builder->count();
         $this->output->progressStart($amount);
 
-        $builder->chunk(100, function ($parents) {
-            foreach ($parents as $parent) {
-                Event::dispatch('catalog.product.update.after', $parent);
-                foreach ($parent->variants as $variant) {
+        $builder->chunk(100, function ($products) {
+            foreach ($products as $product) {
+                Event::dispatch('catalog.product.update.after', $product);
+                foreach ($product->variants as $variant) {
                     Event::dispatch('catalog.product.update.after', $variant);
+                }
+                if (isset($product->parent)) {
+                    Event::dispatch('catalog.product.update.after', $product->parent);
                 }
                 $this->output->progressAdvance();
             }
