@@ -27,6 +27,10 @@ class Exporter extends AbstractExporter
 
     public const BATCH_SIZE = 100;
 
+    const VOORRAAD_TAG_ID = 1392;
+
+    const UITVERKOOP_TAG_ID = 1582;
+
     /**
      * unopim entity name.
      *
@@ -554,10 +558,12 @@ class Exporter extends AbstractExporter
             }
         }
 
-        if ($isUitverkoop) {
-            return [['id' => 1582]];
+        if ($isUitverkoop && $isVoorraadkorting) {
+            return [['id' => self::UITVERKOOP_TAG_ID], ['id' => self::VOORRAAD_TAG_ID]];
+        } elseif ($isUitverkoop) {
+            return [['id' => self::UITVERKOOP_TAG_ID]];
         } elseif ($isVoorraadkorting) {
-            return [['id' => 1392]];
+            return [['id' => self::VOORRAAD_TAG_ID]];
         } else {
             return null;
         }
