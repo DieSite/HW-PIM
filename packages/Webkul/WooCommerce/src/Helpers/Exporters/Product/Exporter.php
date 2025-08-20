@@ -552,7 +552,6 @@ class Exporter extends AbstractExporter
 
                 if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
                     $isUitverkoop = true;
-                    $isVoorraadkorting = false;
                     break;
                 }
             }

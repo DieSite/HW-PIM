@@ -27,10 +27,11 @@ class UpdateAllProducts extends Command
      */
     public function handle()
     {
-        $amount = Product::whereNull('parent_id')->count();
+        $builder = Product::where('values->common->uitverkoop_15_korting', '1')->whereNull('parent_id');
+        $amount = $builder->count();
         $this->output->progressStart($amount);
 
-        Product::whereNull('parent_id')->chunk(100, function ($parents) {
+        $builder->chunk(100, function ($parents) {
             foreach ($parents as $parent) {
                 Event::dispatch('catalog.product.update.after', $parent);
                 foreach ($parent->variants as $variant) {
