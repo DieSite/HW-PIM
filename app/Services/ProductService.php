@@ -64,6 +64,10 @@ class ProductService
 
     public function getUnderrugAlternative(Product $product): ?Product
     {
+        if (is_null($product->parent)) {
+            return null;
+        }
+
         $underrug = $product->values['common']['onderkleed'] ?? null;
         if (is_null($underrug)) {
             return null;
@@ -74,6 +78,8 @@ class ProductService
             default             => 'Zonder onderkleed',
         };
         $size = $product->values['common']['maat'] ?? null;
+
+
 
         // Get other inverse of onderkleed
 
