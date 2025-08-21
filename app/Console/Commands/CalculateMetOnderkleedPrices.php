@@ -35,15 +35,18 @@ class CalculateMetOnderkleedPrices extends Command
         $count = $builder->count();
         $this->output->progressStart($count);
 
-        $builder->chunk(100, function ($products) use ($productService) {
+        $count = 0;
+
+        $builder->chunk(100, function ($products) use ($productService, $count) {
             foreach ($products as $product) {
                 $price = $productService->calculateMetOnderkleedPrice($product);
-                if ($product->values['common']['prijs']['EUR'] != $price) {
+                if ($product->values['common']['prijs']['EUR'] != $price || $count < 5000) {
                     $values = $product->values;
                     $values['common']['prijs']['EUR'] = $price;
                     $product->values = $values;
                     $product->save();
                     Event::dispatch('catalog.product.update.after', $product);
+                    $count++;
                 }
                 $this->output->progressAdvance();
             }
