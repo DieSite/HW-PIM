@@ -180,6 +180,19 @@ return [
     */
 
     'defaults' => [
+        'supervisor-1' => [
+            'connection'          => 'redis',
+            'queue'               => ['default'],
+            'balance'             => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses'        => 1,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 1024,
+            'tries'               => 1,
+            'timeout'             => 60,
+            'nice'                => 0,
+        ],
         'database-supervisor' => [
             'connection'          => 'database',
             'queue'               => ['default'],
@@ -197,6 +210,11 @@ return [
 
     'environments' => [
         'production' => [
+            'supervisor-1' => [
+                'maxProcesses'    => 3,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 1,
+            ],
             'database-supervisor' => [
                 'maxProcesses'    => 3,
                 'balanceMaxShift' => 1,
