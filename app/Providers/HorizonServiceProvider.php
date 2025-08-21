@@ -30,7 +30,6 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
         Gate::define('viewHorizon', function ($user = null) {
             return in_array(Request::ip(), [
                 '::ffff:159.65.202.36',
-                '::ffff:185.116.42.207',
                 '::ffff:84.243.251.101'
             ]);
         });
