@@ -14,26 +14,7 @@ class ProductService
             return;
         }
 
-        $underrug = $product->values['common']['onderkleed'] ?? null;
-
-        Log::debug("Underrug: $underrug");
-
-        if (is_null($underrug)) {
-            return;
-        }
-
-        $otherUnderrug = match ($underrug) {
-            'Zonder onderkleed' => 'Met onderkleed',
-            default             => 'Zonder onderkleed',
-        };
-
-        Log::debug("Underrug: $otherUnderrug");
-
-        $size = $product->values['common']['maat'] ?? null;
-
-        // Get other inverse of onderkleed
-
-        $otherRug = $product->parent->variants()->where('values->common->maat', $size)->where('values->common->onderkleed', $otherUnderrug)->first();
+        $otherRug = $this->getUnderrugAlternative($product);
         if (is_null($otherRug)) {
             return;
         }
@@ -55,5 +36,47 @@ class ProductService
         if ($withUpdatedEvent) {
             Event::dispatch('catalog.product.update.after', $otherRug);
         }
+    }
+
+    public function calculateMetOnderkleedPrice(Product $product): string
+    {
+        if ($product->values['common']['onderkleed'] !== 'Met onderkleed') {
+            throw new \Exception('Moet zonder onderkleed zijn');
+        }
+
+        $withOnderkleed = $this->getUnderrugAlternative($product);
+
+        if (is_null($withOnderkleed)) {
+            return '0';
+        }
+
+        $price = (float) $withOnderkleed->values['common']['prijs']['EUR'];
+        $size = $product->values['common']['maat'] ?? null;
+
+        $plusPrice = config('rugs.underrugs_cost')[$size] ?? null;
+
+        if (is_null($plusPrice)) {
+            return (string) $price;
+        }
+
+        return (string) ($price + $plusPrice);
+    }
+
+    public function getUnderrugAlternative(Product $product): ?Product
+    {
+        $underrug = $product->values['common']['onderkleed'] ?? null;
+        if (is_null($underrug)) {
+            return null;
+        }
+
+        $otherUnderrug = match ($underrug) {
+            'Zonder onderkleed' => 'Met onderkleed',
+            default             => 'Zonder onderkleed',
+        };
+        $size = $product->values['common']['maat'] ?? null;
+
+        // Get other inverse of onderkleed
+
+        return $product->parent->variants()->where('values->common->maat', $size)->where('values->common->onderkleed', $otherUnderrug)->first();
     }
 }

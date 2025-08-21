@@ -33,7 +33,7 @@
                     >
                         @lang('admin::app.account.edit.back-btn')
                     </a>
-                    
+
                     @if(!is_null($product->parent))
                         <a
                             href="{{ route('admin.catalog.products.edit', ['id' => $product->parent_id]) }}"
@@ -41,6 +41,12 @@
                         >
                             Naar hoofdproduct
                         </a>
+                    @endif
+
+                    @if(isset($product->values['common']['onderkleed']) && $product->values['common']['onderkleed'] === 'Met onderkleed')
+                        <button type="button" onclick="calcMetOnderkleed()" class="secondary-button">
+                            Prijs berekenen
+                        </button>
                     @endif
 
                     <!-- Save Button -->
@@ -192,7 +198,8 @@
                         @endphp
 
                             <!-- Bol.com Integration Checkbox -->
-                        <label class="flex gap-1 items-center mb-2.5 {{ $bolSyncDisabled ? 'opacity-50' : 'cursor-pointer' }} select-none">
+                        <label
+                            class="flex gap-1 items-center mb-2.5 {{ $bolSyncDisabled ? 'opacity-50' : 'cursor-pointer' }} select-none">
                             <input
                                 type="checkbox"
                                 name="bol_com_sync"
@@ -209,8 +216,10 @@
                         </label>
 
                         @if(isset($product->bolComCredentials->first()->pivot->reference) && $product->bolComCredentials->first()->pivot->reference)
-                            <div id="bol_com_delete_warning" class="hidden text-xs text-orange-500 dark:text-orange-400 mt-1 mb-2 p-2 bg-orange-50 dark:bg-opacity-10 border border-orange-200 dark:border-orange-800 rounded">
-                                <strong>Let op:</strong> Bij het uitschakelen van de Bol.com synchronisatie en opslaan wordt dit product verwijderd van Bol.com.
+                            <div id="bol_com_delete_warning"
+                                 class="hidden text-xs text-orange-500 dark:text-orange-400 mt-1 mb-2 p-2 bg-orange-50 dark:bg-opacity-10 border border-orange-200 dark:border-orange-800 rounded">
+                                <strong>Let op:</strong> Bij het uitschakelen van de Bol.com synchronisatie en opslaan
+                                wordt dit product verwijderd van Bol.com.
                             </div>
                         @endif
 
@@ -226,7 +235,8 @@
                                 <label class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
                                     Accounts
                                 </label>
-                                <div class="p-2 border border-gray-300 rounded-md dark:border-gray-700 dark:bg-gray-900 max-h-40 overflow-y-auto">
+                                <div
+                                    class="p-2 border border-gray-300 rounded-md dark:border-gray-700 dark:bg-gray-900 max-h-40 overflow-y-auto">
                                     @foreach (app('App\Services\BolComProductService')->getCredentialsOptions() as $credentialId => $credentialName)
                                         <div class="flex items-center mb-1 last:mb-0">
                                             <input
@@ -238,7 +248,8 @@
                                                 {{ !$product->bol_com_sync ? 'disabled' : '' }}
                                                 {{ $product->bolComCredentials->contains('id', $credentialId) ? 'checked' : '' }}
                                             >
-                                            <label for="bol_com_credential_{{ $credentialId }}" class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+                                            <label for="bol_com_credential_{{ $credentialId }}"
+                                                   class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
                                                 {{ $credentialName }}
                                             </label>
                                         </div>
@@ -268,24 +279,56 @@
                                     required
                                 >
                                     <option value="">Selecteer levertijd</option>
-                                    <option value="24uurs-12" {{ $deliveryCode == '24uurs-12' ? 'selected' : '' }}>24 uur - 12</option>
-                                    <option value="24uurs-13" {{ $deliveryCode == '24uurs-13' ? 'selected' : '' }}>24 uur - 13</option>
-                                    <option value="24uurs-14" {{ $deliveryCode == '24uurs-14' ? 'selected' : '' }}>24 uur - 14</option>
-                                    <option value="24uurs-15" {{ $deliveryCode == '24uurs-15' ? 'selected' : '' }}>24 uur - 15</option>
-                                    <option value="24uurs-16" {{ $deliveryCode == '24uurs-16' ? 'selected' : '' }}>24 uur - 16</option>
-                                    <option value="24uurs-17" {{ $deliveryCode == '24uurs-17' ? 'selected' : '' }}>24 uur - 17</option>
-                                    <option value="24uurs-18" {{ $deliveryCode == '24uurs-18' ? 'selected' : '' }}>24 uur - 18</option>
-                                    <option value="24uurs-19" {{ $deliveryCode == '24uurs-19' ? 'selected' : '' }}>24 uur - 19</option>
-                                    <option value="24uurs-20" {{ $deliveryCode == '24uurs-20' ? 'selected' : '' }}>24 uur - 20</option>
-                                    <option value="24uurs-21" {{ $deliveryCode == '24uurs-21' ? 'selected' : '' }}>24 uur - 21</option>
-                                    <option value="24uurs-22" {{ $deliveryCode == '24uurs-22' ? 'selected' : '' }}>24 uur - 22</option>
-                                    <option value="24uurs-23" {{ $deliveryCode == '24uurs-23' ? 'selected' : '' }}>24 uur - 23</option>
-                                    <option value="1-2d" {{ $deliveryCode == '1-2d' ? 'selected' : '' }}>1-2 dagen</option>
-                                    <option value="2-3d" {{ $deliveryCode == '2-3d' ? 'selected' : '' }}>2-3 dagen</option>
-                                    <option value="3-5d" {{ $deliveryCode == '3-5d' ? 'selected' : '' }}>3-5 dagen</option>
-                                    <option value="4-8d" {{ $deliveryCode == '4-8d' ? 'selected' : '' }}>4-8 dagen</option>
-                                    <option value="1-8d" {{ $deliveryCode == '1-8d' ? 'selected' : '' }}>1-8 dagen</option>
-                                    <option value="MijnLeverBelofte" {{ $deliveryCode == 'MijnLeverBelofte' ? 'selected' : '' }}>Mijn Lever Belofte</option>
+                                    <option value="24uurs-12" {{ $deliveryCode == '24uurs-12' ? 'selected' : '' }}>24
+                                        uur - 12
+                                    </option>
+                                    <option value="24uurs-13" {{ $deliveryCode == '24uurs-13' ? 'selected' : '' }}>24
+                                        uur - 13
+                                    </option>
+                                    <option value="24uurs-14" {{ $deliveryCode == '24uurs-14' ? 'selected' : '' }}>24
+                                        uur - 14
+                                    </option>
+                                    <option value="24uurs-15" {{ $deliveryCode == '24uurs-15' ? 'selected' : '' }}>24
+                                        uur - 15
+                                    </option>
+                                    <option value="24uurs-16" {{ $deliveryCode == '24uurs-16' ? 'selected' : '' }}>24
+                                        uur - 16
+                                    </option>
+                                    <option value="24uurs-17" {{ $deliveryCode == '24uurs-17' ? 'selected' : '' }}>24
+                                        uur - 17
+                                    </option>
+                                    <option value="24uurs-18" {{ $deliveryCode == '24uurs-18' ? 'selected' : '' }}>24
+                                        uur - 18
+                                    </option>
+                                    <option value="24uurs-19" {{ $deliveryCode == '24uurs-19' ? 'selected' : '' }}>24
+                                        uur - 19
+                                    </option>
+                                    <option value="24uurs-20" {{ $deliveryCode == '24uurs-20' ? 'selected' : '' }}>24
+                                        uur - 20
+                                    </option>
+                                    <option value="24uurs-21" {{ $deliveryCode == '24uurs-21' ? 'selected' : '' }}>24
+                                        uur - 21
+                                    </option>
+                                    <option value="24uurs-22" {{ $deliveryCode == '24uurs-22' ? 'selected' : '' }}>24
+                                        uur - 22
+                                    </option>
+                                    <option value="24uurs-23" {{ $deliveryCode == '24uurs-23' ? 'selected' : '' }}>24
+                                        uur - 23
+                                    </option>
+                                    <option value="1-2d" {{ $deliveryCode == '1-2d' ? 'selected' : '' }}>1-2 dagen
+                                    </option>
+                                    <option value="2-3d" {{ $deliveryCode == '2-3d' ? 'selected' : '' }}>2-3 dagen
+                                    </option>
+                                    <option value="3-5d" {{ $deliveryCode == '3-5d' ? 'selected' : '' }}>3-5 dagen
+                                    </option>
+                                    <option value="4-8d" {{ $deliveryCode == '4-8d' ? 'selected' : '' }}>4-8 dagen
+                                    </option>
+                                    <option value="1-8d" {{ $deliveryCode == '1-8d' ? 'selected' : '' }}>1-8 dagen
+                                    </option>
+                                    <option
+                                        value="MijnLeverBelofte" {{ $deliveryCode == 'MijnLeverBelofte' ? 'selected' : '' }}>
+                                        Mijn Lever Belofte
+                                    </option>
                                     <option value="VVB" {{ $deliveryCode == 'VVB' ? 'selected' : '' }}>VVB</option>
                                 </select>
                                 <div id="delivery_code_error" class="text-xs text-red-500 mt-1 hidden">
@@ -313,17 +356,17 @@
 
                 <!-- Categories View Blade File -->
                 @if($product->type !== 'simple')
-                @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])
+                    @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])
 
 
-                @includeIf('admin::catalog.products.edit.types.' . $product->type)
+                    @includeIf('admin::catalog.products.edit.types.' . $product->type)
 
-                <!-- Related, Cross Sells, Up Sells View Blade File -->
-                @include('admin::catalog.products.edit.links', [
-                    'upSellAssociations'    => $product->values['associations']['up_sells'] ?? [],
-                    'crossSellAssociations' => $product->values['associations']['cross_sells'] ?? [],
-                    'relatedAssociations'   => $product->values['associations']['related_products'] ?? [],
-                ])
+                    <!-- Related, Cross Sells, Up Sells View Blade File -->
+                    @include('admin::catalog.products.edit.links', [
+                        'upSellAssociations'    => $product->values['associations']['up_sells'] ?? [],
+                        'crossSellAssociations' => $product->values['associations']['cross_sells'] ?? [],
+                        'relatedAssociations'   => $product->values['associations']['related_products'] ?? [],
+                    ])
                 @endif
 
                 <!-- Include Product Type Additional Blade Files If Any -->
@@ -367,7 +410,32 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
+    function calcMetOnderkleed() {
+        const sku = document.querySelector('input[name="sku"]').value;
+
+// Maak een XHR request
+        fetch('/product/met_onderkleed_price', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value
+            },
+            body: JSON.stringify({sku: sku})
+        })
+            .then(response => response.json())
+            .then(data => {
+                if(confirm('De zonder onderkleed prijs is: €' + data.original_price + '\nBerekende prijs is: €' + data.price + "\n(Vergeet niet op te slaan na het bevestigen van de prijs)")) {
+                    document.querySelector('input[name="values[common][prijs][EUR]"]').value = data.price;
+                }
+            })
+            .catch(error => {
+                alert('Er is een fout opgetreden bij het berekenen van de prijs');
+                console.error('Error:', error);
+            });
+
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
         const checkbox = document.getElementById('bol_com_sync');
         if (checkbox) {
             toggleDeleteWarning(checkbox);
