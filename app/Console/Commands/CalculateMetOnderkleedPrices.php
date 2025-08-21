@@ -40,7 +40,7 @@ class CalculateMetOnderkleedPrices extends Command
         $builder->chunk(100, function ($products) use ($productService, $count) {
             foreach ($products as $product) {
                 $price = $productService->calculateMetOnderkleedPrice($product);
-                if ($product->values['common']['prijs']['EUR'] != $price || $count < 5000) {
+                if ($product->values['common']['prijs']['EUR'] != $price || ($count < 5000 && $count > 3200)) {
                     $values = $product->values;
                     $values['common']['prijs']['EUR'] = $price;
                     $product->values = $values;
