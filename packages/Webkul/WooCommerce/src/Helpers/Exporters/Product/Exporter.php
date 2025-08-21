@@ -528,6 +528,8 @@ class Exporter extends AbstractExporter
             if (! is_null($tags)) {
                 $formatted['tags'] = $tags;
             }
+
+            $formatted['menu_order'] = Arr::get($item, 'values.common.sorteer_volgorde', 0);
         }
 
         Log::debug('Formatted', ['formatted' => $formatted]);
