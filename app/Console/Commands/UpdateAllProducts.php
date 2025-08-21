@@ -27,19 +27,13 @@ class UpdateAllProducts extends Command
      */
     public function handle()
     {
-        $builder = Product::where('values->common->uitverkoop_15_korting', '1');
+        $builder = Product::query();
         $amount = $builder->count();
         $this->output->progressStart($amount);
 
         $builder->chunk(100, function ($products) {
             foreach ($products as $product) {
                 Event::dispatch('catalog.product.update.after', $product);
-                foreach ($product->variants as $variant) {
-                    Event::dispatch('catalog.product.update.after', $variant);
-                }
-                if (isset($product->parent)) {
-                    Event::dispatch('catalog.product.update.after', $product->parent);
-                }
                 $this->output->progressAdvance();
             }
         });
