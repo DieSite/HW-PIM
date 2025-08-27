@@ -112,6 +112,11 @@ class BoxRugSizes extends Command
         foreach ($products as $product) {
             $_product = $productRepository->find($product->id);
             $values = $_product->values;
+            if (!isset($values['common']['maat'])) {
+                $this->info('No size found for product: ' . $product->sku);
+                $progressBar->advance();
+                continue;
+            }
             $actualSize = $values['common']['maat'];
 
             $sizeGroup = self::SIZE_MAPPING[$actualSize] ?? 'Afwijkende afmetingen';
