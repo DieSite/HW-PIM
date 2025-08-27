@@ -4,9 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\ProductService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Event;
 use Webkul\Product\Models\Product;
-use Webkul\WooCommerce\Listeners\ProcessProductsToWooCommerce;
 
 class UpdateProductsByFile extends Command
 {
@@ -45,7 +43,12 @@ class UpdateProductsByFile extends Command
 
         $builder->chunk(100, function ($products) {
             foreach ($products as $product) {
-                app(ProductService::class)->triggerWCSyncForParent($product);
+                if (is_null($product->parent)) {
+                    app(ProductService::class)->triggerWCSyncForParent($product);
+                } else {
+                    app(ProductService::class)->triggerWCSyncForChild($product);
+                }
+
                 $this->output->progressAdvance();
             }
         });
