@@ -13,7 +13,7 @@ class UpdateAllParentProducts extends Command
      *
      * @var string
      */
-    protected $signature = 'app:update-all-parent-products';
+    protected $signature = 'app:update-all-parent-products {--skip=}';
 
     /**
      * The console command description.
@@ -30,9 +30,15 @@ class UpdateAllParentProducts extends Command
         $builder = Product::whereNull('parent_id');
         $amount = $builder->count();
         $this->output->progressStart($amount);
+        $skip = $this->option('skip') ?? 0;
+        $count = 0;
 
-        $builder->chunk(100, function ($products) {
+        $builder->chunk(100, function ($products) use (&$count, $skip) {
             foreach ($products as $product) {
+                if ($count++ < $skip) {
+                    $this->output->progressAdvance();
+                    continue;
+                }
                 Event::dispatch('catalog.product.update.after', $product);
                 $this->output->progressAdvance();
             }
