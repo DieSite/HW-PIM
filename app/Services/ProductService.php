@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\Listeners\ProcessProductsToWooCommerce;
+use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 class ProductService
 {
@@ -99,13 +100,11 @@ class ProductService
 
     public function triggerWCSyncForParent(Product $product): void
     {
-        $product->load(['variants']);
-        $parentJob = new ProcessProductsToWooCommerce($product->toArray());
+        $parentJob = new SerializedProcessProductsToWooCommerce($product);
 
         $childJobs = [];
         foreach ($product->variants as $variant) {
-            $product->load(['parent']);
-            $childJobs[] = new ProcessProductsToWooCommerce($variant->toArray());
+            $childJobs[] = new SerializedProcessProductsToWooCommerce($variant);
         }
 
         \Bus::chain([
