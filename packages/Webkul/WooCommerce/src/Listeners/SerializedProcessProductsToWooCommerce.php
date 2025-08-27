@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Webkul\Product\Models\Product;
+use Webkul\Product\Repositories\ProductRepository;
 
 class SerializedProcessProductsToWooCommerce implements ShouldQueue
 {
@@ -17,7 +18,7 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        private readonly Product $product
+        private Product $product
     ) {
         $this->product->withoutRelations();
     }
@@ -27,6 +28,8 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
      */
     public function handle(): void
     {
+        $this->product = app(ProductRepository::class)->find($this->product->id);
+
         if (is_null($this->product->parent)) {
             $this->product->load('variants');
         } else {
