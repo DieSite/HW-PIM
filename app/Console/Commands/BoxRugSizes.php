@@ -80,7 +80,22 @@ class BoxRugSizes extends Command
         '350 cm x 400 cm' => '350 cm x 400 cm',
         '400 cm x 600 cm' => '350 cm x 400 cm',
 
-        'Maatwerk' => 'Maatwerk',
+        'Rond 80 cm'  => 'Rond 80 cm',
+        'Rond 100 cm' => 'Rond 100 cm',
+        'Rond 120 cm' => 'Rond 120 cm',
+        'Rond 140 cm' => 'Rond 140 cm',
+        'Rond 160 cm' => 'Rond 160 cm',
+        'Rond 200 cm' => 'Rond 200 cm',
+        'Rond 210 cm' => 'Rond 210 cm',
+        'Rond 220 cm' => 'Rond 220 cm',
+        'Rond 230 cm' => 'Rond 230 cm',
+        'Rond 240 cm' => 'Rond 240 cm',
+        'Rond 250 cm' => 'Rond 250 cm',
+        'Rond 300 cm' => 'Rond 300 cm',
+        'Rond 320 cm' => 'Rond 320 cm',
+
+        'Maatwerk'      => 'Maatwerk',
+        'Rond Maatwerk' => 'Rond Maatwerk',
     ];
 
     /**
