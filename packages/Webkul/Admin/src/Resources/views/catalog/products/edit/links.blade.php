@@ -85,8 +85,8 @@
                                 <!-- Details -->
                                 <div class="grid gap-1.5 place-content-start">
                                     <p
-                                        class="text-base text-gray-800 dark:text-white font-semibold"
-                                        v-text="product.productnaam"
+                                        class="text-gray-800 dark:text-white font-semibold"
+                                        v-text="product.values.common.productnaam"
                                     >
                                     </p>
 

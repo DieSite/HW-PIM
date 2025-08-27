@@ -75,7 +75,7 @@
                             >
                                 <template v-if="! product?.image">
                                     <img src="{{ unopim_asset('images/product-placeholders/front.svg') }}">
-                                
+
                                     <p class="w-full absolute bottom-1.5 text-[6px] text-gray-400 text-center font-semibold">
                                         @lang('admin::app.components.products.search.product-image')
                                     </p>
@@ -89,7 +89,7 @@
                             <!-- Details -->
                             <div class="grid gap-1.5 place-content-start">
                                 <p class="text-base text-gray-800 dark:text-white font-semibold">
-                                    @{{ product.name }}
+                                    @{{ product.values.common.productnaam }}
                                 </p>
 
                                 <p class="text-gray-600 dark:text-gray-300">
@@ -175,7 +175,7 @@
                     }
 
                     let self = this;
-                    
+
                     this.$axios.get("{{ route('admin.catalog.products.search') }}", {
                             params: {
                                 ...{query: this.searchTerm},
