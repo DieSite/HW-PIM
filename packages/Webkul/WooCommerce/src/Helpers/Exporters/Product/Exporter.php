@@ -628,7 +628,7 @@ class Exporter extends AbstractExporter
                                 }
 
                                 if ($attributeMapping && $optionValueMapping) {
-                                    if ($code === 'kleuren') {
+                                    if ($code === 'kleuren' || $code === 'materiaal') {
                                         if (str_contains($value, '|')) {
                                             $value = explode('|', $value);
                                         } else {
