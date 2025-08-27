@@ -185,9 +185,4 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             Log::error('Error occured'.json_encode($result));
         }
     }
-
-    public function displayName()
-    {
-        return self::class.'-'.$this->batch['sku'];
-    }
 }
