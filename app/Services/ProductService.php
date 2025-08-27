@@ -38,6 +38,16 @@ class ProductService
         }
     }
 
+    public function generateMetaTitle(string $naam, string $merk): string
+    {
+        return "Vloerkleed $naam van $merk bij Huis & Wonen";
+    }
+
+    public function generateMetaDescription(string $naam): string
+    {
+        return "Bestel je vloerkleed $naam bij Huis & Wonen online of kom langs in ons Experience Center in Gorinchem. Huis & Wonen de vloerkleden specialist.";
+    }
+
     public function calculateMetOnderkleedPrice(Product $product): string
     {
         if ($product->values['common']['onderkleed'] !== 'Met onderkleed') {

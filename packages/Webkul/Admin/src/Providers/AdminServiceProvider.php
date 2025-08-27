@@ -4,8 +4,10 @@ namespace Webkul\Admin\Providers;
 
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Webkul\Admin\Listeners\ProductStoredListener;
 use Webkul\Core\Tree;
 
 class AdminServiceProvider extends ServiceProvider
@@ -30,6 +32,8 @@ class AdminServiceProvider extends ServiceProvider
         $this->registerACL();
 
         $this->app->register(EventServiceProvider::class);
+
+        Event::listen('catalog.product.create.after', [ProductStoredListener::class, 'fillMetaValues']);
     }
 
     /**

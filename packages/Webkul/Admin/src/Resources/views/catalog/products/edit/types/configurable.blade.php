@@ -761,7 +761,6 @@
                                             <a
                                                 :href="'{{ route('admin.catalog.products.edit', ':id') }}'.replace(':id', variant.id)"
                                                 class="inline-block text-violet-700 hover:text-violet-700 hover:underline"
-                                                target="_blank"
                                             >
                                                 @lang('admin::app.catalog.products.edit.types.configurable.edit.edit-link-title')
                                             </a>

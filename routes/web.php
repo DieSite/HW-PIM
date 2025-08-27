@@ -12,6 +12,7 @@
 */
 
 
-use App\Http\Controllers\ProductPriceController;
+use App\Http\Controllers\ProductHelperController;
 
-Route::post('/product/met_onderkleed_price', [ProductPriceController::class, 'index']);
+Route::post('/product/met_onderkleed_price', [ProductHelperController::class, 'price']);
+Route::post('/product/meta_fields', [ProductHelperController::class, 'metaFields']);

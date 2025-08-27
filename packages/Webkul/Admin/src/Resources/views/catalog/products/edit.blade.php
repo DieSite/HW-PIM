@@ -48,6 +48,11 @@
                             Prijs berekenen
                         </button>
                     @endif
+                    @if(is_null($product->parent_id))
+                        <button type="button" onclick="getMetaFields()" class="secondary-button">
+                            Meta velden genereren
+                        </button>
+                    @endif
 
                     <!-- Save Button -->
                     <button class="primary-button">
@@ -408,6 +413,33 @@
                 warningElement.classList.remove('hidden');
             }
         }
+    }
+
+    function getMetaFields() {
+        const sku = document.querySelector('input[name="sku"]').value;
+        const title = document.querySelector('input[name="values[common][productnaam]"]').value;
+        const merk = document.querySelector('input[name="values[common][merk]"]').value;
+
+// Maak een XHR request
+        fetch('/product/meta_fields', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value
+            },
+            body: JSON.stringify({sku: sku, title: title, merk: merk})
+        })
+            .then(response => response.json())
+            .then(data => {
+                if(confirm('(Vergeet niet op te slaan na het bevestigen van de teksten)\n\nMeta titel: ' + data.meta_title + "\n\n" + 'Meta beschrijving: \n' + data.meta_description)) {
+                    document.querySelector('input[name="values[common][meta_titel]"]').value = data.meta_title;
+                    tinymce.get("meta_beschrijving").setContent(data.meta_description);
+                }
+            })
+            .catch(error => {
+                alert('Er is een fout opgetreden bij het ophalen van de meta');
+                console.error('Error:', error);
+            });
     }
 
     function calcMetOnderkleed() {
