@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
+use Webkul\WooCommerce\Listeners\ProcessProductsToWooCommerce;
 
 class ProductService
 {
@@ -94,5 +95,27 @@ class ProductService
         // Get other inverse of onderkleed
 
         return $product->parent->variants()->where('values->common->maat', $size)->where('values->common->onderkleed', $otherUnderrug)->first();
+    }
+
+    public function triggerWCSyncForParent(Product $product): void
+    {
+        $product->load(['variants']);
+        $parentJob = new ProcessProductsToWooCommerce($product->toArray());
+
+        $childJobs = [];
+        foreach ($product->variants as $variant) {
+            $product->load(['parent']);
+            $childJobs[] = new ProcessProductsToWooCommerce($variant->toArray());
+        }
+
+        \Bus::chain([
+            $parentJob,
+            ...$childJobs,
+        ])->dispatch();
+    }
+
+    public function triggerWCSyncForChild(Product $product): void
+    {
+        $this->triggerWCSyncForParent($product->parent);
     }
 }

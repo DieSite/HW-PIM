@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ProductService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Event;
 use Webkul\Product\Models\Product;
@@ -33,10 +34,7 @@ class UpdateAllProducts extends Command
 
         $builder->chunk(100, function ($products) {
             foreach ($products as $product) {
-                Event::dispatch('catalog.product.update.after', $product);
-                foreach ($product->variants as $variant) {
-                    Event::dispatch('catalog.product.update.after', $variant);
-                }
+                app(ProductService::class)->triggerWCSyncForParent($product);
                 $this->output->progressAdvance();
             }
         });

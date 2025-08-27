@@ -253,14 +253,11 @@ class ProductController extends Controller
                 }
             }
 
-            Event::dispatch('catalog.product.update.after', $product);
-            if (! is_null($product->parent)) {
-                Event::dispatch('catalog.product.update.after', $product->parent);
+            if (is_null($product->parent)) {
+                app(ProductService::class)->triggerWCSyncForParent($product);
+            } else {
+                app(ProductService::class)->triggerWCSyncForChild($product);
                 app(ProductService::class)->copyStockValuesOnderkleed($product);
-            }
-
-            foreach ($product->variants as $variant) {
-                Event::dispatch('catalog.product.update.after', $variant);
             }
 
             session()->flash('success', trans('admin::app.catalog.products.update-success'));
