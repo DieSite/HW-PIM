@@ -61,7 +61,7 @@ class BolComProductService
                 'error'      => $e->getMessage(),
             ]);
 
-            throw new Exception('Failed to sync with Bol.com: '.$e->getMessage());
+            throw new Exception('Failed to sync with Bol.com', previous: $e);
         }
     }
 
