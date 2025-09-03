@@ -566,7 +566,7 @@ class Exporter extends AbstractExporter
         } elseif ($isVoorraadkorting) {
             return [['id' => self::VOORRAAD_TAG_ID]];
         } else {
-            return null;
+            return [];
         }
     }
 
