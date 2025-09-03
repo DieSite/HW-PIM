@@ -14,5 +14,5 @@ return [
     'client_secret' => env('BOLCOM_CLIENT_SECRET'),
     'api_url'       => env('BOLCOM_API_URL', 'https://api.bol.com'),
 
-    'email_recipients' => env('BOLCOM_EMAIL_RECIPIENTS', []),
+    'email_recipients' => explode(env('BOLCOM_EMAIL_RECIPIENTS', ''), ','),
 ];
