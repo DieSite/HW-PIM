@@ -126,7 +126,6 @@ class BolComProductService
             'voorraad_5_korting',
             'voorraad_5_korting_handmatig',
             'voorraad_hw_5_korting',
-            'uitverkoop_15_korting',
         ];
 
         $stock = 0;
