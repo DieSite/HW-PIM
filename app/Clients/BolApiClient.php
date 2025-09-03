@@ -111,7 +111,7 @@ class BolApiClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (Exception $e) {
-            throw new Exception('Bol.com API error: '.$e->getMessage());
+            throw new Exception('Bol.com API error', previous: $e);
         }
     }
 }

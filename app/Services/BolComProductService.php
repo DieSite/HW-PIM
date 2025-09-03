@@ -15,7 +15,9 @@ use Webkul\Product\Repositories\ProductRepository;
 
 class BolComProductService
 {
-    public function __construct(protected ProductRepository $productRepository) {}
+    public function __construct(protected ProductRepository $productRepository)
+    {
+    }
 
     /**
      * @throws GuzzleException
@@ -40,7 +42,7 @@ class BolComProductService
                 return null;
             }
 
-            if (! $product->bol_com_sync) {
+            if (!$product->bol_com_sync) {
                 if ($previousSyncState && $reference) {
                     $this->deleteProductFromBolCom($product, $apiClient, $reference, $bolComCredential);
                     $product->bolComCredentials()->detach($bolComCredential->id);
@@ -49,7 +51,7 @@ class BolComProductService
                 return null;
             }
 
-            if (! $previousSyncState || ! $reference) {
+            if (!$previousSyncState || !$reference) {
                 return $this->createProductOnBolCom($product, $apiClient, $deliveryCode);
             } else {
                 return $this->updateProductOnBolCom($product, $apiClient, $reference, $deliveryCode);
@@ -57,8 +59,8 @@ class BolComProductService
         } catch (Exception $e) {
             Log::error('Failed to sync product with Bol.com', [
                 'product_id' => $product->id,
-                'sku'        => $product->sku,
-                'error'      => $e->getMessage(),
+                'sku' => $product->sku,
+                'error' => $e->getMessage(),
             ]);
 
             throw new Exception('Failed to sync with Bol.com', previous: $e);
@@ -68,12 +70,28 @@ class BolComProductService
     /**
      * @throws GuzzleException
      */
-    protected function createProductOnBolCom(Product $product, BolApiClient $apiClient, $deliveryCode)
+    public function createProductOnBolCom(Product $product, BolApiClient $apiClient, $deliveryCode)
     {
         $data = $this->buildProductData($product, $deliveryCode);
 
-        return $apiClient->post('/retailer/offers', $data);
+        $apiClient->post('/retailer/offers', $data);
 
+        $data = $this->buildContentData($product);
+
+        try {
+            $response = $apiClient->post('/retailer/content/products', $data);
+        } catch (\Exception $exception) {
+            $previous = $exception->getPrevious();
+
+            if ($previous instanceof \GuzzleHttp\Exception\ClientException) {
+                Log::debug('BOL.com response', ['content' => $previous->getResponse()->getBody()->getContents()]);
+            }
+
+            throw $exception;
+        }
+        Log::debug('BOL.com response', $response);
+
+        return $response;
     }
 
     /**
@@ -97,21 +115,21 @@ class BolComProductService
     protected function updateProductPrice(Product $product, BolApiClient $apiClient, $reference)
     {
         $priceData = $product->values['common']['prijs'] ?? [];
-        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
-        $price = (float) number_format($price, 2, '.', '');
+        $price = isset($priceData['EUR']) ? (float)$priceData['EUR'] : 0;
+        $price = (float)number_format($price, 2, '.', '');
 
         $data = [
             'pricing' => [
                 'bundlePrices' => [
                     [
-                        'quantity'  => 1,
+                        'quantity' => 1,
                         'unitPrice' => $price,
                     ],
                 ],
             ],
         ];
 
-        return $apiClient->put('/retailer/offers/'.$reference.'/price', $data);
+        return $apiClient->put('/retailer/offers/' . $reference . '/price', $data);
     }
 
     /**
@@ -130,15 +148,15 @@ class BolComProductService
 
         $stock = 0;
         foreach ($stockSources as $source) {
-            $stock += (int) ($stockData[$source] ?? 0);
+            $stock += (int)($stockData[$source] ?? 0);
         }
 
         $data = [
-            'amount'            => $stock,
+            'amount' => $stock,
             'managedByRetailer' => true,
         ];
 
-        return $apiClient->put('/retailer/offers/'.$reference.'/stock', $data);
+        return $apiClient->put('/retailer/offers/' . $reference . '/stock', $data);
     }
 
     /**
@@ -149,20 +167,20 @@ class BolComProductService
         $title = $product->values['common']['productnaam'];
 
         $data = [
-            'onHoldByRetailer'    => false,
+            'onHoldByRetailer' => false,
             'unknownProductTitle' => $title,
-            'fulfilment'          => [
-                'method'       => 'FBR',
+            'fulfilment' => [
+                'method' => 'FBR',
                 'deliveryCode' => $deliveryCode,
             ],
         ];
 
-        return $apiClient->put('/retailer/offers/'.$reference, $data);
+        return $apiClient->put('/retailer/offers/' . $reference, $data);
     }
 
     protected function deleteProductFromBolCom(Product $product, BolApiClient $apiClient, $reference, BolComCredential $bolComCredential)
     {
-        $apiClient->delete('/retailer/offers/'.$reference);
+        $apiClient->delete('/retailer/offers/' . $reference);
 
         $product->bolComCredentials()->detach($bolComCredential->id);
     }
@@ -175,8 +193,8 @@ class BolComProductService
         $title = $data['productnaam'];
         $sku = $product->sku;
         $priceData = $data['prijs'] ?? [];
-        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
-        $price = (float) number_format($price, 2, '.', '');
+        $price = isset($priceData['EUR']) ? (float)$priceData['EUR'] : 0;
+        $price = (float)number_format($price, 2, '.', '');
 
         $stockSources = [
             'voorraad_eurogros',
@@ -187,32 +205,162 @@ class BolComProductService
 
         $stock = 0;
         foreach ($stockSources as $source) {
-            $stock += (int) ($data[$source] ?? 0);
+            $stock += (int)($data[$source] ?? 0);
         }
 
         return [
-            'ean'       => $ean,
+            'ean' => $ean,
             'condition' => [
                 'name' => 'NEW',
             ],
-            'reference'           => $sku,
-            'onHoldByRetailer'    => false,
+            'reference' => $sku,
+            'onHoldByRetailer' => false,
             'unknownProductTitle' => $title,
-            'pricing'             => [
+            'pricing' => [
                 'bundlePrices' => [
                     [
-                        'quantity'  => 1,
+                        'quantity' => 1,
                         'unitPrice' => $price,
                     ],
                 ],
             ],
             'stock' => [
-                'amount'            => $stock,
+                'amount' => $stock,
                 'managedByRetailer' => true,
             ],
             'fulfilment' => [
-                'method'       => 'FBR',
+                'method' => 'FBR',
                 'deliveryCode' => $deliveryCode,
+            ],
+        ];
+    }
+
+    protected function buildContentData(Product $product): array
+    {
+        $values = $product->values['common'] ?? [];
+
+        $ean = $values['ean'];
+        $title = $values['productnaam'];
+        $description = $product->parent->values['common']['beschrijving_l'] ?? '';
+
+        $colors = $product->parent->values['common']['kleuren'] ?? '';
+        if (str_contains($colors, '|')) {
+            $colors = explode('|', $colors);
+        } else {
+            $colors = explode(', ', $colors);
+        }
+        $colors = collect($colors)->map(fn($color) => ['value' => $color])->toArray();
+
+        $maat = $product->values['common']['maat'] ?? '';
+        [$width, $length] = explode('x', $maat);
+        $width = preg_replace('/\D/', '', $width);
+        $length = preg_replace('/\D/', '', $length);
+
+        $material = $product->parent->values['common']['materiaal'] ?? '';
+        if (str_contains($material, '|')) {
+            $material = explode('|', $material);
+        } else {
+            $material = explode(', ', $material);
+        }
+        $material = collect($material)->map(fn($mat) => ['value' => $mat])->toArray();
+
+        Log::debug('BOL.com product material', ['material' => $material]);
+
+        $merk = $product->parent->values['common']['merk'] ?? '';
+
+        $pileType = $product->parent->values['common']['poolhoogte'] ?? '';
+        $pileType = (int)preg_replace('/\D/', '', $pileType);
+
+        if ($pileType > 15) {
+            $pileType = 'Hoogpolig';
+        } else {
+            $pileType = 'Laagpolig';
+        }
+
+        $shape = match (strtolower($product->parent->values['common']['vorm'])) {
+            'oval' => 'Ovaal',
+            'rechthoek' => 'Rechthoek',
+            'rond' => 'Rond',
+            default => 'Overig'
+        };
+
+        if ($shape === 'Rechthoek' && $width === $length) {
+            $shape = 'Vierkant';
+        }
+
+        return [
+            'language' => 'nl',
+            'attributes' => [
+                [
+                    'id' => 'EAN',
+                    'values' => [
+                        'value' => $ean,
+                    ],
+                ],
+                [
+                    'id' => 'Description',
+                    'values' => [
+                        'value' => $description,
+                    ],
+                ],
+                [
+                    'id' => 'Name',
+                    'values' => [
+                        'value' => $title,
+                    ],
+                ],
+                [
+                    'id' => 'Color',
+                    'values' => $colors,
+                ],
+                [
+                    'id' => 'Width',
+                    'values' => [
+                        'value' => $width,
+                        'unitId' => 'cm',
+                    ],
+                ],
+                [
+                    'id' => 'Length',
+                    'values' => [
+                        'value' => $length,
+                        'unitId' => 'cm',
+                    ],
+                ],
+                [
+                    'id' => 'Number of Items in Pack',
+                    'values' => [
+                        'value' => '1',
+                    ],
+                ],
+                [
+                    'id' => 'Material',
+                    'values' => $material,
+                ],
+                [
+                    'id' => 'Brand',
+                    'values' => [
+                        'value' => $merk,
+                    ],
+                ],
+                [
+                    'id' => 'Pile Type',
+                    'values' => [
+                        'value' => $pileType,
+                    ],
+                ],
+                [
+                    'id' => 'Type of Rug',
+                    'values' => [
+                        'value' => 'Vloerkleed',
+                    ],
+                ],
+                [
+                    'id' => 'Rug Shape',
+                    'values' => [
+                        'value' => $shape,
+                    ],
+                ],
             ],
         ];
     }
