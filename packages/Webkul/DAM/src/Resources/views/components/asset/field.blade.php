@@ -8,37 +8,45 @@
 <v-asset-field
     name="{{ $name }}"
     asset-values="{{ (is_array($assetValues) ? implode(',', $assetValues) : $assetValues) }}"
-    width="{{ $width }}"    
+    width="{{ $width }}"
     height="{{ $height }}"
     :errors="errors"
 >
-    <x-admin::shimmer.image class="w-[110px] h-[110px] rounded" />
+    <x-admin::shimmer.image class="w-[110px] h-[110px] rounded"/>
 </v-asset-field>
 
 @pushOnce('scripts')
     <script type="text/x-template" id="v-asset-field-template">
         <!-- Panel Content -->
         <div class="grid">
-            <x-admin::shimmer.image class="w-[110px] h-[110px] rounded" v-if="isLoading" />
+            <x-admin::shimmer.image class="w-[110px] h-[110px] rounded" v-if="isLoading"/>
 
             <div class="flex flex-wrap gap-3" v-else>
                 <input type="hidden" :name="name + '[]'" value="" v-if="assets.length === 0">
 
                 <!-- Uploaded assets -->
-                <div 
+                <draggable
+                    class="flex flex-wrap gap-1"
+                    ghost-class="draggable-ghost"
                     v-bind="{animation: 200}"
-                    v-for="(element, index) in assets"
+                    v-model="assets"
+                    item-key="id"
+                    v-else
                 >
-                    <v-asset-field-item
-                        :name="name"
-                        :index="index"
-                        :asset="element"
-                        :width="width"
-                        :height="height"
-                        @onRemove="remove($event)"
-                    >
-                    </v-asset-field-item>
-                </div>
+                    <template #item="{ element, index }">
+                        <div>
+                            <v-asset-field-item
+                                :name="name"
+                                :index="index"
+                                :asset="element"
+                                :width="width"
+                                :height="height"
+                                @onRemove="remove($event)"
+                            >
+                            </v-asset-field-item>
+                        </div>
+                    </template>
+                </draggable>
 
                 <!-- Add Asset -->
                 <label
@@ -59,121 +67,130 @@
                     <x-slot:header>
                         <div class="flex gap-x-2.5">
                             <!-- save selected assets -->
-                            <span 
+                            <span
                                 class="text-gray-800 dark:text-white font-semibold"
                             >
                                 @lang('dam::app.admin.components.asset.field.assign-assets')
                             </span>
                         </div>
-                    </x-slot>
+                        </x-slot>
 
-                    <!--Modal Content -->
-                    <x-slot:content>
-                        <div class="flex gap-3">
-                            @if (bouncer()->hasPermission('dam.directory.index'))
-                                <x-dam::asset.picker.directory-tree />
-                            @endif
+                        <!--Modal Content -->
+                        <x-slot:content>
+                            <div class="flex gap-3">
+                                @if (bouncer()->hasPermission('dam.directory.index'))
+                                    <x-dam::asset.picker.directory-tree/>
+                                @endif
 
-                            <x-dam::asset.picker 
-                                :src="route('admin.dam.asset_picker.index')"
-                                ref="datagrid"
-                            >
-                                <template #body-header="{ records, meta, massActions, selectAllRecords }">
-                                    <div class="flex gap-2 items-center justify-between pb-4" v-if="records.length">
-                                        <!-- Select All -->
-                                        <div class="flex gap-2">
-                                            <label for="mass_action_select_all_records">
-                                                <input
-                                                    type="checkbox"
-                                                    name="mass_action_select_all_records"
-                                                    id="mass_action_select_all_records"
-                                                    class="peer hidden"
-                                                    :checked="['all', 'partial'].includes(meta.mode)"
-                                                    @change="selectAllRecords"
-                                                >
-    
-                                                <span
-                                                    class="icon-checkbox-normal cursor-pointer rounded-md text-2xl"
-                                                    :class="[
+                                <x-dam::asset.picker
+                                    :src="route('admin.dam.asset_picker.index')"
+                                    ref="datagrid"
+                                >
+                                    <template #body-header="{ records, meta, massActions, selectAllRecords }">
+                                        <div class="flex gap-2 items-center justify-between pb-4" v-if="records.length">
+                                            <!-- Select All -->
+                                            <div class="flex gap-2">
+                                                <label for="mass_action_select_all_records">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="mass_action_select_all_records"
+                                                        id="mass_action_select_all_records"
+                                                        class="peer hidden"
+                                                        :checked="['all', 'partial'].includes(meta.mode)"
+                                                        @change="selectAllRecords"
+                                                    >
+
+                                                    <span
+                                                        class="icon-checkbox-normal cursor-pointer rounded-md text-2xl"
+                                                        :class="[
                                                         meta.mode === 'all' ? 'peer-checked:icon-checkbox-check peer-checked:text-violet-700 ' : (
                                                         meta.mode === 'partial' ? 'peer-checked:icon-checkbox-partial peer-checked:text-violet-700' : ''
                                                         ),
                                                     ]"
-                                                >
+                                                    >
                                                 </span>
-                                                
-                                            </label>
-                                            <span class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-800 dark:hover:text-white"  >@lang("Select All")</span>
-                                        </div>
-                                        
-                                        @if (bouncer()->hasPermission('dam.asset_assign'))
-                                            <span 
-                                                @click="saveAssets"
-                                                class="secondary-button"
-                                            >
+
+                                                </label>
+                                                <span
+                                                    class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-800 dark:hover:text-white">@lang("Select All")</span>
+                                            </div>
+
+                                            @if (bouncer()->hasPermission('dam.asset_assign'))
+                                                <span
+                                                    @click="saveAssets"
+                                                    class="secondary-button"
+                                                >
                                                 Assign
                                             </span>
-                                        @endif
-                                    </div>
-                                </template>
-                                <template #body="{ columns, records, performAction, setCurrentSelectionMode, meta, applied, isLoading }">
-                                    <template v-if="! isLoading && records.length">
-                                        <div
-                                            v-for="record in records"
-                                        >
-
-                                            <!-- Select asset -->
-                                            <label :for="`mass_action_select_record_${record[meta.primary_column]}`" class="cursor-pointer">
-                                                <div class="grid image-card relative overflow-hidden transition-all hover:border-gray-400 group">
-                                                    <img 
-                                                        :src="record.path"
-                                                        :alt="record.file_name"
-                                                        class="w-full h-full object-cover object-top"
-                                                    >
-                                                </div>
-                                                <div class="flex gap-2 items-center mt-2.5">
-                                                    <input
-                                                        type="checkbox"
-                                                        class="peer hidden"
-                                                        :name="`mass_action_select_record_${record[meta.primary_column]}`"
-                                                        :value="record[meta.primary_column]"
-                                                        :id="`mass_action_select_record_${record[meta.primary_column]}`"
-                                                        v-model="applied.massActions.indices"
-                                                        @change="setCurrentSelectionMode"
-                                                    >
-                                                    
-                                                    <span class="icon-checkbox-normal peer-checked:icon-checkbox-check peer-checked:text-violet-700 cursor-pointer rounded-md text-2xl">
-                                                    </span>
-
-                                                    <h2 class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-800 dark:hover:text-white overflow-hidden" v-text="record.file_name"></h2>
-                                                </div>
-                                            </label>
+                                            @endif
                                         </div>
                                     </template>
-    
-                                    <template v-else>
-                                        <x-admin::shimmer.datagrid.table.body isMultiRow="false" />
+                                    <template
+                                        #body="{ columns, records, performAction, setCurrentSelectionMode, meta, applied, isLoading }">
+                                        <template v-if="! isLoading && records.length">
+                                            <div
+                                                v-for="record in records"
+                                            >
+
+                                                <!-- Select asset -->
+                                                <label :for="`mass_action_select_record_${record[meta.primary_column]}`"
+                                                       class="cursor-pointer">
+                                                    <div
+                                                        class="grid image-card relative overflow-hidden transition-all hover:border-gray-400 group">
+                                                        <img
+                                                            :src="record.path"
+                                                            :alt="record.file_name"
+                                                            class="w-full h-full object-cover object-top"
+                                                        >
+                                                    </div>
+                                                    <div class="flex gap-2 items-center mt-2.5">
+                                                        <input
+                                                            type="checkbox"
+                                                            class="peer hidden"
+                                                            :name="`mass_action_select_record_${record[meta.primary_column]}`"
+                                                            :value="record[meta.primary_column]"
+                                                            :id="`mass_action_select_record_${record[meta.primary_column]}`"
+                                                            v-model="applied.massActions.indices"
+                                                            @change="setCurrentSelectionMode"
+                                                        >
+
+                                                        <span
+                                                            class="icon-checkbox-normal peer-checked:icon-checkbox-check peer-checked:text-violet-700 cursor-pointer rounded-md text-2xl">
+                                                    </span>
+
+                                                        <h2 class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-800 dark:hover:text-white overflow-hidden"
+                                                            v-text="record.file_name"></h2>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </template>
+
+                                        <template v-else>
+                                            <x-admin::shimmer.datagrid.table.body isMultiRow="false"/>
+                                        </template>
+
                                     </template>
-    
-                                </template>
-                            </x-dam::asset.picker>
-                        </div>
-                    </x-slot>
+                                </x-dam::asset.picker>
+                            </div>
+                            </x-slot>
                 </x-dam::modal>
 
             </div>
-        </div>  
+        </div>
     </script>
 
     <script type="text/x-template" id="v-asset-field-item-template">
         <div class="grid gap-2">
-            <div class="grid justify-items-center min-w-[120px] max-h-[120px] relative rounded overflow-hidden transition-all hover:border-gray-400 group" :style="{'width': this.width, 'height': this.height}">
+            <div
+                class="grid justify-items-center min-w-[120px] max-h-[120px] relative rounded overflow-hidden transition-all hover:border-gray-400 group"
+                :style="{'width': this.width, 'height': this.height}">
                 <!-- Image Preview -->
                 <img
                     :src="asset.url"
                     class="w-full h-full object-cover object-top"
                 />
-                <div class="flex flex-col justify-between invisible w-full p-3 bg-white dark:bg-cherry-800 absolute top-0 bottom-0 opacity-80 transition-all group-hover:visible">
+                <div
+                    class="flex flex-col justify-between invisible w-full p-3 bg-white dark:bg-cherry-800 absolute top-0 bottom-0 opacity-80 transition-all group-hover:visible">
                     <!-- Actions -->
                     <div class="flex items-center justify-center h-full">
                         <span
@@ -195,7 +212,8 @@
                             title="@lang('dam::app.admin.components.asset.field.remove')"
                         ></span>
 
-                        <input type="hidden" :name="name + '[]'" v-if="! asset.is_new && asset.value" :value="asset.value"/>
+                        <input type="hidden" :name="name + '['+index+']'" v-if="! asset.is_new && asset.value"
+                               :value="asset.value"/>
                     </div>
                 </div>
             </div>
@@ -209,9 +227,9 @@
             <x-slot:content class="flex items-center">
                 <div class="flex flex-row gap-3 justify-between w-full">
                     <div class="flex justify-center w-full">
-                        <img 
-                            :src="asset.previewUrl" 
-                            alt="Preview" 
+                        <img
+                            :src="asset.previewUrl"
+                            alt="Preview"
                             class="w-max"
                             v-if="asset"
                         />
@@ -224,7 +242,7 @@
                         </span>
                     </div>
                 </div>
-            </x-slot>
+                </x-slot>
         </x-dam::modal>
     </script>
 
@@ -234,7 +252,7 @@
 
             props: {
                 name: {
-                    type: String, 
+                    type: String,
                     default: 'images',
                 },
 
@@ -255,7 +273,8 @@
 
                 errors: {
                     type: Object,
-                    default: () => {}
+                    default: () => {
+                    }
                 }
             },
 
@@ -263,8 +282,7 @@
                 return {
                     assets: [],
 
-                    placeholders: [
-                    ],
+                    placeholders: [],
 
                     currentAssets: [],
 
@@ -316,7 +334,7 @@
                     try {
                         return JSON.parse(value);
                     } catch (e) {
-                        if (! silent) {
+                        if (!silent) {
                             console.error(e);
                         }
 
@@ -329,7 +347,7 @@
                         let selectedIndices = this.$refs.datagrid.applied.massActions.indices;
 
                         this.$refs.datagrid.applied.massActions.indices = [
-                            ...this.currentAssets.filter(id => ! selectedIndices.includes(id)),
+                            ...this.currentAssets.filter(id => !selectedIndices.includes(id)),
                             ...selectedIndices
                         ];
 
@@ -342,7 +360,7 @@
                 fetchAssets(assetIds, initialize = false) {
                     this.isLoading = true;
 
-                    return this.$axios.get("{{ route('admin.dam.asset_picker.get_assets') }}", {params: {assetIds: assetIds} })
+                    return this.$axios.get("{{ route('admin.dam.asset_picker.get_assets') }}", {params: {assetIds: assetIds}})
                         .then(response => {
                             this.isLoading = false;
 
@@ -352,7 +370,12 @@
                                 this.setCurrentAssets();
                             }
 
-                            return response.data
+                            let result = response.data;
+                            result.sort((a, b) => {
+                                return assetIds.indexOf(a.id) - assetIds.indexOf(b.id);
+                            });
+
+                            return result;
                         }).catch(error => {
                             console.error(error);
 
@@ -383,7 +406,7 @@
                 },
 
                 preview(record) {
-                    if (! this.asset.previewUrl) {
+                    if (!this.asset.previewUrl) {
                         this.setPreviewUrl();
                     }
 
