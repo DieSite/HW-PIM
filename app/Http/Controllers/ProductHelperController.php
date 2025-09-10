@@ -4,12 +4,35 @@ namespace App\Http\Controllers;
 
 use App\Services\ProductService;
 use Illuminate\Http\Request;
+use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
+use Webkul\WooCommerce\Services\WooCommerceService;
 
 class ProductHelperController extends Controller
 {
     public function __construct(private readonly ProductService $productService)
     {
+    }
+
+    public function redirectToFrontend(Product $product)
+    {
+        $connector = app(WooCommerceService::class);
+
+        if ( $product->parent !== null ) {
+            $product = $product->parent;
+        }
+
+        $products = $connector->requestApiAction(
+            'getProductWithSku',
+            [],
+            ['sku' => $product->sku]
+        );
+
+        if ( isset($products[0]) ) {
+            return redirect($products[0]['permalink']);
+        }
+
+        abort(418, 'External product not found.');
     }
 
     public function metaFields(Request $request)

@@ -54,6 +54,10 @@
                         </button>
                     @endif
 
+                    <a href="{{ route('product.frontend', ['id' => $product->id]) }}" class="secondary-button" target="_blank">
+                        Naar frontend
+                    </a>
+
                     <!-- Save Button -->
                     <button class="primary-button">
                         @lang('admin::app.catalog.products.edit.save-btn')

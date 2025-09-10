@@ -16,3 +16,5 @@ use App\Http\Controllers\ProductHelperController;
 
 Route::post('/product/met_onderkleed_price', [ProductHelperController::class, 'price']);
 Route::post('/product/meta_fields', [ProductHelperController::class, 'metaFields']);
+
+Route::get('/product/frontend/{product}', [ProductHelperController::class, 'redirectToFrontend'])->name('product.frontend');
