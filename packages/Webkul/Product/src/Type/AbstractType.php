@@ -157,6 +157,7 @@ abstract class AbstractType
         if (! empty($data[self::PRODUCT_VALUES_KEY])) {
             $data = $this->prepareProductValues($data, $product);
 
+
             $product->values = $data[self::PRODUCT_VALUES_KEY];
         }
 
@@ -183,6 +184,8 @@ abstract class AbstractType
         }
 
         $product->values = $productValues;
+
+        $product->status = $data['status'] ?? $product->status;
 
         if ($product->isDirty()) {
             $product->update($data);

@@ -204,7 +204,7 @@ class ProductDataGrid extends DataGrid implements ExportableInterface
             'closure' => function ($row) {
                 return $row->status
                     ? "<span class='label-active'>".trans('admin::app.common.enable').'</span>'
-                    : "<span class='label-info'>".trans('admin::app.common.disable').'</span>';
+                    : "<span class='label-processing'>".trans('admin::app.common.disable').'</span>';
             },
         ]);
 

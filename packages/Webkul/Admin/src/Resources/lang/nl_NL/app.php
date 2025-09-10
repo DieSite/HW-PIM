@@ -2419,6 +2419,6 @@ return [
         'true'     => 'WAAR',
         'false'    => 'Vals',
         'enable'   => 'Ingeschakeld',
-        'disable'  => 'Gehandicapt',
+        'disable'  => 'Uitgeschakeld',
     ],
 ];

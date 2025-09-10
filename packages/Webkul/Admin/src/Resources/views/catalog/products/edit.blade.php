@@ -193,6 +193,21 @@
                 @endforeach
             </div>
             <div class="right-column flex flex-col gap-2 w-[360px] max-w-full max-sm:w-full">
+                @if(is_null($product->parent))
+                    <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                        <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
+                            Status
+                        </p>
+
+                        <div class="mb-2.5">
+                            <select name="status" class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                                <option value="1" @selected(old('status', $product->status) == 1)>✓ Ingeschakeld</option>
+                                <option value="0" @selected(old('status', $product->status) == 0)>✗ Uitgeschakeld</option>
+                            </select>
+                        </div>
+                    </div>
+                @endif
+
                 <!-- Add Bol.com Integration Box -->
                 <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
@@ -362,7 +377,6 @@
                         @endif
                     </div>
                 </div>
-
                 <!-- Categories View Blade File -->
                 @if($product->type !== 'simple')
                     @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])
