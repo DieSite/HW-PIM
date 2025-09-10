@@ -18,6 +18,8 @@ class PickerDataGrid extends AssetDataGrid
 
         $queryBuilder->addSelect('dam_assets.path as storage_file_path');
 
+        $queryBuilder->where('extension' , '!=', 'webp');
+
         return $queryBuilder;
     }
 
