@@ -25,6 +25,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('import:eurogros')->dailyAt('03:00')->timezone('Europe/Amsterdam');
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
+        $schedule->command('app:import-eurogros-ean')->weeklyOn('2', '03:00')->timezone('Europe/Amsterdam');
     }
 
     /**
