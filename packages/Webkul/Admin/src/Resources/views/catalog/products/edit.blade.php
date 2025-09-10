@@ -54,7 +54,7 @@
                         </button>
                     @endif
 
-                    <a href="{{ route('product.frontend', ['id' => $product->id]) }}" class="secondary-button" target="_blank">
+                    <a href="{{ route('product.frontend', ['product' => $product->id]) }}" class="secondary-button" target="_blank">
                         Naar frontend
                     </a>
 
