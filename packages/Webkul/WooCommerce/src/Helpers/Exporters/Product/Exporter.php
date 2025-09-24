@@ -529,7 +529,7 @@ class Exporter extends AbstractExporter
                 $formatted['tags'] = $tags;
             }
 
-            $formatted['cross_sell_ids'] = $this->getCrossSellProducts($item);
+            $formatted['upsell_ids'] = $this->getUpsellProducts($item);
 
             $formatted['menu_order'] = Arr::get($item, 'values.common.sorteer_volgorde', 0);
         }
@@ -539,20 +539,25 @@ class Exporter extends AbstractExporter
         return $formatted;
     }
 
-    private function getCrossSellProducts(array $item): array
+    private function getUpsellProducts(array $item): array
     {
         $crossSellProducts = [];
 
         $connector = app(WooCommerceService::class);
 
         foreach (Arr::get($item, 'values.associations.cross_sells', []) as $crossSellSku) {
+            if ($crossSellSku === $item['sku'] ) {
+                continue;
+            }
+
             $crossSellItems = $connector->requestApiAction(
                 'getProductWithSku',
                 [],
                 ['sku' => $crossSellSku]
             );
 
-            $ids = Arr::get($crossSellItems, '*.id', []);
+            $ids = collect($crossSellItems)->pluck('id')->reject(fn($value) => is_null($value))->toArray();
+
             $crossSellProducts = array_merge($crossSellProducts, $ids);
         }
 
