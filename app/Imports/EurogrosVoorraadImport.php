@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Product;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
@@ -10,7 +11,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithProgressBar;
 use Maatwebsite\Excel\Concerns\WithUpserts;
 
-class EurogrosVoorraadImport implements ToModel, WithChunkReading, WithHeadingRow, WithProgressBar, WithUpserts
+class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, WithHeadingRow, WithProgressBar, WithUpserts
 {
     use Importable;
 
@@ -41,7 +42,7 @@ class EurogrosVoorraadImport implements ToModel, WithChunkReading, WithHeadingRo
 
     public function chunkSize(): int
     {
-        return 1000;
+        return 60;
     }
 
     public function uniqueBy()

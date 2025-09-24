@@ -48,7 +48,7 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
         $fullPath = storage_path('app/'.$this->path);
 
         if (file_exists($fullPath)) {
-            Excel::import(new EurogrosVoorraadImport, $fullPath);
+            (new EurogrosVoorraadImport)->queue($fullPath);
         }
     }
 
