@@ -335,12 +335,36 @@
                                             @lang('admin::app.catalog.products.index.create.sku')
                                         </x-admin::form.control-group.label>
 
-                                        <x-admin::form.control-group.control
-                                            type="text"
-                                            name="sku"
-                                            ::rules="{ required: true, regex: /^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/ }"
-                                            :label="trans('admin::app.catalog.products.index.create.sku')"
-                                        />
+                                        <div class="flex gap-2.5">
+                                            <x-admin::form.control-group.control
+                                                type="text"
+                                                name="sku"
+                                                v-model="skuValue"
+                                                ::rules="{ required: true, regex: /^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/ }"
+                                                :label="trans('admin::app.catalog.products.index.create.sku')"
+                                            />
+
+                                            <select
+                                                v-model="brand"
+                                                name="brand"
+                                                class="multiselect__tags"
+                                                style="padding-bottom: 8px;"
+                                            >
+                                                <option :value="null" disabled hidden>--- Kies een merk ---</option>
+                                                <option value="ERG">Eurogros</option>
+                                                <option value="DMC">De Munk</option>
+                                                <option value="DES">Desso</option>
+                                                <option value="KP">Karpi</option>
+                                            </select>
+
+                                            <button
+                                                type="button"
+                                                class="secondary-button"
+                                                @click="generateSku"
+                                            >
+                                                Genereer SKU
+                                            </button>
+                                        </div>
 
                                         <x-admin::form.control-group.error control-name="sku" />
                                     </x-admin::form.control-group>
@@ -414,11 +438,27 @@
                     return {
                         attributes: [],
 
-                        superAttributes: {}
+                        superAttributes: {},
+
+                        skuValue: '',
+                        brand: null,
                     };
                 },
 
                 methods: {
+                    async generateSku() {
+                        try {
+                            const response = await this.$axios.post('/product/generateSku', {
+                                brand: this.brand
+                            });
+
+                            if (response.data.sku) {
+                                this.skuValue = response.data.sku;
+                            }
+                        } catch (error) {
+                            console.error('Fout bij het genereren van SKU:', error);
+                        }
+                    },
                     create(params, { setErrors }) {
                         let formData = new FormData(this.$refs.productCreateForm);
 

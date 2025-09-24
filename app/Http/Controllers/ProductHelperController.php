@@ -60,4 +60,24 @@ class ProductHelperController extends Controller
 
         return response()->json(['price' => $price, 'original_price' => $original]);
     }
+
+    public function sku(Request $request)
+    {
+        $data = $request->validate([
+            'brand' => 'required|string|in:ERG,DES,KP,DMC',
+        ]);
+        $brand = $data['brand'];
+
+        // SELECT  FROM products WHERE sku LIKE 'ERG%' AND sku NOT LIKE '%.%'
+
+        $value = Product::where('sku', 'like', $brand.'%')->where('type', 'configurable')->rawValue("MAX(CAST(REPLACE(sku, '$brand', '') as UNSIGNED))");
+        $value++;
+
+        // Ensure the SKU doesn't exist already
+        while (Product::where('sku', $brand.$value)->exists()) {
+            $value++;
+        }
+
+        return response()->json(['sku' => $brand.$value]);
+    }
 }
