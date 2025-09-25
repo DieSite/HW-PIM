@@ -13,7 +13,7 @@ class ProductStoredListener
 
         $productService = app(ProductService::class);
 
-        if (empty($values['common']['meta_title']) && ! empty($values['common']['productnaam'] && ! empty($values['common']['merk']))) {
+        if (empty($values['common']['meta_title']) && ! empty($values['common']['productnaam']) && ! empty($values['common']['merk'])) {
             $values['common']['meta_title'] = $productService->generateMetaTitle($values['common']['productnaam'], $values['common']['merk']);
         }
 
