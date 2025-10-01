@@ -4,9 +4,11 @@ namespace Webkul\WooCommerce\Listeners;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
 
@@ -36,5 +38,19 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
             $this->product->load('parent');
         }
         ProcessProductsToWooCommerce::dispatchSync($this->product->toArray());
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        if ($exception instanceof ModelNotFoundException) {
+            // Log dat het product niet meer bestaat, maar markeer de job niet als mislukt
+            \Log::info('Product bestaat niet meer voor WooCommerce synchronisatie', [
+                'product_id' => $this->product->id
+            ]);
+            return;
+        }
+
+        // Gooi andere exceptions gewoon door
+        throw $exception;
     }
 }
