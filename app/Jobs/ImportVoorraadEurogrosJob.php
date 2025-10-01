@@ -24,7 +24,6 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
         }
 
         $this->importData();
-        $this->cleanupFile();
     }
 
     private function pullFromSftp(): bool
