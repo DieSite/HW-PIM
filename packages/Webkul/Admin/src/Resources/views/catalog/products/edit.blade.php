@@ -475,14 +475,18 @@
             .then(response => response.json())
             .then(data => {
                 if(confirm('De zonder onderkleed prijs is: €' + data.original_price + '\nBerekende prijs is: €' + data.price + "\n(Vergeet niet op te slaan na het bevestigen van de prijs)")) {
-                    document.querySelector('input[name="values[common][prijs][EUR]"]').value = data.price;
+                    const input = document.querySelector('input[name="values[common][prijs][EUR]"]');
+                    input.value = data.price;
+
+                    // Trigger zowel 'input' als 'change' events
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             })
             .catch(error => {
                 alert('Er is een fout opgetreden bij het berekenen van de prijs');
                 console.error('Error:', error);
             });
-
     }
 
     document.addEventListener('DOMContentLoaded', function () {
