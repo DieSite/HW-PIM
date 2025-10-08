@@ -465,6 +465,7 @@ class Exporter extends AbstractExporter
             $formatted['parent_id'] = $item['parent_id'];
             $meta = $formatted['meta_data'] ?? [];
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
+            $meta[] = ['key' => 'afbeeling_zonder_logo', 'value' => $this->generateImageUrl($item['afbeelding_zonder_logo'])];
             $formatted['meta_data'] = $meta;
         } else {
             $onderkleed = collect();
