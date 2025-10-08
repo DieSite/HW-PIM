@@ -153,7 +153,6 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         } elseif ($result['code'] == 201) {
             Log::info("Product $productData[sku] created successfully");
         } else {
-            Log::error('Error occured '.json_encode($result));
             throw new \Exception('Error occurred: '.json_encode($result));
         }
     }
@@ -182,11 +181,11 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         if ($result['code'] == 200) {
-            Log::debug("Product updated successfully \n ".json_encode($result));
+            Log::debug("Product $productData[sku] updated successfully");
         } elseif ($result['code'] == 201) {
-            Log::debug("Product created successfully \n ".json_encode($result));
+            Log::debug("Product $productData[sku] created successfully");
         } else {
-            Log::error('Error occured'.json_encode($result));
+            throw new \Exception('Error occurred: '.json_encode($result));
         }
     }
 }
