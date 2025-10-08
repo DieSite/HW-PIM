@@ -68,6 +68,7 @@ class ProductService
         $plusPrice = config('rugs.underrugs_cost')[$size] ?? null;
 
         if (is_null($plusPrice)) {
+            Log::warning('Underrugs cost not found for size', ['size' => $size]);
             return (string) $price;
         }
 
