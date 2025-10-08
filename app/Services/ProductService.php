@@ -5,7 +5,6 @@ namespace App\Services;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
-use Webkul\WooCommerce\Listeners\ProcessProductsToWooCommerce;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 class ProductService
@@ -64,11 +63,13 @@ class ProductService
 
         $price = (float) $withOnderkleed->values['common']['prijs']['EUR'];
         $size = $product->values['common']['maat'] ?? null;
+        $size = ! is_null($size) ? trim($size) : null;
 
         $plusPrice = config('rugs.underrugs_cost')[$size] ?? null;
 
         if (is_null($plusPrice)) {
-            Log::warning('Underrugs cost not found for size', ['size' => $size]);
+            Log::warning('Underrugs cost not found for size', ['size' => $size, 'costs' => config('rugs.underrugs_cost')]);
+
             return (string) $price;
         }
 
@@ -91,8 +92,6 @@ class ProductService
             default             => 'Zonder onderkleed',
         };
         $size = $product->values['common']['maat'] ?? null;
-
-
 
         // Get other inverse of onderkleed
 
