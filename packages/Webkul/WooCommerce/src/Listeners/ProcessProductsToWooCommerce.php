@@ -107,6 +107,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         return $this->exporter->formatData($batchData);
     }
 
+    /**
+     * @throws \Exception
+     */
     private function processToVariation(array $productData)
     {
         Log::debug('Processing to variation');
@@ -146,11 +149,12 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         if ($result['code'] == 200) {
-            Log::info("Product updated successfully \n ".json_encode($result));
+            Log::info("Product $productData[sku] updated successfully");
         } elseif ($result['code'] == 201) {
-            Log::info("Product created successfully \n ".json_encode($result));
+            Log::info("Product $productData[sku] created successfully");
         } else {
             Log::error('Error occured '.json_encode($result));
+            throw new \Exception('Error occurred: '.json_encode($result));
         }
     }
 
