@@ -465,11 +465,6 @@ class Exporter extends AbstractExporter
             $formatted['parent_id'] = $item['parent_id'];
             $meta = $formatted['meta_data'] ?? [];
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
-
-            if (! empty( $item['afbeelding_zonder_logo'] )) {
-                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($item['afbeelding_zonder_logo'])];
-            }
-
             $formatted['meta_data'] = $meta;
         } else {
             $onderkleed = collect();
@@ -536,6 +531,12 @@ class Exporter extends AbstractExporter
 
             $formatted['upsell_ids'] = $this->getUpsellProducts($item);
 
+            $meta = $formatted['meta_data'] ?? [];
+            if (! empty($item['values']['common']['afbeelding_zonder_logo'])) {
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($item['values']['common']['afbeelding_zonder_logo'])];
+            }
+            $formatted['meta_data'] = $meta;
+
             $formatted['menu_order'] = Arr::get($item, 'values.common.sorteer_volgorde', 0);
         }
 
@@ -551,7 +552,7 @@ class Exporter extends AbstractExporter
         $connector = app(WooCommerceService::class);
 
         foreach (Arr::get($item, 'values.associations.cross_sells', []) as $crossSellSku) {
-            if ($crossSellSku === $item['sku'] ) {
+            if ($crossSellSku === $item['sku']) {
                 continue;
             }
 
@@ -561,7 +562,7 @@ class Exporter extends AbstractExporter
                 ['sku' => $crossSellSku]
             );
 
-            $ids = collect($crossSellItems)->pluck('id')->reject(fn($value) => is_null($value))->toArray();
+            $ids = collect($crossSellItems)->pluck('id')->reject(fn ($value) => is_null($value))->toArray();
 
             $crossSellProducts = array_merge($crossSellProducts, $ids);
         }
