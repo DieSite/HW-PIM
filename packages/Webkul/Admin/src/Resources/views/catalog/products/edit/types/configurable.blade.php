@@ -617,6 +617,9 @@
                     <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values.common.onderkleed">
                         @{{ variant.values.common.onderkleed.replace('_', ' ') }}
                     </p>
+                    <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values.common.festoneren_banderen">
+                        @{{ variant.values.common.festoneren_banderen }}
+                    </p>
                     <p class="text-gray-600 dark:text-gray-300">
                         @{{ "@lang('admin::app.catalog.products.edit.types.configurable.sku')".replace(':sku', variant.sku) }}
                     </p>

@@ -470,10 +470,12 @@ class Exporter extends AbstractExporter
             $onderkleed = collect();
             $maat = collect();
             $maatgroep = collect();
+            $festoneren_banderen = collect();
             foreach (Arr::get($item, 'variants', []) as $variant) {
                 $onderkleed->push(...Arr::wrap(Arr::get($variant, 'values.common.onderkleed', [])));
                 $maat->push(...Arr::wrap(Arr::get($variant, 'values.common.maat', [])));
                 $maatgroep->push(...Arr::wrap(Arr::get($variant, 'values.common.maatgroep', [])));
+                $festoneren_banderen->push(...Arr::wrap(Arr::get($variant, 'values.common.festoneren_banderen', [])));
             }
 
             $attributeMappingMaat = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
@@ -500,6 +502,14 @@ class Exporter extends AbstractExporter
                 'options'   => $maatgroep->unique()->toArray(),
             ];
 
+            $attributeMappingFestonerenBanderen = $this->getDataTransferMapping('festoneren_banderen', self::UNOPIM_ATTRIBUTE_ENTITY);
+            $formatted['attributes'][] = [
+                'id'        => $attributeMappingMaatgroep[0]['externalId'],
+                'visible'   => true,
+                'variation' => false,
+                'options'   => $festoneren_banderen->unique()->toArray(),
+            ];
+
             $maat = $maat->sort(function ($a, $b) {
                 // Controleer eerst of een van beide waarden numeriek is
                 $aIsNumeric = is_numeric($a[0]);
@@ -519,9 +529,12 @@ class Exporter extends AbstractExporter
                 return strcasecmp($a, $b);
             });
 
+            $festoneren_banderen = $festoneren_banderen->sort();
+
             $formatted['default_attributes'] = [
                 ['id' => $attributeMappingMaat[0]['externalId'], 'option' => $maat->first()],
                 ['id' => $attributeMappingOnderkleed[0]['externalId'], 'option' => $onderkleed->first()],
+                ['id' => $attributeMappingFestonerenBanderen[0]['externalId'], 'option' => $festoneren_banderen->first()],
             ];
 
             $tags = $this->getTags($item);
