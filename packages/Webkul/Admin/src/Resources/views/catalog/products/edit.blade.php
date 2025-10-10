@@ -450,7 +450,13 @@
             .then(response => response.json())
             .then(data => {
                 if(confirm('(Vergeet niet op te slaan na het bevestigen van de teksten)\n\nMeta titel: ' + data.meta_title + "\n\n" + 'Meta beschrijving: \n' + data.meta_description)) {
-                    document.querySelector('input[name="values[common][meta_titel]"]').value = data.meta_title;
+                    const input = document.querySelector('input[name="values[common][meta_titel]"]');
+                    input.value = data.meta_title;
+
+                    // Trigger zowel 'input' als 'change' events
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+
                     tinymce.get("meta_beschrijving").setContent(data.meta_description);
                 }
             })
