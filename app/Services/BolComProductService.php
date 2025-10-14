@@ -10,6 +10,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
 
@@ -89,6 +90,20 @@ class BolComProductService
         return $apiClient->get('/retailer/products/categories');
     }
 
+    public function fetchCatalogProductDetails(BolComCredential $bolComCredential, string $ean, bool $assets)
+    {
+        $apiClient = new BolApiClient;
+        $apiClient->setCredential($bolComCredential);
+
+        if ( $assets ) {
+            $endpoint = "/retailer/products/$ean/assets";
+        } else {
+            $endpoint = "/retailer/content/catalog-products/$ean";
+        }
+
+        return $apiClient->get($endpoint);
+    }
+
     /**
      * @throws GuzzleException
      */
@@ -127,6 +142,22 @@ class BolComProductService
      */
     protected function updateProductOnBolCom(Product $product, BolApiClient $apiClient, $reference, $deliveryCode)
     {
+        $data = $this->buildContentData($product);
+
+        Log::debug('BOL.com content data', $data);
+        try {
+            $response = $apiClient->post('/retailer/content/products', $data);
+        } catch (\Exception $exception) {
+            $previous = $exception->getPrevious();
+
+            if ($previous instanceof \GuzzleHttp\Exception\ClientException) {
+                Log::debug('BOL.com response', ['content' => $previous->getResponse()->getBody()->getContents()]);
+            }
+
+            throw $exception;
+        }
+        Log::debug('BOL.com response', $response);
+
         $this->updateProductPrice($product, $apiClient, $reference);
         $this->updateProductStock($product, $apiClient, $reference);
         $this->updateProductDetails($product, $apiClient, $reference, $deliveryCode);
@@ -289,8 +320,6 @@ class BolComProductService
         }
         $material = collect($material)->map(fn ($mat) => ['value' => $mat])->toArray();
 
-        Log::debug('BOL.com product material', ['material' => $material]);
-
         $merk = $product->parent->values['common']['merk'] ?? '';
 
         $pileType = $product->parent->values['common']['poolhoogte'] ?? '';
@@ -317,7 +346,8 @@ class BolComProductService
             [
                 'id'     => 'Number of Items in Pack',
                 'values' => [
-                    'value' => '1',
+                    'value'  => '1',
+                    'unitId' => 'unece.unit.EA',
                 ],
             ],
             [
@@ -327,15 +357,21 @@ class BolComProductService
                 ],
             ],
             [
-                'id'     => 'Pile Type',
+                'id'     => 'Pile type',
                 'values' => [
                     'value' => $pileType,
                 ],
             ],
             [
-                'id'     => 'Category',
+                'id'     => 'GPC Code',
                 'values' => [
                     'value' => '14176', // TODO
+                ],
+            ],
+            [
+                'id'     => 'Indoor or Outdoor',
+                'values' => [
+                    'value' => 'Voor binnen',
                 ],
             ],
         ];
@@ -369,14 +405,19 @@ class BolComProductService
 
         if (! empty($colors)) {
             $attributes[] = [
-                'id'     => 'Color',
+                'id'     => 'Colour',
+                'values' => $colors,
+            ];
+
+            $attributes[] = [
+                'id'     => 'Colour Group',
                 'values' => $colors,
             ];
         }
 
         if (! empty($width)) {
             $attributes[] = [
-                'id'     => 'Width',
+                'id'     => 'Product Width',
                 'values' => [
                     'value'  => $width,
                     'unitId' => 'cm',
@@ -386,7 +427,7 @@ class BolComProductService
 
         if (! empty($length)) {
             $attributes[] = [
-                'id'     => 'Length',
+                'id'     => 'Product Length',
                 'values' => [
                     'value'  => $length,
                     'unitId' => 'cm',
@@ -401,28 +442,63 @@ class BolComProductService
             ];
         }
 
+        $parties = [];
+
         if (! empty($merk)) {
-            $attributes[] = [
-                'id'     => 'Brand',
-                'values' => [
-                    'value' => $merk,
-                ],
+            $parties[] = [
+                'name' => $merk,
+                'type' => 'Brand',
+                'role' => 'BRAND',
             ];
         }
 
         if (! empty($shape)) {
             $attributes[] = [
-                'id'     => 'Rug Shape',
+                'id'     => 'Shape',
                 'values' => [
                     'value' => $shape,
                 ],
             ];
         }
 
-        return [
+        $assets = [];
+
+        if (! empty($product->parent->values['common']['afbeelding_zonder_logo'])) {
+            $images = explode(',', $product->parent->values['common']['afbeelding_zonder_logo'] ?? '');
+        } elseif (! empty($product->parent->values['common']['afbeelding'])) {
+            $images = explode(',', $product->parent->values['common']['afbeelding'] ?? '');
+        } else {
+            $images = [];
+        }
+
+        Log::debug('Images', ['images' => $images]);
+        foreach ($images as $image) {
+            if (empty($image)) {
+                continue;
+            }
+
+            $label = empty($assets) ? 'PRIMARY' : 'DETAIL';
+
+            $assets[] = [
+                'url'    => $this->generateImageUrl($image),
+                'labels' => [$label],
+            ];
+        }
+
+        $data = [
             'language'   => 'nl',
             'attributes' => $attributes,
         ];
+
+        if (! empty($parties)) {
+            $data['parties'] = $parties;
+        }
+
+        if (! empty($assets)) {
+            $data['assets'] = $assets;
+        }
+
+        return $data;
     }
 
     protected function getCredentialsId()
@@ -459,5 +535,16 @@ class BolComProductService
         }
 
         Mail::to($recipients)->send(new BolComSyncSuccess($product, $offer, $bolComCredential));
+    }
+
+    protected function generateImageUrl(string $image): string
+    {
+        $damAsset = \DB::table('dam_assets')->where('id', $image)->first();
+
+        if ($damAsset && ! empty($damAsset->path)) {
+            $image = $damAsset->path;
+        }
+
+        return Storage::disk('private')->url($image);
     }
 }
