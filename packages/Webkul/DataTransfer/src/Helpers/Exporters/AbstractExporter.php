@@ -52,6 +52,15 @@ abstract class AbstractExporter
      */
     public const ERROR_CODE_COLUMNS_NUMBER = 'wrong_columns_number';
 
+    public const BATCH_SIZE = 1000;
+
+    /**
+     * The name of the queue the job should be sent to.
+     *
+     * @var string|null
+     */
+    public $queue;
+
     /**
      * Error message templates.
      */
@@ -64,8 +73,6 @@ abstract class AbstractExporter
         self::ERROR_CODE_WRONG_QUOTES        => 'data_transfer::app.validation.errors.wrong-quotes',
         self::ERROR_CODE_COLUMNS_NUMBER      => 'data_transfer::app.validation.errors.column-numbers',
     ];
-
-    public const BATCH_SIZE = 1000;
 
     /**
      * Is linking required
@@ -142,13 +149,6 @@ abstract class AbstractExporter
     protected $jobLogger;
 
     /**
-     * The name of the queue the job should be sent to.
-     *
-     * @var string|null
-     */
-    public $queue;
-
-    /**
      * Create a new instance.
      *
      * @return void
@@ -167,16 +167,6 @@ abstract class AbstractExporter
      * export data rows
      */
     abstract public function exportBatch(JobTrackBatchContract $exportBatchContract, $filePath): bool;
-
-    /**
-     * Initialize Product error messages
-     */
-    protected function initErrorMessages(): void
-    {
-        foreach ($this->errorMessages as $errorCode => $message) {
-            $this->errorHelper->addErrorMessage($errorCode, trans($message));
-        }
-    }
 
     /**
      * Initializes for the export process.
@@ -275,26 +265,6 @@ abstract class AbstractExporter
         return $this->filters;
     }
 
-    protected function getResults()
-    {
-        return $this->source->all()?->getIterator();
-    }
-
-    /**
-     * Get filename for generate data
-     */
-    protected function getFileName(): string
-    {
-        $fileName = sprintf(
-            '%s-%s.%s',
-            $this->export->jobInstance->code,
-            $this->export->jobInstance->entity_type,
-            strtolower($this->filters['file_format'] ?? SpoutWriterFactory::CSV),
-        );
-
-        return $fileName;
-    }
-
     /**
      * Start the export process
      */
@@ -348,14 +318,6 @@ abstract class AbstractExporter
         }
 
         return true;
-    }
-
-    /**
-     * Get the queue name for the worker.
-     */
-    protected function getQueue(): ?string
-    {
-        return $this->queue;
     }
 
     /**
@@ -455,30 +417,6 @@ abstract class AbstractExporter
     }
 
     /**
-     * Add row as skipped
-     *
-     * @param  int|null  $rowNumber
-     * @param  string|null  $columnName
-     * @param  string|null  $errorMessage
-     * @return $this
-     */
-    protected function skipRow($rowNumber, string $errorCode, $columnName = null, $errorMessage = null): self
-    {
-        $this->errorHelper->addError(
-            $errorCode,
-            $rowNumber,
-            $columnName,
-            $errorMessage
-        );
-
-        $this->errorHelper->addRowToSkip($rowNumber);
-
-        $this->skippedItemsCount++;
-
-        return $this;
-    }
-
-    /**
      * Returns number of skipped items count
      */
     public function getSkippedtemsCount(): int
@@ -530,5 +468,67 @@ abstract class AbstractExporter
             // Copy the file
             Storage::copy($sourcePath, $destinationPath);
         }
+    }
+
+    /**
+     * Initialize Product error messages
+     */
+    protected function initErrorMessages(): void
+    {
+        foreach ($this->errorMessages as $errorCode => $message) {
+            $this->errorHelper->addErrorMessage($errorCode, trans($message));
+        }
+    }
+
+    protected function getResults()
+    {
+        return $this->source->all()?->getIterator();
+    }
+
+    /**
+     * Get filename for generate data
+     */
+    protected function getFileName(): string
+    {
+        $fileName = sprintf(
+            '%s-%s.%s',
+            $this->export->jobInstance->code,
+            $this->export->jobInstance->entity_type,
+            strtolower($this->filters['file_format'] ?? SpoutWriterFactory::CSV),
+        );
+
+        return $fileName;
+    }
+
+    /**
+     * Get the queue name for the worker.
+     */
+    protected function getQueue(): ?string
+    {
+        return $this->queue;
+    }
+
+    /**
+     * Add row as skipped
+     *
+     * @param  int|null  $rowNumber
+     * @param  string|null  $columnName
+     * @param  string|null  $errorMessage
+     * @return $this
+     */
+    protected function skipRow($rowNumber, string $errorCode, $columnName = null, $errorMessage = null): self
+    {
+        $this->errorHelper->addError(
+            $errorCode,
+            $rowNumber,
+            $columnName,
+            $errorMessage
+        );
+
+        $this->errorHelper->addRowToSkip($rowNumber);
+
+        $this->skippedItemsCount++;
+
+        return $this;
     }
 }

@@ -286,30 +286,6 @@ class OptionController extends Controller
     }
 
     /**
-     * This is used when the select field is initially loaded on page with selected value
-     * if the selected value is not in a format for select field the value is fetched from repo
-     */
-    protected function applyInitialValues($repository, array $initializeValues)
-    {
-        return $repository->whereIn(
-            $initializeValues['columnName'],
-            is_array($initializeValues['values']) ? $initializeValues['values'] : [$initializeValues['values']]
-        );
-    }
-
-    protected function filterCustomAttributes(array $formattedoptions, $credentialId): array
-    {
-        $customAttributes = $this->attributeMappingRepository->getCustomAttributesMapping($credentialId);
-
-        $customAttributes = array_filter($formattedoptions, function ($item) use ($customAttributes) {
-            return in_array($item['code'], $customAttributes);
-        });
-        $customAttributes = array_values($customAttributes);
-
-        return $customAttributes;
-    }
-
-    /**
      * List image attributes.
      */
     public function listImageAttributes(): JsonResponse
@@ -595,6 +571,53 @@ class OptionController extends Controller
     }
 
     /**
+     * Fetch and format options for async select and multiselect handlers
+     */
+    public function listProductSKU()
+    {
+        $page = request()->get('page');
+        $query = request()->get('query') ?? '';
+        $queryParams = request()->except(['page', 'query', 'entityName']);
+        $options = $this->getProductOptionsByParams(self::PRODUCT_ENTITY_NAME, $page, $query, $queryParams);
+        $currentLocaleCode = core()->getRequestedLocaleCode();
+        $formattedoptions = [];
+
+        foreach ($options as $option) {
+            $formattedoptions[] = $this->formatSkuOption($option);
+        }
+
+        return new JsonResponse([
+            'options'  => $formattedoptions,
+            'page'     => $options->currentPage(),
+            'lastPage' => $options->lastPage(),
+        ]);
+    }
+
+    /**
+     * This is used when the select field is initially loaded on page with selected value
+     * if the selected value is not in a format for select field the value is fetched from repo
+     */
+    protected function applyInitialValues($repository, array $initializeValues)
+    {
+        return $repository->whereIn(
+            $initializeValues['columnName'],
+            is_array($initializeValues['values']) ? $initializeValues['values'] : [$initializeValues['values']]
+        );
+    }
+
+    protected function filterCustomAttributes(array $formattedoptions, $credentialId): array
+    {
+        $customAttributes = $this->attributeMappingRepository->getCustomAttributesMapping($credentialId);
+
+        $customAttributes = array_filter($formattedoptions, function ($item) use ($customAttributes) {
+            return in_array($item['code'], $customAttributes);
+        });
+        $customAttributes = array_values($customAttributes);
+
+        return $customAttributes;
+    }
+
+    /**
      * Fetch options according to parameters for search, page and id
      */
     protected function getOptionsByParams(
@@ -647,21 +670,6 @@ class OptionController extends Controller
     }
 
     /**
-     * Get Repository according to entity name
-     */
-    private function getRepository(string $entityName): Repository
-    {
-        return match ($entityName) {
-            'attributes'         => $this->attributeRepository,
-            'channels'           => $this->channelRepository,
-            'locales'            => $this->localeRepository,
-            'attributeFamilies'  => $this->attributeFamilyRepository,
-            'product'            => $this->productRepository,
-            default              => throw new \Exception('Not implemented for '.$entityName)
-        };
-    }
-
-    /**
      * Get translated label for the entity
      */
     protected function getTranslatedLabel(string $currentLocaleCode, TranslatableModel $option): string
@@ -696,29 +704,6 @@ class OptionController extends Controller
             'attributeFamilies' => 'name',
             default             => 'label'
         };
-    }
-
-    /**
-     * Fetch and format options for async select and multiselect handlers
-     */
-    public function listProductSKU()
-    {
-        $page = request()->get('page');
-        $query = request()->get('query') ?? '';
-        $queryParams = request()->except(['page', 'query', 'entityName']);
-        $options = $this->getProductOptionsByParams(self::PRODUCT_ENTITY_NAME, $page, $query, $queryParams);
-        $currentLocaleCode = core()->getRequestedLocaleCode();
-        $formattedoptions = [];
-
-        foreach ($options as $option) {
-            $formattedoptions[] = $this->formatSkuOption($option);
-        }
-
-        return new JsonResponse([
-            'options'  => $formattedoptions,
-            'page'     => $options->currentPage(),
-            'lastPage' => $options->lastPage(),
-        ]);
     }
 
     /**
@@ -789,5 +774,20 @@ class OptionController extends Controller
             $queryBuilder->where('sku', 'like', '%'.$query.'%')
                 ->orWhere('sku', $query);
         });
+    }
+
+    /**
+     * Get Repository according to entity name
+     */
+    private function getRepository(string $entityName): Repository
+    {
+        return match ($entityName) {
+            'attributes'         => $this->attributeRepository,
+            'channels'           => $this->channelRepository,
+            'locales'            => $this->localeRepository,
+            'attributeFamilies'  => $this->attributeFamilyRepository,
+            'product'            => $this->productRepository,
+            default              => throw new \Exception('Not implemented for '.$entityName)
+        };
     }
 }

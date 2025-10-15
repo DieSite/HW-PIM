@@ -189,7 +189,7 @@ class ProductRepository extends Repository
         $product = $this->findBySlug($slug);
 
         if (! $product) {
-            throw (new ModelNotFoundException)->setModel(
+            throw (new ModelNotFoundException())->setModel(
                 get_class($this->model), $slug
             );
         }

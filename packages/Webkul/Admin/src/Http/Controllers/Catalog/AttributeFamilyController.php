@@ -58,6 +58,127 @@ class AttributeFamilyController extends Controller
     }
 
     /**
+     * Store a newly created resource in storage.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function store()
+    {
+        $this->validate(request(), [
+            'code' => ['required', 'unique:attribute_families,code', new Code()],
+        ]);
+
+        $requestData = request()->all();
+        Event::dispatch('catalog.attribute_family.create.before');
+
+        $attributeFamily = $this->attributeFamilyRepository->create($requestData);
+
+        Event::dispatch('catalog.attribute_family.create.after', $attributeFamily);
+
+        session()->flash('success', trans('admin::app.catalog.families.create-success'));
+
+        return redirect()->route('admin.catalog.families.index');
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @return \Illuminate\View\View
+     */
+    public function edit(int $id)
+    {
+        $attributeFamily = $this->attributeFamilyRepository->findOrFail($id, ['*']);
+        $normalizedData = $this->normalize($attributeFamily);
+
+        return view('admin::catalog.families.edit', $normalizedData);
+    }
+
+    /**
+     * Show the form for copy the specified resource.
+     *
+     * @return \Illuminate\View\View
+     */
+    public function copy(int $id)
+    {
+        $attributeFamily = $this->attributeFamilyRepository->findOrFail($id, ['*']);
+        $normalizedData = $this->normalize($attributeFamily);
+
+        return view('admin::catalog.families.create', $normalizedData);
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function update(int $id)
+    {
+        $this->validate(request(), [
+            'code' => ['required', 'unique:attribute_families,code,'.$id, new Code()],
+        ]);
+
+        $requestData = request()->except(['code']);
+
+        Event::dispatch('catalog.attribute_family.update.before', $id);
+
+        $attributeFamily = $this->attributeFamilyRepository->update($requestData, $id);
+
+        Event::dispatch('catalog.attribute_family.update.after', $attributeFamily);
+
+        session()->flash('success', trans('admin::app.catalog.families.update-success'));
+
+        return redirect()->route('admin.catalog.families.edit', $id);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $attributeFamily = $this->attributeFamilyRepository->findOrFail($id);
+
+        if ($attributeFamily->products()->count()) {
+            return new JsonResponse([
+                'message' => trans('admin::app.catalog.families.attribute-product-error'),
+            ], 400);
+        }
+
+        try {
+            Event::dispatch('catalog.attribute_family.delete.before', $id);
+
+            $this->attributeFamilyRepository->delete($id);
+
+            Event::dispatch('catalog.attribute_family.delete.after', $id);
+
+            return new JsonResponse([
+                'message' => trans('admin::app.catalog.families.delete-success'),
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+        }
+
+        return new JsonResponse([
+            'message' => trans('admin::app.catalog.families.delete-failed', ['name' => 'admin::app.catalog.families.family']),
+        ], 500);
+    }
+
+    /**
+     * Check product has variant products and return family if exists
+     */
+    protected function hasVariantProducts($id): ?AttributeFamily
+    {
+        $family = $this->attributeFamilyRepository->find($id);
+
+        $products = $family->products()->where('parent_id', '<>', null)->count();
+
+        if ($products) {
+            return $family;
+        }
+
+        return null;
+    }
+
+    /**
      * Normalize attribute family, custom attributes, and custom attribute groups data.
      *
      * @return array
@@ -161,126 +282,5 @@ class AttributeFamilyController extends Controller
             'customAttributeGroups'   => $normalizedCustomAttributeGroups,
             'variantOptionAttributes' => $variantOptionAttributes,
         ];
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function store()
-    {
-        $this->validate(request(), [
-            'code' => ['required', 'unique:attribute_families,code', new Code],
-        ]);
-
-        $requestData = request()->all();
-        Event::dispatch('catalog.attribute_family.create.before');
-
-        $attributeFamily = $this->attributeFamilyRepository->create($requestData);
-
-        Event::dispatch('catalog.attribute_family.create.after', $attributeFamily);
-
-        session()->flash('success', trans('admin::app.catalog.families.create-success'));
-
-        return redirect()->route('admin.catalog.families.index');
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @return \Illuminate\View\View
-     */
-    public function edit(int $id)
-    {
-        $attributeFamily = $this->attributeFamilyRepository->findOrFail($id, ['*']);
-        $normalizedData = $this->normalize($attributeFamily);
-
-        return view('admin::catalog.families.edit', $normalizedData);
-    }
-
-    /**
-     * Show the form for copy the specified resource.
-     *
-     * @return \Illuminate\View\View
-     */
-    public function copy(int $id)
-    {
-        $attributeFamily = $this->attributeFamilyRepository->findOrFail($id, ['*']);
-        $normalizedData = $this->normalize($attributeFamily);
-
-        return view('admin::catalog.families.create', $normalizedData);
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function update(int $id)
-    {
-        $this->validate(request(), [
-            'code' => ['required', 'unique:attribute_families,code,'.$id, new Code],
-        ]);
-
-        $requestData = request()->except(['code']);
-
-        Event::dispatch('catalog.attribute_family.update.before', $id);
-
-        $attributeFamily = $this->attributeFamilyRepository->update($requestData, $id);
-
-        Event::dispatch('catalog.attribute_family.update.after', $attributeFamily);
-
-        session()->flash('success', trans('admin::app.catalog.families.update-success'));
-
-        return redirect()->route('admin.catalog.families.edit', $id);
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(int $id): JsonResponse
-    {
-        $attributeFamily = $this->attributeFamilyRepository->findOrFail($id);
-
-        if ($attributeFamily->products()->count()) {
-            return new JsonResponse([
-                'message' => trans('admin::app.catalog.families.attribute-product-error'),
-            ], 400);
-        }
-
-        try {
-            Event::dispatch('catalog.attribute_family.delete.before', $id);
-
-            $this->attributeFamilyRepository->delete($id);
-
-            Event::dispatch('catalog.attribute_family.delete.after', $id);
-
-            return new JsonResponse([
-                'message' => trans('admin::app.catalog.families.delete-success'),
-            ]);
-        } catch (\Exception $e) {
-            report($e);
-        }
-
-        return new JsonResponse([
-            'message' => trans('admin::app.catalog.families.delete-failed', ['name' => 'admin::app.catalog.families.family']),
-        ], 500);
-    }
-
-    /**
-     * Check product has variant products and return family if exists
-     */
-    protected function hasVariantProducts($id): ?AttributeFamily
-    {
-        $family = $this->attributeFamilyRepository->find($id);
-
-        $products = $family->products()->where('parent_id', '<>', null)->count();
-
-        if ($products) {
-            return $family;
-        }
-
-        return null;
     }
 }

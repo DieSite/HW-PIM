@@ -66,6 +66,16 @@ class ResetPasswordController extends Controller
     }
 
     /**
+     * Get the broker to be used during password reset.
+     *
+     * @return \Illuminate\Contracts\Auth\PasswordBroker
+     */
+    public function broker()
+    {
+        return Password::broker('admins');
+    }
+
+    /**
      * Reset the given admin's password.
      *
      * @param  \Illuminate\Contracts\Auth\CanResetPassword  $admin
@@ -83,15 +93,5 @@ class ResetPasswordController extends Controller
         event(new PasswordReset($admin));
 
         auth()->guard('admin')->login($admin);
-    }
-
-    /**
-     * Get the broker to be used during password reset.
-     *
-     * @return \Illuminate\Contracts\Auth\PasswordBroker
-     */
-    public function broker()
-    {
-        return Password::broker('admins');
     }
 }

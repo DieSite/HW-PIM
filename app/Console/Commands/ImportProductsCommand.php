@@ -14,7 +14,7 @@ class ImportProductsCommand extends Command
     public function handle()
     {
         $this->output->title('Starting import');
-        (new ProductsImport)->withOutput($this->output)->import($this->argument('file'));
+        (new ProductsImport())->withOutput($this->output)->import($this->argument('file'));
         $this->output->success('Import successful');
     }
 }

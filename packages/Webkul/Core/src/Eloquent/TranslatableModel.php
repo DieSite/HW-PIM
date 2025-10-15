@@ -11,6 +11,17 @@ class TranslatableModel extends Model
 {
     use Translatable;
 
+    public function scopeWhereTranslationIn(Builder $query, string $translationField, $value, ?string $locale = null, string $method = 'whereHas')
+    {
+        return $query->$method('translations', function (Builder $query) use ($translationField, $value, $locale) {
+            $query->whereIn($this->getTranslationsTable().'.'.$translationField, $value);
+
+            if ($locale) {
+                $query->whereIn($this->getTranslationsTable().'.'.$this->getLocaleKey(), $locale);
+            }
+        });
+    }
+
     /**
      * Get locales helper.
      */
@@ -47,16 +58,5 @@ class TranslatableModel extends Model
     protected function isChannelBased()
     {
         return false;
-    }
-
-    public function scopeWhereTranslationIn(Builder $query, string $translationField, $value, ?string $locale = null, string $method = 'whereHas')
-    {
-        return $query->$method('translations', function (Builder $query) use ($translationField, $value, $locale) {
-            $query->whereIn($this->getTranslationsTable().'.'.$translationField, $value);
-
-            if ($locale) {
-                $query->whereIn($this->getTranslationsTable().'.'.$this->getLocaleKey(), $locale);
-            }
-        });
     }
 }

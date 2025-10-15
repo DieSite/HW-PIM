@@ -74,25 +74,6 @@ class TrackerController extends Controller
     }
 
     /**
-     * Normalizes the summary data by translating keys and handling null values.
-     *
-     * @param  array|null  $summary  The summary data to be normalized.
-     * @return array The normalized summary data.
-     */
-    private function normalizeSummary($summery)
-    {
-        $summaryData = [];
-
-        // Loop through the summary data, translating keys and handling null values
-        foreach (($summery ?? []) as $key => $value) {
-            $summaryData[trans(sprintf('admin::app.settings.data-transfer.tracker.summary.%s', $key))] = $value ?? 0;
-        }
-
-        // Return the normalized summary data
-        return $summaryData;
-    }
-
-    /**
      * Download
      */
     public function download(int $id)
@@ -108,7 +89,7 @@ class TrackerController extends Controller
     public function downloadArchive(int $id)
     {
         $jobTrack = $this->jobTrackRepository->findOrFail($id);
-        $zip = new ZipArchive;
+        $zip = new ZipArchive();
         $zipFileName = sprintf('%s-%s.zip', $jobTrack->jobInstance->code, $jobTrack->jobInstance->entity_type);
         if ($zip->open(public_path($zipFileName), ZipArchive::CREATE) === true) {
             $folderPath = $jobTrack->file_path;
@@ -149,5 +130,24 @@ class TrackerController extends Controller
         }
 
         return response()->download($path);
+    }
+
+    /**
+     * Normalizes the summary data by translating keys and handling null values.
+     *
+     * @param  array|null  $summary  The summary data to be normalized.
+     * @return array The normalized summary data.
+     */
+    private function normalizeSummary($summery)
+    {
+        $summaryData = [];
+
+        // Loop through the summary data, translating keys and handling null values
+        foreach (($summery ?? []) as $key => $value) {
+            $summaryData[trans(sprintf('admin::app.settings.data-transfer.tracker.summary.%s', $key))] = $value ?? 0;
+        }
+
+        // Return the normalized summary data
+        return $summaryData;
     }
 }

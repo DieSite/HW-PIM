@@ -77,22 +77,6 @@ class Error
     /**
      * Add specific row to invalid list via row number
      */
-    protected function addRowToInvalid(?int $rowNumber): self
-    {
-        if (is_null($rowNumber)) {
-            return $this;
-        }
-
-        if (! in_array($rowNumber, $this->invalidRows)) {
-            $this->invalidRows[] = $rowNumber;
-        }
-
-        return $this;
-    }
-
-    /**
-     * Add specific row to invalid list via row number
-     */
     public function addRowToSkip(?int $rowNumber): self
     {
         if (is_null($rowNumber)) {
@@ -112,32 +96,6 @@ class Error
     public function isRowInvalid(int $rowNumber): bool
     {
         return in_array($rowNumber, array_merge($this->invalidRows, $this->skippedRows));
-    }
-
-    /**
-     * Build an error message via code, message and column name
-     */
-    protected function getErrorMessage(?string $code, ?string $message, ?string $columnName): string
-    {
-        if (
-            empty($message)
-            && isset($this->messageTemplate[$code])
-        ) {
-            $message = (string) $this->messageTemplate[$code];
-        }
-
-        if (
-            $columnName
-            && $message
-        ) {
-            $message = sprintf($message, $columnName);
-        }
-
-        if (! $message) {
-            $message = $code;
-        }
-
-        return $message;
     }
 
     /**
@@ -182,5 +140,47 @@ class Error
         }
 
         return $errors;
+    }
+
+    /**
+     * Add specific row to invalid list via row number
+     */
+    protected function addRowToInvalid(?int $rowNumber): self
+    {
+        if (is_null($rowNumber)) {
+            return $this;
+        }
+
+        if (! in_array($rowNumber, $this->invalidRows)) {
+            $this->invalidRows[] = $rowNumber;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Build an error message via code, message and column name
+     */
+    protected function getErrorMessage(?string $code, ?string $message, ?string $columnName): string
+    {
+        if (
+            empty($message)
+            && isset($this->messageTemplate[$code])
+        ) {
+            $message = (string) $this->messageTemplate[$code];
+        }
+
+        if (
+            $columnName
+            && $message
+        ) {
+            $message = sprintf($message, $columnName);
+        }
+
+        if (! $message) {
+            $message = $code;
+        }
+
+        return $message;
     }
 }

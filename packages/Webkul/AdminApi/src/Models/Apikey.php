@@ -79,14 +79,6 @@ class Apikey extends Model implements ApikeyContract, HistoryContract
     }
 
     /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return ApiKeyFactory::new();
-    }
-
-    /**
      * Checks if admin has permission to perform certain action.
      *
      * @param  string  $permission
@@ -121,5 +113,13 @@ class Apikey extends Model implements ApikeyContract, HistoryContract
                 'label' => trans('admin::app.configuration.integrations.edit.all'),
             ],
         ];
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return ApiKeyFactory::new();
     }
 }

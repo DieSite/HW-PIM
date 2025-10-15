@@ -187,34 +187,18 @@ class CategoryRepository extends Repository
         return $trimmed;
     }
 
-    /**
-     * Set same value to all locales in category.
-     *
-     * To Do: Move column from the `category_translations` to `category` table. And remove
-     * this created method.
-     *
-     * @param  string  $attributeNames
-     * @return array
-     */
-    private function setSameAttributeValueToAllLocale(array $data, ...$attributeNames)
+    public function queryBuilder()
     {
-        $requestedLocale = core()->getRequestedLocaleCode();
+        return $this->with(['parent_category']);
 
-        $model = app()->make($this->model());
+    }
 
-        foreach ($attributeNames as $attributeName) {
-            foreach (core()->getAllActiveLocales() as $locale) {
-                if ($requestedLocale == $locale->code) {
-                    foreach ($model->translatedAttributes as $attribute) {
-                        if ($attribute === $attributeName) {
-                            $data[$locale->code][$attribute] = $data[$requestedLocale][$attribute] ?? $data[$data['locale']][$attribute];
-                        }
-                    }
-                }
-            }
-        }
-
-        return $data;
+    /**
+     * The products.
+     */
+    public function getProducts(string $code)
+    {
+        return ProductProxy::query()->whereJsonContains('values->categories', $code)->get();
     }
 
     /**
@@ -326,17 +310,33 @@ class CategoryRepository extends Repository
         return $values;
     }
 
-    public function queryBuilder()
-    {
-        return $this->with(['parent_category']);
-
-    }
-
     /**
-     * The products.
+     * Set same value to all locales in category.
+     *
+     * To Do: Move column from the `category_translations` to `category` table. And remove
+     * this created method.
+     *
+     * @param  string  $attributeNames
+     * @return array
      */
-    public function getProducts(string $code)
+    private function setSameAttributeValueToAllLocale(array $data, ...$attributeNames)
     {
-        return ProductProxy::query()->whereJsonContains('values->categories', $code)->get();
+        $requestedLocale = core()->getRequestedLocaleCode();
+
+        $model = app()->make($this->model());
+
+        foreach ($attributeNames as $attributeName) {
+            foreach (core()->getAllActiveLocales() as $locale) {
+                if ($requestedLocale == $locale->code) {
+                    foreach ($model->translatedAttributes as $attribute) {
+                        if ($attribute === $attributeName) {
+                            $data[$locale->code][$attribute] = $data[$requestedLocale][$attribute] ?? $data[$data['locale']][$attribute];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $data;
     }
 }

@@ -131,14 +131,6 @@ class Admin extends Authenticatable implements AdminContract, AuditableContract
     }
 
     /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return AdminFactory::new();
-    }
-
-    /**
      * Returns the ui locale selected by the user.
      */
     public function uiLocale(): BelongsTo
@@ -152,5 +144,13 @@ class Admin extends Authenticatable implements AdminContract, AuditableContract
     public function findForPassport(string $username)
     {
         return $this->where('email', $username)->first();
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return AdminFactory::new();
     }
 }

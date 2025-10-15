@@ -27,13 +27,39 @@ class BolComAuthenticationHelper
      */
     public function __construct($credentialsId = null, $skipCache = false)
     {
-        $this->client = new Client;
+        $this->client = new Client();
         $this->credentialsId = $credentialsId;
         $this->skipCache = $skipCache;
 
         if ($credentialsId) {
             $this->loadCredentials($credentialsId);
         }
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getAccessToken()
+    {
+        $cacheKey = 'bolcom_access_token';
+
+        if (! $this->skipCache && Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        return $this->requestNewAccessToken($cacheKey);
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getAuthHeaders(): array
+    {
+        return [
+            'Authorization' => 'Bearer '.$this->getAccessToken(),
+            'Accept'        => 'application/vnd.retailer.v10+json',
+            'Content-Type'  => 'application/vnd.retailer.v10+json',
+        ];
     }
 
     /**
@@ -51,20 +77,6 @@ class BolComAuthenticationHelper
 
         $this->clientId = $credentials->client_id;
         $this->clientSecret = $credentials->client_secret;
-    }
-
-    /**
-     * @throws GuzzleException
-     */
-    public function getAccessToken()
-    {
-        $cacheKey = 'bolcom_access_token';
-
-        if (! $this->skipCache && Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
-        }
-
-        return $this->requestNewAccessToken($cacheKey);
     }
 
     /**
@@ -91,17 +103,5 @@ class BolComAuthenticationHelper
         }
 
         throw new Exception('Failed to retrieve access token from Bol.com API');
-    }
-
-    /**
-     * @throws GuzzleException
-     */
-    public function getAuthHeaders(): array
-    {
-        return [
-            'Authorization' => 'Bearer '.$this->getAccessToken(),
-            'Accept'        => 'application/vnd.retailer.v10+json',
-            'Content-Type'  => 'application/vnd.retailer.v10+json',
-        ];
     }
 }

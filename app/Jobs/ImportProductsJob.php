@@ -23,7 +23,7 @@ class ImportProductsJob implements ShouldQueue
 
     public function handle()
     {
-        Excel::import(new ProductsImport, $this->filePath);
+        Excel::import(new ProductsImport(), $this->filePath);
     }
 
     public function failed(\Throwable $exception)

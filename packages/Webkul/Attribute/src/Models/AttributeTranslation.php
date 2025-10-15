@@ -11,6 +11,8 @@ class AttributeTranslation extends Model implements AttributeTranslationContract
 {
     use HistoryTrait;
 
+    public $timestamps = false;
+
     /**
      * These columns history will not be generated
      */
@@ -19,8 +21,6 @@ class AttributeTranslation extends Model implements AttributeTranslationContract
         'locale',
         'attribute_id',
     ];
-
-    public $timestamps = false;
 
     protected $fillable = ['name'];
 

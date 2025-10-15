@@ -97,6 +97,29 @@ class DataGridExport implements FromGenerator, WithCustomCsvSettings, WithStyles
     }
 
     /**
+     * Settings for csv export
+     */
+    public function getCsvSettings(): array
+    {
+        return [
+            'delimiter' => ',',
+        ];
+    }
+
+    public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)
+    {
+        return [
+            1 => [
+                'font' => ['bold' => true],
+                'fill' => [
+                    'fillType'   => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => '9c9c9c'],
+                ],
+            ],
+        ];
+    }
+
+    /**
      * return columns and records from grid data
      */
     protected function getColumnsAndRecords(): array
@@ -152,28 +175,5 @@ class DataGridExport implements FromGenerator, WithCustomCsvSettings, WithStyles
         }
 
         return $recordData;
-    }
-
-    /**
-     * Settings for csv export
-     */
-    public function getCsvSettings(): array
-    {
-        return [
-            'delimiter' => ',',
-        ];
-    }
-
-    public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)
-    {
-        return [
-            1 => [
-                'font' => ['bold' => true],
-                'fill' => [
-                    'fillType'   => Fill::FILL_SOLID,
-                    'startColor' => ['rgb' => '9c9c9c'],
-                ],
-            ],
-        ];
     }
 }

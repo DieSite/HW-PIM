@@ -8,11 +8,6 @@ use Webkul\User\Repositories\AdminRepository;
 
 class ApiClientCommand extends Passport
 {
-    public function __construct(protected AdminRepository $adminRepository)
-    {
-        parent::__construct();
-    }
-
     /**
      * The name and signature of the console command.
      *
@@ -29,6 +24,11 @@ class ApiClientCommand extends Passport
      * @var string
      */
     protected $description = 'Create a client for issuing access tokens';
+
+    public function __construct(protected AdminRepository $adminRepository)
+    {
+        parent::__construct();
+    }
 
     /**
      * Execute the console command.

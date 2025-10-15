@@ -39,14 +39,6 @@ class ChannelTranslation extends Model implements ChannelTranslationContract, Hi
     protected $casts = [];
 
     /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return ChannelTranslationFactory::new();
-    }
-
-    /**
      * Id used for creating version for history
      *
      * {@inheritdoc}
@@ -54,5 +46,13 @@ class ChannelTranslation extends Model implements ChannelTranslationContract, Hi
     public function getPrimaryModelIdForHistory(): int
     {
         return $this->channel_id;
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return ChannelTranslationFactory::new();
     }
 }

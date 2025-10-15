@@ -266,14 +266,6 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
     }
 
     /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return ProductFactory::new();
-    }
-
-    /**
      * {@inheritdoc}
      */
     public static function getPresenters(): array
@@ -341,5 +333,13 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
         return $this->belongsToMany(BolComCredential::class, 'product_bol_com_credentials')
             ->withPivot('delivery_code', 'reference')
             ->withTimestamps();
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return ProductFactory::new();
     }
 }

@@ -41,6 +41,16 @@ class Excel extends AbstractSource
     }
 
     /**
+     * Rewind the iterator to the first row
+     */
+    public function rewind(): void
+    {
+        $this->currentRowNumber = 1;
+
+        $this->next();
+    }
+
+    /**
      * Read next line from csv
      */
     protected function getNextRow(): array|bool
@@ -56,15 +66,5 @@ class Excel extends AbstractSource
         }
 
         return $rowData;
-    }
-
-    /**
-     * Rewind the iterator to the first row
-     */
-    public function rewind(): void
-    {
-        $this->currentRowNumber = 1;
-
-        $this->next();
     }
 }

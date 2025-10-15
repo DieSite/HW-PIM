@@ -64,14 +64,6 @@ class Exporter extends AbstractExporter
     }
 
     /**
-     * {@inheritdoc}
-     */
-    protected function getResults()
-    {
-        return $this->source->with('parent_category')->all()?->getIterator();
-    }
-
-    /**
      * Prepare categories from current batch
      */
     public function prepareCategories(JobTrackBatchContract $batch, mixed $filePath)
@@ -103,6 +95,14 @@ class Exporter extends AbstractExporter
         }
 
         return $categories;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getResults()
+    {
+        return $this->source->with('parent_category')->all()?->getIterator();
     }
 
     /**

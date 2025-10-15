@@ -15,7 +15,7 @@ trait ApiHelperTrait
     {
         $admin = Admin::factory()->create(['email' => 'test@testingApi.com', 'password' => bcrypt('password')]);
 
-        $clientRepo = new ClientRepository;
+        $clientRepo = new ClientRepository();
 
         $client = $clientRepo->createPasswordGrantClient(
             $admin->id, 'Client for Testing the api', env('APP_URL'), 'admins'

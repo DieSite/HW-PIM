@@ -60,6 +60,35 @@ class Category extends Model implements CategoryContract, HistoryContract, Prese
     protected $appends = ['name'];
 
     /**
+     * Overrides the default Eloquent query builder.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @return \Webkul\Category\Database\Eloquent\Builder
+     */
+    public function newEloquentBuilder($query)
+    {
+        return new Builder($query);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function getPresenters(): array
+    {
+        return [
+            'additional_data' => JsonDataPresenter::class,
+        ];
+    }
+
+    /**
+     * Get the category that is the parent of this category.
+     */
+    public function parent_category(): BelongsTo
+    {
+        return $this->belongsTo(static::class, 'parent_id');
+    }
+
+    /**
      * Use fallback for category.
      */
     protected function useFallback(): bool
@@ -86,17 +115,6 @@ class Category extends Model implements CategoryContract, HistoryContract, Prese
     }
 
     /**
-     * Overrides the default Eloquent query builder.
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query
-     * @return \Webkul\Category\Database\Eloquent\Builder
-     */
-    public function newEloquentBuilder($query)
-    {
-        return new Builder($query);
-    }
-
-    /**
      * Accessor method for category name value
      */
     protected function name(): Attribute
@@ -104,23 +122,5 @@ class Category extends Model implements CategoryContract, HistoryContract, Prese
         return Attribute::make(
             get: fn (?string $value, array $attributes) => $this->additional_data['locale_specific'][core()->getRequestedLocaleCode()]['name'] ?? '['.$this->code.']'
         )->shouldCache();
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public static function getPresenters(): array
-    {
-        return [
-            'additional_data' => JsonDataPresenter::class,
-        ];
-    }
-
-    /**
-     * Get the category that is the parent of this category.
-     */
-    public function parent_category(): BelongsTo
-    {
-        return $this->belongsTo(static::class, 'parent_id');
     }
 }

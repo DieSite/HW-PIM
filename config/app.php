@@ -161,7 +161,6 @@ return [
          */
         Astrotomic\Translatable\TranslatableServiceProvider::class,
         Barryvdh\DomPDF\ServiceProvider::class,
-        Intervention\Image\ImageServiceProvider::class,
         Konekt\Concord\ConcordServiceProvider::class,
         Maatwebsite\Excel\ExcelServiceProvider::class,
         Prettus\Repository\Providers\RepositoryServiceProvider::class,
@@ -217,7 +216,6 @@ return [
         'Core'         => Webkul\Core\Facades\Core::class,
         'Excel'        => Maatwebsite\Excel\Facades\Excel::class,
         'Helper'       => Konekt\Concord\Facades\Helper::class,
-        'Image'        => Intervention\Image\Facades\Image::class,
         'PDF'          => Barryvdh\DomPDF\Facade\Pdf::class,
         'ProductImage' => Webkul\Product\Facades\ProductImage::class,
         'ProductVideo' => Webkul\Product\Facades\ProductVideo::class,

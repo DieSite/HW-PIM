@@ -55,14 +55,6 @@ class Currency extends Model implements AuditableContract, CurrencyContract
     }
 
     /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return CurrencyFactory::new();
-    }
-
-    /**
      * Get the associated channels with this currency
      */
     public function channel(): BelongsToMany
@@ -76,6 +68,14 @@ class Currency extends Model implements AuditableContract, CurrencyContract
     public function isCurrencyBeingUsed(): bool
     {
         return $this->channel()?->get()?->first()?->exists() ?? false;
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return CurrencyFactory::new();
     }
 
     /**

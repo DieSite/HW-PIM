@@ -267,7 +267,7 @@ class DirectoryController
             return back()->with('error', trans('dam::app.admin.dam.index.directory.empty-directory'));
         }
 
-        $zip = new ZipArchive;
+        $zip = new ZipArchive();
         $zipFileName = sprintf('%s.zip', $directory->name);
         if ($zip->open(public_path($zipFileName), ZipArchive::CREATE) === true) {
             // Add files to the ZIP archive

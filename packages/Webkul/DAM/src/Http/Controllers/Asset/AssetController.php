@@ -7,7 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Facades\Image;
+use Spatie\Image\Enums\Fit;
+use Spatie\Image\Image;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Admin\Http\Requests\MassDestroyRequest;
 use Webkul\Admin\Http\Requests\MassUpdateRequest;
@@ -99,7 +100,7 @@ class AssetController extends Controller
 
             return [
                 'success' => true,
-                'data'    => Image::make($filePath)->exif(),
+                'data'    => exif_read_data($filePath),
             ];
 
         } catch (\Exception $e) {
@@ -479,16 +480,14 @@ class AssetController extends Controller
         if ($asset->file_type === 'image' && ($format || $height || $width)) {
             try {
                 $filePath = Storage::disk(Directory::ASSETS_DISK)->path($asset->path);
-                $image = Image::make($filePath);
+                $image = Image::load($filePath);
 
                 if ($width || $height) {
-                    $image->resize($width, $height, function ($constraint) {
-                        $constraint->aspectRatio();
-                    });
+                    $image->fit(Fit::Max, $width, $height);
                 }
 
                 if ($format) {
-                    $image->encode($format);
+                    $image->format($format);
                     $fileName = pathinfo($asset->file_name, PATHINFO_FILENAME).'.'.$format;
                 } else {
                     $fileName = $asset->file_name;

@@ -19,7 +19,7 @@ class ResetPasswordNotification extends ResetPassword
             return call_user_func(static::$toMailCallback, $notifiable, $this->token);
         }
 
-        return (new MailMessage)
+        return (new MailMessage())
             ->from(core()->getSenderEmailDetails()['email'], core()->getSenderEmailDetails()['name'])
             ->view('admin::emails.admin.forget-password', [
                 'userName'  => $notifiable->name,

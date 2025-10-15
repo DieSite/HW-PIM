@@ -10,52 +10,6 @@ use Webkul\Theme\Facades\Themes;
 class ThemeViewFinder extends FileViewFinder
 {
     /**
-     * Override findNamespacedView() to add "resources/themes/theme_name/views/..." paths
-     *
-     * @param  string  $name
-     * @return string
-     */
-    protected function findNamespacedView($name)
-    {
-        // Extract the $view and the $namespace parts
-        [$namespace, $view] = $this->parseNamespaceSegments($name);
-
-        if (! Str::contains(request()->url(), config('app.admin_url').'/')) {
-            $paths = $this->addThemeNamespacePaths($namespace);
-
-            try {
-                return $this->findInPaths($view, $paths);
-            } catch (\Exception $e) {
-                if ($namespace !== 'shop') {
-                    if (strpos($view, 'shop.') !== false) {
-                        $view = str_replace('shop.', 'shop.'.Themes::current()->code.'.', $view);
-                    }
-                }
-
-                return $this->findInPaths($view, $paths);
-            }
-        } else {
-            $themes = app('themes');
-
-            $themes->set(config('themes.admin-default'));
-
-            $paths = $this->addThemeNamespacePaths($namespace);
-
-            try {
-                return $this->findInPaths($view, $paths);
-            } catch (\Exception $e) {
-                if ($namespace != 'admin') {
-                    if (strpos($view, 'admin.') !== false) {
-                        $view = str_replace('admin.', 'admin.'.Themes::current()->code.'.', $view);
-                    }
-                }
-
-                return $this->findInPaths($view, $paths);
-            }
-        }
-    }
-
-    /**
      * @param  string  $namespace
      * @return array
      */
@@ -115,5 +69,51 @@ class ThemeViewFinder extends FileViewFinder
         $this->paths = $paths;
 
         $this->flush();
+    }
+
+    /**
+     * Override findNamespacedView() to add "resources/themes/theme_name/views/..." paths
+     *
+     * @param  string  $name
+     * @return string
+     */
+    protected function findNamespacedView($name)
+    {
+        // Extract the $view and the $namespace parts
+        [$namespace, $view] = $this->parseNamespaceSegments($name);
+
+        if (! Str::contains(request()->url(), config('app.admin_url').'/')) {
+            $paths = $this->addThemeNamespacePaths($namespace);
+
+            try {
+                return $this->findInPaths($view, $paths);
+            } catch (\Exception $e) {
+                if ($namespace !== 'shop') {
+                    if (strpos($view, 'shop.') !== false) {
+                        $view = str_replace('shop.', 'shop.'.Themes::current()->code.'.', $view);
+                    }
+                }
+
+                return $this->findInPaths($view, $paths);
+            }
+        } else {
+            $themes = app('themes');
+
+            $themes->set(config('themes.admin-default'));
+
+            $paths = $this->addThemeNamespacePaths($namespace);
+
+            try {
+                return $this->findInPaths($view, $paths);
+            } catch (\Exception $e) {
+                if ($namespace != 'admin') {
+                    if (strpos($view, 'admin.') !== false) {
+                        $view = str_replace('admin.', 'admin.'.Themes::current()->code.'.', $view);
+                    }
+                }
+
+                return $this->findInPaths($view, $paths);
+            }
+        }
     }
 }

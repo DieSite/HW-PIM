@@ -29,6 +29,34 @@ class Exporter extends BaseExporter
     }
 
     /**
+     * Generates a public URL for a given file path
+     *
+     * @see https://laravel.com/docs/8.x/filesystem#retrieving-files
+     */
+    public function makePublicUrlMedia(string $filePath, bool $isAssetField = false): string
+    {
+        if ($isAssetField) {
+            return route('admin.dam.file.fetch', ['path' => $filePath]);
+        }
+
+        return Storage::url($filePath);
+    }
+
+    /**
+     * Copy media file from a source path to a destination path.
+     */
+    public function copyMedia(string $sourcePath, string $destinationPath, bool $isAssetField = false)
+    {
+        if ($isAssetField && Storage::disk('private')->exists($sourcePath)) {
+            Storage::writeStream($destinationPath, Storage::disk('private')->readStream($sourcePath));
+
+            return;
+        }
+
+        parent::copyMedia($sourcePath, $destinationPath);
+    }
+
+    /**
      * {@inheritdoc}
      */
     protected function setAttributesValues(array $values, mixed $filePath)
@@ -100,33 +128,5 @@ class Exporter extends BaseExporter
         }
 
         return $attributeValues;
-    }
-
-    /**
-     * Generates a public URL for a given file path
-     *
-     * @see https://laravel.com/docs/8.x/filesystem#retrieving-files
-     */
-    public function makePublicUrlMedia(string $filePath, bool $isAssetField = false): string
-    {
-        if ($isAssetField) {
-            return route('admin.dam.file.fetch', ['path' => $filePath]);
-        }
-
-        return Storage::url($filePath);
-    }
-
-    /**
-     * Copy media file from a source path to a destination path.
-     */
-    public function copyMedia(string $sourcePath, string $destinationPath, bool $isAssetField = false)
-    {
-        if ($isAssetField && Storage::disk('private')->exists($sourcePath)) {
-            Storage::writeStream($destinationPath, Storage::disk('private')->readStream($sourcePath));
-
-            return;
-        }
-
-        parent::copyMedia($sourcePath, $destinationPath);
     }
 }

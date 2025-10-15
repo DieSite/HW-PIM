@@ -129,26 +129,6 @@ class Importer extends AbstractImporter
     }
 
     /**
-     * Initialize Product error templates
-     */
-    protected function initErrorMessages(): void
-    {
-        foreach ($this->messages as $errorCode => $message) {
-            $this->errorHelper->addErrorMessage($errorCode, trans($message));
-        }
-
-        parent::initErrorMessages();
-    }
-
-    /**
-     * Initialize locales
-     */
-    protected function initLocales(): void
-    {
-        $this->locales = $this->localeRepository->getActiveLocales()->pluck('code')->toArray();
-    }
-
-    /**
      * Validate data.
      */
     public function validateData(): void
@@ -222,7 +202,7 @@ class Importer extends AbstractImporter
          * Validate category attributes
          */
         $validator = Validator::make($rowData, [
-            'code'   => ['string', 'required', new Code],
+            'code'   => ['string', 'required', new Code()],
             'parent' => 'nullable|string|exists:categories,code',
             ...$this->categoryFieldValidations,
         ]);
@@ -283,61 +263,6 @@ class Importer extends AbstractImporter
     }
 
     /**
-     * Delete categories from current batch
-     */
-    protected function deleteCategoryData(JobTrackBatchContract $batch): bool
-    {
-        /**
-         * Load categories storage with batch slugs
-         */
-        $this->categoryStorage->load(Arr::pluck($batch->data, 'code'));
-
-        $idsToDelete = [];
-
-        foreach ($batch->data as $rowData) {
-            if (! $this->isCategoryExist($rowData['code'])) {
-                continue;
-            }
-
-            $idsToDelete[] = $this->categoryStorage->get($rowData['code']);
-        }
-
-        $idsToDelete = array_unique($idsToDelete);
-
-        $this->deletedItemsCount = count($idsToDelete);
-
-        $this->categoryRepository->deleteWhere([['id', 'IN', $idsToDelete]]);
-
-        return true;
-    }
-
-    /**
-     * Save category from current batch
-     */
-    protected function saveCategoryData(JobTrackBatchContract $batch): bool
-    {
-        /**
-         * Load category storage with batch code
-         */
-        $this->categoryStorage->load(Arr::pluck($batch->data, 'code'));
-
-        $categories = [];
-
-        $imagesData = [];
-
-        foreach ($batch->data as $rowData) {
-            /**
-             * Prepare categories for import
-             */
-            $this->prepareCategories($rowData, $categories);
-        }
-
-        $this->saveCategories($categories);
-
-        return true;
-    }
-
-    /**
      * Prepare categories from current batch
      */
     public function prepareCategories(array $rowData, array &$categories): void
@@ -388,14 +313,6 @@ class Importer extends AbstractImporter
 
             $categories['insert'][$rowData['code']] = array_merge($categories['insert'][$rowData['code']] ?? [], $data);
         }
-    }
-
-    /**
-     * Get the local id using code
-     */
-    protected function getLocalId($localeCode)
-    {
-        return DB::table('locales')->where('code', $localeCode)->first()?->id;
     }
 
     /**
@@ -456,6 +373,99 @@ class Importer extends AbstractImporter
     public function isCategoryExist(string $code): bool
     {
         return $this->categoryStorage->has($code);
+    }
+
+    /**
+     * Get Categories linked to channel which should not be deleted
+     */
+    public function getNonDeletableCategories(): void
+    {
+        if (! $this->nonDeletableCategories) {
+            $this->nonDeletableCategories = $this->channelRepository->pluck('root_category_id')->toArray();
+        }
+    }
+
+    /**
+     * Initialize Product error templates
+     */
+    protected function initErrorMessages(): void
+    {
+        foreach ($this->messages as $errorCode => $message) {
+            $this->errorHelper->addErrorMessage($errorCode, trans($message));
+        }
+
+        parent::initErrorMessages();
+    }
+
+    /**
+     * Initialize locales
+     */
+    protected function initLocales(): void
+    {
+        $this->locales = $this->localeRepository->getActiveLocales()->pluck('code')->toArray();
+    }
+
+    /**
+     * Delete categories from current batch
+     */
+    protected function deleteCategoryData(JobTrackBatchContract $batch): bool
+    {
+        /**
+         * Load categories storage with batch slugs
+         */
+        $this->categoryStorage->load(Arr::pluck($batch->data, 'code'));
+
+        $idsToDelete = [];
+
+        foreach ($batch->data as $rowData) {
+            if (! $this->isCategoryExist($rowData['code'])) {
+                continue;
+            }
+
+            $idsToDelete[] = $this->categoryStorage->get($rowData['code']);
+        }
+
+        $idsToDelete = array_unique($idsToDelete);
+
+        $this->deletedItemsCount = count($idsToDelete);
+
+        $this->categoryRepository->deleteWhere([['id', 'IN', $idsToDelete]]);
+
+        return true;
+    }
+
+    /**
+     * Save category from current batch
+     */
+    protected function saveCategoryData(JobTrackBatchContract $batch): bool
+    {
+        /**
+         * Load category storage with batch code
+         */
+        $this->categoryStorage->load(Arr::pluck($batch->data, 'code'));
+
+        $categories = [];
+
+        $imagesData = [];
+
+        foreach ($batch->data as $rowData) {
+            /**
+             * Prepare categories for import
+             */
+            $this->prepareCategories($rowData, $categories);
+        }
+
+        $this->saveCategories($categories);
+
+        return true;
+    }
+
+    /**
+     * Get the local id using code
+     */
+    protected function getLocalId($localeCode)
+    {
+        return DB::table('locales')->where('code', $localeCode)->first()?->id;
     }
 
     /**
@@ -586,16 +596,6 @@ class Importer extends AbstractImporter
 
                 $this->skipRow($rowNumber, $errorCode, $categoryFieldCode, current($message));
             }
-        }
-    }
-
-    /**
-     * Get Categories linked to channel which should not be deleted
-     */
-    public function getNonDeletableCategories(): void
-    {
-        if (! $this->nonDeletableCategories) {
-            $this->nonDeletableCategories = $this->channelRepository->pluck('root_category_id')->toArray();
         }
     }
 }

@@ -25,7 +25,7 @@ class BolComProductService
     public function syncProduct(Product $product, BolComCredential $bolComCredential, $previousSyncState = false, $unchecked = false)
     {
         try {
-            $apiClient = new BolApiClient;
+            $apiClient = new BolApiClient();
             $apiClient->setCredential($bolComCredential);
 
             $pivotData = $product->bolComCredentials()
@@ -68,7 +68,7 @@ class BolComProductService
 
     public function fetchContentStatus(string $id, BolComCredential $bolComCredential)
     {
-        $apiClient = new BolApiClient;
+        $apiClient = new BolApiClient();
         $apiClient->setCredential($bolComCredential);
 
         return $apiClient->get("/shared/process-status/$id");
@@ -76,7 +76,7 @@ class BolComProductService
 
     public function fetchUploadReport(string $id, BolComCredential $bolComCredential)
     {
-        $apiClient = new BolApiClient;
+        $apiClient = new BolApiClient();
         $apiClient->setCredential($bolComCredential);
 
         return $apiClient->get("/retailer/content/upload-report/$id");
@@ -84,7 +84,7 @@ class BolComProductService
 
     public function fetchCategories(BolComCredential $bolComCredential)
     {
-        $apiClient = new BolApiClient;
+        $apiClient = new BolApiClient();
         $apiClient->setCredential($bolComCredential);
 
         return $apiClient->get('/retailer/products/categories');
@@ -92,10 +92,10 @@ class BolComProductService
 
     public function fetchCatalogProductDetails(BolComCredential $bolComCredential, string $ean, bool $assets)
     {
-        $apiClient = new BolApiClient;
+        $apiClient = new BolApiClient();
         $apiClient->setCredential($bolComCredential);
 
-        if ( $assets ) {
+        if ($assets) {
             $endpoint = "/retailer/products/$ean/assets";
         } else {
             $endpoint = "/retailer/content/catalog-products/$ean";
@@ -132,6 +132,33 @@ class BolComProductService
         Log::debug('BOL.com offer response', $offerResponse);
 
         return $response;
+    }
+
+    public function getCredentialsOptions(): array
+    {
+        $credentials = DB::table('bol_com_credentials')
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->where('is_active', 1)
+            ->get();
+
+        $options = [];
+        foreach ($credentials as $credential) {
+            $options[$credential->id] = $credential->name;
+        }
+
+        return $options;
+    }
+
+    public function sendSuccessMail(product $product, array $offer, bolComCredential $bolComCredential)
+    {
+        $recipients = config('bolcom.email_recipients', []);
+
+        if (empty($recipients)) {
+            return;
+        }
+
+        Mail::to($recipients)->send(new BolComSyncSuccess($product, $offer, $bolComCredential));
     }
 
     /**
@@ -508,33 +535,6 @@ class BolComProductService
             ->first();
 
         return $credential?->id;
-    }
-
-    public function getCredentialsOptions(): array
-    {
-        $credentials = DB::table('bol_com_credentials')
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->where('is_active', 1)
-            ->get();
-
-        $options = [];
-        foreach ($credentials as $credential) {
-            $options[$credential->id] = $credential->name;
-        }
-
-        return $options;
-    }
-
-    public function sendSuccessMail(product $product, array $offer, bolComCredential $bolComCredential)
-    {
-        $recipients = config('bolcom.email_recipients', []);
-
-        if (empty($recipients)) {
-            return;
-        }
-
-        Mail::to($recipients)->send(new BolComSyncSuccess($product, $offer, $bolComCredential));
     }
 
     protected function generateImageUrl(string $image): string

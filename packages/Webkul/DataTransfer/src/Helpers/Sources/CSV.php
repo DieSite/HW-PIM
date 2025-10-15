@@ -38,6 +38,20 @@ class CSV extends AbstractSource
     }
 
     /**
+     * Close file handle
+     *
+     * @return void
+     */
+    public function __destruct()
+    {
+        if (! is_object($this->reader)) {
+            return;
+        }
+
+        $this->reader->close();
+    }
+
+    /**
      * Determine the separator used in a CSV file.
      */
     public static function checkSeparator(string $filePath): ?string
@@ -65,17 +79,13 @@ class CSV extends AbstractSource
     }
 
     /**
-     * Close file handle
-     *
-     * @return void
+     * Rewind the iterator to the first row
      */
-    public function __destruct()
+    public function rewind(): void
     {
-        if (! is_object($this->reader)) {
-            return;
-        }
+        rewind($this->reader);
 
-        $this->reader->close();
+        parent::rewind();
     }
 
     /**
@@ -98,15 +108,5 @@ class CSV extends AbstractSource
         }
 
         return is_array($parsed) ? $parsed : [];
-    }
-
-    /**
-     * Rewind the iterator to the first row
-     */
-    public function rewind(): void
-    {
-        rewind($this->reader);
-
-        parent::rewind();
     }
 }

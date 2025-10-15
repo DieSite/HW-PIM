@@ -71,14 +71,6 @@ class AttributeOption extends TranslatableModel implements AttributeOptionContra
     }
 
     /**
-     * Create a new factory instance for the model
-     */
-    protected static function newFactory(): Factory
-    {
-        return AttributeOptionFactory::new();
-    }
-
-    /**
      * Id used for creating version for history
      *
      * {@inheritdoc}
@@ -86,5 +78,13 @@ class AttributeOption extends TranslatableModel implements AttributeOptionContra
     public function getPrimaryModelIdForHistory(): int
     {
         return $this->attribute_id;
+    }
+
+    /**
+     * Create a new factory instance for the model
+     */
+    protected static function newFactory(): Factory
+    {
+        return AttributeOptionFactory::new();
     }
 }

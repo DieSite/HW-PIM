@@ -135,27 +135,6 @@ class ApiKeysController extends Controller
     }
 
     /**
-     * Prepares default details for the API key edit view.
-     *
-     * @param  object  $apiKey  The API key object to retrieve details from.
-     * @return array An associative array containing the necessary details for the edit view.
-     */
-    private function getDefaultDetails($apiKey)
-    {
-        $oauthClientId = $apiKey->oauthClients?->getKey();
-        $clientId = $apiKey->oauthClients?->getKey();
-        $secretKey = $oauthClientId ? $this->maskClientIdAndScreatKey($apiKey->oauthClients?->secret) : $apiKey->oauthClients?->secret;
-
-        return [
-            'apiKey'          => $apiKey,
-            'oauth_client_id' => $oauthClientId,
-            'client_id'       => $clientId,
-            'secret_key'      => $secretKey,
-            'permissionTypes' => json_encode($this->apiKeyRepository->getPermissionTypes()),
-        ];
-    }
-
-    /**
      * Generates a new client ID and secret key for the API key.
      *
      * This function is responsible for creating a new OAuth client ID and secret key
@@ -253,5 +232,26 @@ class ApiKeysController extends Controller
                 'admin::app.configuration.integrations.delete-failed'
             ),
         ], 500);
+    }
+
+    /**
+     * Prepares default details for the API key edit view.
+     *
+     * @param  object  $apiKey  The API key object to retrieve details from.
+     * @return array An associative array containing the necessary details for the edit view.
+     */
+    private function getDefaultDetails($apiKey)
+    {
+        $oauthClientId = $apiKey->oauthClients?->getKey();
+        $clientId = $apiKey->oauthClients?->getKey();
+        $secretKey = $oauthClientId ? $this->maskClientIdAndScreatKey($apiKey->oauthClients?->secret) : $apiKey->oauthClients?->secret;
+
+        return [
+            'apiKey'          => $apiKey,
+            'oauth_client_id' => $oauthClientId,
+            'client_id'       => $clientId,
+            'secret_key'      => $secretKey,
+            'permissionTypes' => json_encode($this->apiKeyRepository->getPermissionTypes()),
+        ];
     }
 }

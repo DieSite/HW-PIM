@@ -211,18 +211,6 @@ class CategoryController extends Controller
     }
 
     /**
-     * Check whether the current category is related to a channel or not.
-     * If the category is assigned as root to any channel it can not have parent category.
-     *
-     * This method will fetch all root category ids from the channel. If `id` is present,
-     * then it is not deletable and can not have a parent category.
-     */
-    private function isRelatedToChannel(int $categoryId): bool
-    {
-        return (bool) $this->channelRepository->pluck('root_category_id')->contains($categoryId);
-    }
-
-    /**
      * Get all categories in tree format.
      *
      * @return \Illuminate\Http\JsonResponse
@@ -250,5 +238,17 @@ class CategoryController extends Controller
         })->paginate(10);
 
         return response()->json($categories);
+    }
+
+    /**
+     * Check whether the current category is related to a channel or not.
+     * If the category is assigned as root to any channel it can not have parent category.
+     *
+     * This method will fetch all root category ids from the channel. If `id` is present,
+     * then it is not deletable and can not have a parent category.
+     */
+    private function isRelatedToChannel(int $categoryId): bool
+    {
+        return (bool) $this->channelRepository->pluck('root_category_id')->contains($categoryId);
     }
 }

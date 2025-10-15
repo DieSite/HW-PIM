@@ -18,6 +18,15 @@ class Channel extends TranslatableModel implements ChannelContract, HistoryContr
     use HasFactory;
     use HistoryTrait;
 
+    /**
+     * Translated attributes.
+     *
+     * @var array
+     */
+    public $translatedAttributes = [
+        'name',
+    ];
+
     protected $table = 'channels';
 
     /** Tags for History */
@@ -53,15 +62,6 @@ class Channel extends TranslatableModel implements ChannelContract, HistoryContr
      * @var array
      */
     protected $casts = [
-    ];
-
-    /**
-     * Translated attributes.
-     *
-     * @var array
-     */
-    public $translatedAttributes = [
-        'name',
     ];
 
     /**

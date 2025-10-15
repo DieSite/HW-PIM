@@ -64,18 +64,18 @@ class CategoryFieldController extends ApiController
         $rules = [
             'type' => [
                 'required',
-                new FieldTypes,
+                new FieldTypes(),
             ],
             'code' => [
                 'required',
                 sprintf('unique:%s,code', 'category_fields'),
-                new Code,
-                new NotSupportedFields,
+                new Code(),
+                new NotSupportedFields(),
             ],
         ];
 
         if (isset($requestData['validation']) && $requestData['validation']) {
-            $rules['validation'] = [new ValidationTypes];
+            $rules['validation'] = [new ValidationTypes()];
         }
 
         $validator = $this->codeRequireWithUniqueValidator(
@@ -135,26 +135,6 @@ class CategoryFieldController extends ApiController
         } catch (\Exception $e) {
             return $this->storeExceptionLog($e);
         }
-    }
-
-    /**
-     * Sets default values for the given request data array.
-     *
-     * @return array The updated request data array with default values.
-     */
-    private function setDefaultValues(array $requestData)
-    {
-        $requestData['status'] = $requestData['status'] ?? 1;
-        $requestData['position'] = $requestData['position'] ?? 0;
-        $requestData['is_required'] = $requestData['is_required'] ?? 0;
-        $requestData['is_unique'] = $requestData['is_unique'] ?? 0;
-        $requestData['value_per_locale'] = $requestData['value_per_locale'] ?? 0;
-        $requestData['enable_wysiwyg'] = $requestData['enable_wysiwyg'] ?? 0;
-        $requestData['section'] = $requestData['section'] ?? 'left';
-        $requestData['validation'] = $requestData['validation'] ?? null;
-        $requestData['regex_pattern'] = $requestData['regex_pattern'] ?? null;
-
-        return $requestData;
     }
 
     /**
@@ -268,6 +248,26 @@ class CategoryFieldController extends ApiController
     }
 
     /**
+     * Sets default values for the given request data array.
+     *
+     * @return array The updated request data array with default values.
+     */
+    private function setDefaultValues(array $requestData)
+    {
+        $requestData['status'] = $requestData['status'] ?? 1;
+        $requestData['position'] = $requestData['position'] ?? 0;
+        $requestData['is_required'] = $requestData['is_required'] ?? 0;
+        $requestData['is_unique'] = $requestData['is_unique'] ?? 0;
+        $requestData['value_per_locale'] = $requestData['value_per_locale'] ?? 0;
+        $requestData['enable_wysiwyg'] = $requestData['enable_wysiwyg'] ?? 0;
+        $requestData['section'] = $requestData['section'] ?? 'left';
+        $requestData['validation'] = $requestData['validation'] ?? null;
+        $requestData['regex_pattern'] = $requestData['regex_pattern'] ?? null;
+
+        return $requestData;
+    }
+
+    /**
      * Validates the category field option data.
      *
      * @return \Illuminate\Contracts\Validation\Validator The Validator instance with the applied rules.
@@ -279,7 +279,7 @@ class CategoryFieldController extends ApiController
                 Rule::unique('category_field_options')->where(function ($query) use ($requestData, $categoryFieldId) {
                     return $query->where('code', $requestData['code'])->where('category_field_id', $categoryFieldId);
                 }),
-                new Code,
+                new Code(),
             ],
         ];
 

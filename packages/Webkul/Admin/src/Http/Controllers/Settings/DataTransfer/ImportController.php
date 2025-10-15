@@ -69,7 +69,7 @@ class ImportController extends Controller
             'action'              => 'required:in:append,delete',
             'validation_strategy' => 'required:in:stop-on-errors,skip-errors',
             'allowed_errors'      => 'required|integer|min:0',
-            'field_separator'     => ['required', new SeparatorTypes],
+            'field_separator'     => ['required', new SeparatorTypes()],
             'file'                => 'required|mimes:csv,xls,xlsx,txt',
         ], ['file.mimes' => trans('core::validation.file-type')]);
 
@@ -136,7 +136,7 @@ class ImportController extends Controller
             'action'              => 'required:in:append,delete',
             'validation_strategy' => 'required:in:stop-on-errors,skip-errors',
             'allowed_errors'      => 'required|integer|min:0',
-            'field_separator'     => ['required', new SeparatorTypes],
+            'field_separator'     => ['required', new SeparatorTypes()],
             'file'                => 'mimes:csv,xls,xlsx,txt',
         ], ['file.mimes' => trans('core::validation.file-type')]);
 
@@ -507,25 +507,6 @@ class ImportController extends Controller
     }
 
     /**
-     * Normalizes the summary data by translating keys and handling null values.
-     *
-     * @param  array|null  $summary  The summary data to be normalized.
-     * @return array The normalized summary data.
-     */
-    private function normalizeSummary($summery)
-    {
-        $summaryData = [];
-
-        // Loop through the summary data, translating keys and handling null values
-        foreach (($summery ?? []) as $key => $value) {
-            $summaryData[trans(sprintf('admin::app.settings.data-transfer.tracker.summary.%s', $key))] = $value ?? 0;
-        }
-
-        // Return the normalized summary data
-        return $summaryData;
-    }
-
-    /**
      * Download import error report
      */
     public function downloadSample(string $type)
@@ -553,5 +534,24 @@ class ImportController extends Controller
         $import = $this->jobTrackRepository->findOrFail($id);
 
         return Storage::disk('private')->download($import->error_file_path);
+    }
+
+    /**
+     * Normalizes the summary data by translating keys and handling null values.
+     *
+     * @param  array|null  $summary  The summary data to be normalized.
+     * @return array The normalized summary data.
+     */
+    private function normalizeSummary($summery)
+    {
+        $summaryData = [];
+
+        // Loop through the summary data, translating keys and handling null values
+        foreach (($summery ?? []) as $key => $value) {
+            $summaryData[trans(sprintf('admin::app.settings.data-transfer.tracker.summary.%s', $key))] = $value ?? 0;
+        }
+
+        // Return the normalized summary data
+        return $summaryData;
     }
 }

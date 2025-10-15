@@ -38,7 +38,7 @@ class LocaleController extends Controller
     public function store(): JsonResponse
     {
         $this->validate(request(), [
-            'code'        => ['required', 'unique:locales,code', new \Webkul\Core\Rules\Code],
+            'code'        => ['required', 'unique:locales,code', new \Webkul\Core\Rules\Code()],
         ]);
 
         $this->localeRepository->create(request()->only([

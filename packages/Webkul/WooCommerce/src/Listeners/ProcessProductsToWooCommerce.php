@@ -18,6 +18,16 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 {
     use DataTransferMappingTrait, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public const ACTION_ADD = 'addProduct';
+
+    public const ACTION_UPDATE = 'updateProduct';
+
+    public const ACTION_GET = 'getAllProduct';
+
+    public const ACTION_ADD_VARIATION = 'addVariation';
+
+    public const ACTION_UPDATE_VARIATION = 'updateVariation';
+
     public $tries = 5;
 
     public $timeout = 300000;
@@ -33,16 +43,6 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     protected $credential;
 
     protected $dataTransferMappingRepository;
-
-    public const ACTION_ADD = 'addProduct';
-
-    public const ACTION_UPDATE = 'updateProduct';
-
-    public const ACTION_GET = 'getAllProduct';
-
-    public const ACTION_ADD_VARIATION = 'addVariation';
-
-    public const ACTION_UPDATE_VARIATION = 'updateVariation';
 
     /**
      * Create a new job instance.

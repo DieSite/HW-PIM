@@ -42,6 +42,17 @@ class PullFromDO extends Command
         $this->pullSubDirectories($directory);
     }
 
+    protected function mappedWithDirectory($assetIds, $directory): ?Directory
+    {
+        if (! $directory) {
+            return null;
+        }
+
+        $directory->assets()->attach($assetIds);
+
+        return $directory;
+    }
+
     private function pullSubDirectories(Directory $parent): void
     {
         $parentPath = $parent->generatePath();
@@ -116,16 +127,5 @@ class PullFromDO extends Command
         } else {
             return 'document';
         }
-    }
-
-    protected function mappedWithDirectory($assetIds, $directory): ?Directory
-    {
-        if (! $directory) {
-            return null;
-        }
-
-        $directory->assets()->attach($assetIds);
-
-        return $directory;
     }
 }

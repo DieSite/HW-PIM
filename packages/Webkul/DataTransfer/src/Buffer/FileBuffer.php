@@ -86,16 +86,6 @@ class FileBuffer
     ];
 
     /**
-     * @return TemporaryFile
-     */
-    public function make($directory, ?string $fileExtension = null, ?string $fileName = null)
-    {
-        $temporaryFileFactory = new TemporaryFileFactory($directory);
-
-        return $temporaryFileFactory->make($fileExtension, $fileName);
-    }
-
-    /**
      * Close and delete file at buffer destruction
      */
     public function __destruct()
@@ -104,6 +94,16 @@ class FileBuffer
         if (is_file($this->filePath)) {
             unlink($this->filePath);
         }
+    }
+
+    /**
+     * @return TemporaryFile
+     */
+    public function make($directory, ?string $fileExtension = null, ?string $fileName = null)
+    {
+        $temporaryFileFactory = new TemporaryFileFactory($directory);
+
+        return $temporaryFileFactory->make($fileExtension, $fileName);
     }
 
     public function appendRows(array $item, $sheet)

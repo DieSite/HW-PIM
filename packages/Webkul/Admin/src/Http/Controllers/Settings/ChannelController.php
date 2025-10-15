@@ -51,10 +51,10 @@ class ChannelController extends Controller
         $locales = core()->getAllActiveLocales();
 
         $rules = [
-            'code'              => ['required', 'unique:channels,code', new \Webkul\Core\Rules\Code],
+            'code'              => ['required', 'unique:channels,code', new \Webkul\Core\Rules\Code()],
             'root_category_id'  => 'required',
-            'locales'           => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded],
-            'currencies'        => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded],
+            'locales'           => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded()],
+            'currencies'        => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded()],
         ];
 
         foreach ($locales as $locale) {
@@ -99,8 +99,8 @@ class ChannelController extends Controller
 
         $rules = [
             'root_category_id'  => 'required',
-            'locales'           => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded],
-            'currencies'        => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded],
+            'locales'           => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded()],
+            'currencies'        => ['required', new \Webkul\Core\Rules\ConvertToArrayIfNeeded()],
         ];
 
         foreach ($locales as $locale) {

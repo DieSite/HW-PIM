@@ -7,14 +7,14 @@ use Webkul\DataTransfer\Contracts\JobTrack as JobTrackContract;
 
 class JobTrack extends Model implements JobTrackContract
 {
-    protected $table = 'job_track';
-
     /**
      * Indicates if the model should be timestamped.
      *
      * @var bool
      */
     public $timestamps = true;
+
+    protected $table = 'job_track';
 
     /**
      * The attributes that are mass assignable.

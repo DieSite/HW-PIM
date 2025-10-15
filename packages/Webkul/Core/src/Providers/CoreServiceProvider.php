@@ -52,11 +52,11 @@ class CoreServiceProvider extends ServiceProvider
         });
 
         $this->app->extend('command.down', function () {
-            return new \Webkul\Core\Console\Commands\DownCommand;
+            return new \Webkul\Core\Console\Commands\DownCommand();
         });
 
         $this->app->extend('command.up', function () {
-            return new \Webkul\Core\Console\Commands\UpCommand;
+            return new \Webkul\Core\Console\Commands\UpCommand();
         });
 
         /**
@@ -88,6 +88,16 @@ class CoreServiceProvider extends ServiceProvider
     }
 
     /**
+     * Register the Blade compiler implementation.
+     */
+    public function registerBladeCompiler(): void
+    {
+        $this->app->singleton('blade.compiler', function ($app) {
+            return new BladeCompiler($app['files'], $app['config']['view.compiled']);
+        });
+    }
+
+    /**
      * Register Bouncer as a singleton.
      */
     protected function registerFacades(): void
@@ -104,7 +114,7 @@ class CoreServiceProvider extends ServiceProvider
          * Register ElasticSearch as a singleton.
          */
         $this->app->singleton('elasticsearch', function () {
-            return new ElasticSearch;
+            return new ElasticSearch();
         });
 
         $loader->alias('elasticsearch', ElasticSearchFacade::class);
@@ -125,15 +135,5 @@ class CoreServiceProvider extends ServiceProvider
                 \Webkul\Core\Console\Commands\UnoPimVersion::class,
             ]);
         }
-    }
-
-    /**
-     * Register the Blade compiler implementation.
-     */
-    public function registerBladeCompiler(): void
-    {
-        $this->app->singleton('blade.compiler', function ($app) {
-            return new BladeCompiler($app['files'], $app['config']['view.compiled']);
-        });
     }
 }

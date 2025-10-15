@@ -37,6 +37,7 @@ class UpdateAllParentProducts extends Command
             foreach ($products as $product) {
                 if ($count++ < $skip) {
                     $this->output->progressAdvance();
+
                     continue;
                 }
                 Event::dispatch('catalog.product.update.after', $product);

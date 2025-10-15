@@ -34,6 +34,16 @@ class HistoryController extends Controller
         return new JsonResponse($normalizedData);
     }
 
+    public function restoreHistory(string $entityName, int $id)
+    {
+        // Your code here
+    }
+
+    public function deleteHistory(string $entityName, int $id)
+    {
+        // Your code here
+    }
+
     /**
      * Normalized the data
      *
@@ -135,16 +145,6 @@ class HistoryController extends Controller
         }
 
         return $normalizedData;
-    }
-
-    public function restoreHistory(string $entityName, int $id)
-    {
-        // Your code here
-    }
-
-    public function deleteHistory(string $entityName, int $id)
-    {
-        // Your code here
     }
 
     /**

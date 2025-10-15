@@ -45,32 +45,6 @@ class ApiClient
     }
 
     /**
-     * Build API URL.
-     *
-     * @param  string  $url  Store URL.
-     * @return string
-     */
-    protected function buildApiUrl($url, $replaceUrl = null)
-    {
-        $api = '/wp-json/wc/';
-        $url = str_replace(['/wp-admin', 'shop/'], ['', ''], $url);
-        $updatedUrl = \rtrim($url, '/').$api.($this->options['version'] ?? 'v2').'/';
-
-        if (! empty($this->options['type'])) {
-            $updatedUrl = str_replace('/wp-json/wc/', '/wp-json/'.$this->options['type'].'/', $updatedUrl);
-        }
-        $this->url = $updatedUrl;
-
-        $response = $this->request('settings', [], []);
-
-        if (! empty($response['data']['status']) && $response['data']['status'] == 404) {
-            $updatedUrl = str_replace('v2', 'v1', $updatedUrl);
-        }
-
-        return $updatedUrl;
-    }
-
-    /**
      * Make requests.
      *
      * @param  string  $endpoint  Request endpoint.
@@ -104,6 +78,52 @@ class ApiClient
         \curl_close($this->ch);
 
         return $response;
+    }
+
+    /**
+     * Get request data.
+     *
+     * @return Request
+     */
+    public function getRequest()
+    {
+        return $this->request;
+    }
+
+    /**
+     * Get response data.
+     *
+     * @return Response
+     */
+    public function getResponse()
+    {
+        return $this->response;
+    }
+
+    /**
+     * Build API URL.
+     *
+     * @param  string  $url  Store URL.
+     * @return string
+     */
+    protected function buildApiUrl($url, $replaceUrl = null)
+    {
+        $api = '/wp-json/wc/';
+        $url = str_replace(['/wp-admin', 'shop/'], ['', ''], $url);
+        $updatedUrl = \rtrim($url, '/').$api.($this->options['version'] ?? 'v2').'/';
+
+        if (! empty($this->options['type'])) {
+            $updatedUrl = str_replace('/wp-json/wc/', '/wp-json/'.$this->options['type'].'/', $updatedUrl);
+        }
+        $this->url = $updatedUrl;
+
+        $response = $this->request('settings', [], []);
+
+        if (! empty($response['data']['status']) && $response['data']['status'] == 404) {
+            $updatedUrl = str_replace('v2', 'v1', $updatedUrl);
+        }
+
+        return $updatedUrl;
     }
 
     /**
@@ -247,25 +267,5 @@ class ApiClient
     protected function isSsl()
     {
         return \substr($this->url, 0, 8) === 'https://';
-    }
-
-    /**
-     * Get request data.
-     *
-     * @return Request
-     */
-    public function getRequest()
-    {
-        return $this->request;
-    }
-
-    /**
-     * Get response data.
-     *
-     * @return Response
-     */
-    public function getResponse()
-    {
-        return $this->response;
     }
 }

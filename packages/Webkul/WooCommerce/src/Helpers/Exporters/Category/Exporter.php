@@ -115,36 +115,6 @@ class Exporter extends AbstractExporter
         return true;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function getResults()
-    {
-        $filters = $this->getFilters();
-        $ids = $this->getRootCategoryIds($filters);
-
-        return $this->source
-            ->whereIn('id', $ids)
-            ->where('parent_id', null)
-            ->with('descendants')
-            ->with('parent_category')
-            ->get()
-            ?->getIterator();
-    }
-
-    protected function getRootCategoryIds($filters): array
-    {
-        $categoryIds = [];
-
-        if (isset($filters['channel']) && $filters['channel']) {
-            $channelCodes = is_array($filters['channel']) ? $filters['channel'] : [$filters['channel']];
-            $channels = $this->channelRepository->findWhereIn('code', $channelCodes);
-            $categoryIds = $channels->pluck('root_category.id')->unique()->values()->all() ?? [];
-        }
-
-        return $categoryIds;
-    }
-
     public function exportCategory(JobTrackBatchContract $batch)
     {
         foreach ($batch->data as $rawData) {
@@ -185,6 +155,64 @@ class Exporter extends AbstractExporter
         }
     }
 
+    public function formatData(array $rawData): array
+    {
+        $locale = $this->selectedLocale;
+        $categoryFields = $this->getLocaleSpecificFields($rawData, $locale);
+
+        $data['parent'] = $this->getParentCategoryId($rawData);
+        $data['name'] = $categoryFields ? $categoryFields['name'] : $rawData['code'];
+        $data['slug'] = $rawData['code'];
+        $data['description'] = $categoryFields['description'] ?? '';
+
+        $this->setCategoryMainFields($data, $categoryFields);
+
+        return $data;
+    }
+
+    /**
+     * log Warning generate
+     */
+    public function logWarning(array $data, string $code): void
+    {
+        if (! empty($data) && ! empty($code)) {
+            $error = json_encode($data, true);
+            $this->jobLogger->warning(
+                "Warning for Category with code: {$code}, : {$error}"
+            );
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getResults()
+    {
+        $filters = $this->getFilters();
+        $ids = $this->getRootCategoryIds($filters);
+
+        return $this->source
+            ->whereIn('id', $ids)
+            ->where('parent_id', null)
+            ->with('descendants')
+            ->with('parent_category')
+            ->get()
+            ?->getIterator();
+    }
+
+    protected function getRootCategoryIds($filters): array
+    {
+        $categoryIds = [];
+
+        if (isset($filters['channel']) && $filters['channel']) {
+            $channelCodes = is_array($filters['channel']) ? $filters['channel'] : [$filters['channel']];
+            $channels = $this->channelRepository->findWhereIn('code', $channelCodes);
+            $categoryIds = $channels->pluck('root_category.id')->unique()->values()->all() ?? [];
+        }
+
+        return $categoryIds;
+    }
+
     protected function createCategory(array $rawData): array
     {
         $payload = $this->formatData($rawData);
@@ -207,43 +235,12 @@ class Exporter extends AbstractExporter
         return $response;
     }
 
-    public function formatData(array $rawData): array
-    {
-        $locale = $this->selectedLocale;
-        $categoryFields = $this->getLocaleSpecificFields($rawData, $locale);
-
-        $data['parent'] = $this->getParentCategoryId($rawData);
-        $data['name'] = $categoryFields ? $categoryFields['name'] : $rawData['code'];
-        $data['slug'] = $rawData['code'];
-        $data['description'] = $categoryFields['description'] ?? '';
-
-        $this->setCategoryMainFields($data, $categoryFields);
-
-        return $data;
-    }
-
     protected function setCategoryMainFields(array &$data, array $categoryFields)
     {
         if (! $categoryFields) {
             $data['is_active'] = true;
         }
 
-    }
-
-    /**
-     * Get locale-specific fields from the raw data.
-     */
-    private function getLocaleSpecificFields(array $data, ?string $locale): array
-    {
-        if (! is_array($data['additional_data'])) {
-            return [];
-        }
-
-        if (! array_key_exists('additional_data', $data) || ! array_key_exists('locale_specific', $data['additional_data'])) {
-            return [];
-        }
-
-        return $data['additional_data']['locale_specific'][$locale] ?? [];
     }
 
     protected function getParentCategoryId(array $rawData): ?int
@@ -267,15 +264,18 @@ class Exporter extends AbstractExporter
     }
 
     /**
-     * log Warning generate
+     * Get locale-specific fields from the raw data.
      */
-    public function logWarning(array $data, string $code): void
+    private function getLocaleSpecificFields(array $data, ?string $locale): array
     {
-        if (! empty($data) && ! empty($code)) {
-            $error = json_encode($data, true);
-            $this->jobLogger->warning(
-                "Warning for Category with code: {$code}, : {$error}"
-            );
+        if (! is_array($data['additional_data'])) {
+            return [];
         }
+
+        if (! array_key_exists('additional_data', $data) || ! array_key_exists('locale_specific', $data['additional_data'])) {
+            return [];
+        }
+
+        return $data['additional_data']['locale_specific'][$locale] ?? [];
     }
 }

@@ -11,9 +11,9 @@ use Webkul\WooCommerce\Exceptions\InvalidCredential;
  */
 trait DataTransferMappingTrait
 {
-    protected $jobFilters;
-
     public const STORE_URL_FILTER = 'credential';
+
+    protected $jobFilters;
 
     /**
      * Initialize credentials data from filters
@@ -31,7 +31,7 @@ trait DataTransferMappingTrait
             $this->export->errors = [trans('woocommerce::app.data-transfer.exports.error.invalid')];
             $this->export->save();
 
-            throw new InvalidCredential;
+            throw new InvalidCredential();
         }
     }
 

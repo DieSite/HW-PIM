@@ -80,7 +80,7 @@ class EnvValidatorServiceProvider extends ServiceProvider
     private function writeErrorAndDie(InvalidFileException $e)
     {
         if (app()->runningInConsole()) {
-            $output = (new ConsoleOutput)->getErrorOutput();
+            $output = (new ConsoleOutput())->getErrorOutput();
 
             $output->writeln('The environment file is invalid!');
             $output->writeln($e->getMessage());

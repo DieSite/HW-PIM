@@ -7,20 +7,6 @@ use Webkul\Product\Repositories\ProductRepository;
 
 class BoxRugSizes extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'app:box-rug-sizes';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Command description';
-
     const SIZE_MAPPING = [
         '80 cm x 150 cm'  => '80 cm x 150 cm',
         '60 cm x 90 cm'   => '80 cm x 150 cm',
@@ -99,6 +85,20 @@ class BoxRugSizes extends Command
     ];
 
     /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'app:box-rug-sizes';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Command description';
+
+    /**
      * Execute the console command.
      */
     public function handle()
@@ -112,9 +112,10 @@ class BoxRugSizes extends Command
         foreach ($products as $product) {
             $_product = $productRepository->find($product->id);
             $values = $_product->values;
-            if (!isset($values['common']['maat'])) {
-                $this->info('No size found for product: ' . $product->sku);
+            if (! isset($values['common']['maat'])) {
+                $this->info('No size found for product: '.$product->sku);
                 $progressBar->advance();
+
                 continue;
             }
             $actualSize = $values['common']['maat'];

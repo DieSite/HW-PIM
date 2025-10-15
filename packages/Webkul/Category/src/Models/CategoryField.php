@@ -19,6 +19,33 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
 
     const NON_DELETABLE_FIELD_CODE = 'name';
 
+    /**
+     * Translated attributes.
+     *
+     * @var array
+     */
+    public $translatedAttributes = [
+        'name',
+    ];
+
+    /**
+     * field types.
+     *
+     * @var array
+     */
+    public $categoryTypeFields = [
+        'text'        => 'text_value',
+        'textarea'    => 'text_value',
+        'boolean'     => 'boolean_value',
+        'select'      => 'integer_value',
+        'multiselect' => 'text_value',
+        'datetime'    => 'datetime_value',
+        'date'        => 'date_value',
+        'file'        => 'text_value',
+        'image'       => 'text_value',
+        'checkbox'    => 'text_value',
+    ];
+
     /** Tags for History */
     protected $historyTags = ['category_field'];
 
@@ -30,15 +57,6 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
     /** Proxy Table Fields for History */
     protected $historyProxyFields = [
         'options',
-    ];
-
-    /**
-     * Translated attributes.
-     *
-     * @var array
-     */
-    public $translatedAttributes = [
-        'name',
     ];
 
     /**
@@ -61,37 +79,11 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
     ];
 
     /**
-     * field types.
-     *
-     * @var array
-     */
-    public $categoryTypeFields = [
-        'text'        => 'text_value',
-        'textarea'    => 'text_value',
-        'boolean'     => 'boolean_value',
-        'select'      => 'integer_value',
-        'multiselect' => 'text_value',
-        'datetime'    => 'datetime_value',
-        'date'        => 'date_value',
-        'file'        => 'text_value',
-        'image'       => 'text_value',
-        'checkbox'    => 'text_value',
-    ];
-
-    /**
      * Get all of the options for the CategoryField
      */
     public function options(): HasMany
     {
         return $this->hasMany(CategoryFieldOptionProxy::modelClass());
-    }
-
-    /**
-     * Returns category field value table column based type
-     */
-    protected function getColumnNameField(): string
-    {
-        return $this->categoryTypeFields[$this->type];
     }
 
     /**
@@ -145,7 +137,7 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
             $validations[] = match ($this->validation) {
                 'regex'   => 'regex: "'.$this->regex_pattern.'"',
                 'number'  => 'numeric',
-                'decimal' => new Decimal,
+                'decimal' => new Decimal(),
                 default   => $this->validation
             };
         }
@@ -203,14 +195,6 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
     }
 
     /**
-     * Create a new factory instance for the model
-     */
-    protected static function newFactory(): Factory
-    {
-        return CategoryFieldFactory::new();
-    }
-
-    /**
      * check if possible to delete this attribute
      */
     public function canBeDeleted()
@@ -250,7 +234,7 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
             $validations[] = match ($this->validation) {
                 'regex'   => 'regex: "'.$this->regex_pattern.'"',
                 'number'  => 'numeric',
-                'decimal' => new Decimal,
+                'decimal' => new Decimal(),
                 default   => $this->validation
             };
         }
@@ -268,5 +252,21 @@ class CategoryField extends TranslatableModel implements CategoryFieldContract, 
         }
 
         return 'common->'.$this->code;
+    }
+
+    /**
+     * Returns category field value table column based type
+     */
+    protected function getColumnNameField(): string
+    {
+        return $this->categoryTypeFields[$this->type];
+    }
+
+    /**
+     * Create a new factory instance for the model
+     */
+    protected static function newFactory(): Factory
+    {
+        return CategoryFieldFactory::new();
     }
 }

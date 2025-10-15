@@ -232,42 +232,6 @@ class Importer extends AbstractImporter
     }
 
     /**
-     * Load all attributes and families to use later
-     */
-    protected function initAttributes(): void
-    {
-        $this->attributeFamilies = $this->attributeFamilyRepository->all();
-
-        $this->attributes = $this->attributeRepository->all();
-
-        $this->initializeChannels();
-
-        foreach ($this->attributes as $key => $attribute) {
-            if ($attribute->type === 'price') {
-                $this->addPriceAttributesColumns($attribute->code);
-
-                continue;
-            }
-
-            $this->validColumnNames[] = $attribute->code;
-        }
-    }
-
-    /**
-     * initialize channels, locales and currecies value
-     */
-    protected function initializeChannels(): void
-    {
-        $channels = $this->channelRepository->all();
-
-        foreach ($channels as $channel) {
-            $this->channelsAndLocales[$channel->code] = $channel->locales?->pluck('code')?->toArray() ?? [];
-
-            $this->currencies = array_merge($this->currencies, $channel->currencies?->pluck('code')?->toArray() ?? []);
-        }
-    }
-
-    /**
      * Add valid column names for the price attribute according to currencies
      */
     public function addPriceAttributesColumns(string $attributeCode): void
@@ -275,56 +239,6 @@ class Importer extends AbstractImporter
         foreach ($this->currencies as $currency) {
             $this->validColumnNames[] = $this->getPriceTypeColumnName($attributeCode, $currency);
         }
-    }
-
-    /**
-     * Get formatted price column name
-     */
-    protected function getPriceTypeColumnName(string $attributeCode, string $currency): string
-    {
-        return "{$attributeCode} ({$currency})";
-    }
-
-    /**
-     * Initialize Product error templates
-     */
-    protected function initErrorMessages(): void
-    {
-        foreach ($this->messages as $errorCode => $message) {
-            $this->errorHelper->addErrorMessage($errorCode, trans($message));
-        }
-
-        parent::initErrorMessages();
-    }
-
-    /**
-     * Save validated batches
-     */
-    protected function saveValidatedBatches(): self
-    {
-        $source = $this->getSource();
-
-        $source->rewind();
-
-        $this->skuStorage->init();
-
-        while ($source->valid()) {
-            try {
-                $rowData = $source->current();
-            } catch (\InvalidArgumentException $e) {
-                $source->next();
-
-                continue;
-            }
-
-            $this->validateRow($rowData, $source->getCurrentRowNumber());
-
-            $source->next();
-        }
-
-        parent::saveValidatedBatches();
-
-        return $this;
     }
 
     /**
@@ -481,7 +395,7 @@ class Importer extends AbstractImporter
     public function getValidationRules(array $rowData): array
     {
         $rules = [
-            'sku' => ['required', new Slug],
+            'sku' => ['required', new Slug()],
         ];
 
         $attributes = $this->getProductTypeFamilyAttributes($rowData['type'], $rowData[self::ATTRIBUTE_FAMILY_CODE]);
@@ -553,86 +467,6 @@ class Importer extends AbstractImporter
     }
 
     /**
-     * Delete products from current batch
-     */
-    protected function deleteProducts(JobTrackBatchContract $batch): bool
-    {
-        /**
-         * Load SKU storage with batch skus
-         */
-        $this->skuStorage->load(Arr::pluck($batch->data, 'sku'));
-
-        $idsToDelete = [];
-
-        foreach ($batch->data as $rowData) {
-            if (! $this->isSKUExist($rowData['sku'])) {
-                continue;
-            }
-
-            $product = $this->skuStorage->get($rowData['sku']);
-
-            $idsToDelete[] = $product['id'];
-        }
-
-        $idsToDelete = array_unique($idsToDelete);
-
-        $this->deletedItemsCount = count($idsToDelete);
-
-        $this->productRepository->deleteWhere([['id', 'IN', $idsToDelete]]);
-
-        /**
-         * Remove product images from the storage
-         */
-        foreach ($idsToDelete as $id) {
-            $imageDirectory = 'product/'.$id;
-
-            if (! Storage::exists($imageDirectory)) {
-                continue;
-            }
-
-            Storage::deleteDirectory($imageDirectory);
-        }
-
-        DeleteIndexJob::dispatch($idsToDelete)->onConnection('sync');
-
-        return true;
-    }
-
-    /**
-     * Save products from current batch
-     */
-    protected function saveProductsData(JobTrackBatchContract $batch): bool
-    {
-        /**
-         * Load SKU storage with batch skus
-         */
-        $this->skuStorage->load(Arr::pluck($batch->data, 'sku'));
-
-        $products = [];
-
-        $attributeValues = [];
-
-        $confgiurableAttributes = [];
-
-        foreach ($batch->data as $rowData) {
-            $isExisting = $this->isSKUExist($rowData['sku']);
-            /**
-             * Prepare products for import
-             */
-            $this->prepareProducts($rowData, $products, $isExisting);
-
-            /**
-             * Prepare Product Configurable Attributes
-             */
-            $this->prepareConfigurableAttributes($rowData, $products, $isExisting);
-        }
-
-        $this->saveProducts($products);
-
-        return true;
-    }
-
-    /**
      * Prepare products from current batch
      */
     public function prepareProducts(array $rowData, array &$products, ?bool $isExisting = null): void
@@ -680,20 +514,6 @@ class Importer extends AbstractImporter
 
             $products['insert'][$rowData['sku']] = array_merge($products['insert'][$rowData['sku']] ?? [], $data);
         }
-    }
-
-    /**
-     * Format Product Status
-     */
-    protected function getProductStatus(array $rowData, bool $isExsting, $product = null): int
-    {
-        $status = $rowData['status'] ?? ($isExisting ? $product?->status : 0);
-
-        return match (true) {
-            is_string($status) && strtolower($status) === 'true' => 1,
-            is_bool($status)                                     => (int) $status,
-            default                                              => 0,
-        };
     }
 
     /**
@@ -765,23 +585,6 @@ class Importer extends AbstractImporter
 
             $attribute->setProductValue($value, $attributeValues, $rowData['channel'] ?? null, $rowData['locale'] ?? null);
         }
-    }
-
-    /**
-     * return the parent id if existing product which has parent id
-     * otherwise returns the parent id according to parent column data for row
-     */
-    protected function getParentId(array $rowData, ?int $parentId): ?int
-    {
-        if ($parentId) {
-            return $parentId;
-        }
-
-        if (! empty($rowData['parent'])) {
-            return $this->getExistingProduct($rowData['parent'])?->id;
-        }
-
-        return null;
     }
 
     /**
@@ -885,7 +688,7 @@ class Importer extends AbstractImporter
             foreach ($images as $key => $image) {
                 $file = new UploadedFile($image['path'], $image['name']);
 
-                $image = (new ImageManager)->make($file)->encode('webp');
+                $image = (new ImageManager())->make($file)->encode('webp');
 
                 $imageDirectory = 'product/'.$product['id'];
 
@@ -995,6 +798,211 @@ class Importer extends AbstractImporter
     }
 
     /**
+     * Get Existing product through sku
+     */
+    public function getExistingProduct(string $sku)
+    {
+        return $this->productRepository->findOneByField('sku', $sku);
+    }
+
+    /**
+     * Load all attributes and families to use later
+     */
+    protected function initAttributes(): void
+    {
+        $this->attributeFamilies = $this->attributeFamilyRepository->all();
+
+        $this->attributes = $this->attributeRepository->all();
+
+        $this->initializeChannels();
+
+        foreach ($this->attributes as $key => $attribute) {
+            if ($attribute->type === 'price') {
+                $this->addPriceAttributesColumns($attribute->code);
+
+                continue;
+            }
+
+            $this->validColumnNames[] = $attribute->code;
+        }
+    }
+
+    /**
+     * initialize channels, locales and currecies value
+     */
+    protected function initializeChannels(): void
+    {
+        $channels = $this->channelRepository->all();
+
+        foreach ($channels as $channel) {
+            $this->channelsAndLocales[$channel->code] = $channel->locales?->pluck('code')?->toArray() ?? [];
+
+            $this->currencies = array_merge($this->currencies, $channel->currencies?->pluck('code')?->toArray() ?? []);
+        }
+    }
+
+    /**
+     * Get formatted price column name
+     */
+    protected function getPriceTypeColumnName(string $attributeCode, string $currency): string
+    {
+        return "{$attributeCode} ({$currency})";
+    }
+
+    /**
+     * Initialize Product error templates
+     */
+    protected function initErrorMessages(): void
+    {
+        foreach ($this->messages as $errorCode => $message) {
+            $this->errorHelper->addErrorMessage($errorCode, trans($message));
+        }
+
+        parent::initErrorMessages();
+    }
+
+    /**
+     * Save validated batches
+     */
+    protected function saveValidatedBatches(): self
+    {
+        $source = $this->getSource();
+
+        $source->rewind();
+
+        $this->skuStorage->init();
+
+        while ($source->valid()) {
+            try {
+                $rowData = $source->current();
+            } catch (\InvalidArgumentException $e) {
+                $source->next();
+
+                continue;
+            }
+
+            $this->validateRow($rowData, $source->getCurrentRowNumber());
+
+            $source->next();
+        }
+
+        parent::saveValidatedBatches();
+
+        return $this;
+    }
+
+    /**
+     * Delete products from current batch
+     */
+    protected function deleteProducts(JobTrackBatchContract $batch): bool
+    {
+        /**
+         * Load SKU storage with batch skus
+         */
+        $this->skuStorage->load(Arr::pluck($batch->data, 'sku'));
+
+        $idsToDelete = [];
+
+        foreach ($batch->data as $rowData) {
+            if (! $this->isSKUExist($rowData['sku'])) {
+                continue;
+            }
+
+            $product = $this->skuStorage->get($rowData['sku']);
+
+            $idsToDelete[] = $product['id'];
+        }
+
+        $idsToDelete = array_unique($idsToDelete);
+
+        $this->deletedItemsCount = count($idsToDelete);
+
+        $this->productRepository->deleteWhere([['id', 'IN', $idsToDelete]]);
+
+        /**
+         * Remove product images from the storage
+         */
+        foreach ($idsToDelete as $id) {
+            $imageDirectory = 'product/'.$id;
+
+            if (! Storage::exists($imageDirectory)) {
+                continue;
+            }
+
+            Storage::deleteDirectory($imageDirectory);
+        }
+
+        DeleteIndexJob::dispatch($idsToDelete)->onConnection('sync');
+
+        return true;
+    }
+
+    /**
+     * Save products from current batch
+     */
+    protected function saveProductsData(JobTrackBatchContract $batch): bool
+    {
+        /**
+         * Load SKU storage with batch skus
+         */
+        $this->skuStorage->load(Arr::pluck($batch->data, 'sku'));
+
+        $products = [];
+
+        $attributeValues = [];
+
+        $confgiurableAttributes = [];
+
+        foreach ($batch->data as $rowData) {
+            $isExisting = $this->isSKUExist($rowData['sku']);
+            /**
+             * Prepare products for import
+             */
+            $this->prepareProducts($rowData, $products, $isExisting);
+
+            /**
+             * Prepare Product Configurable Attributes
+             */
+            $this->prepareConfigurableAttributes($rowData, $products, $isExisting);
+        }
+
+        $this->saveProducts($products);
+
+        return true;
+    }
+
+    /**
+     * Format Product Status
+     */
+    protected function getProductStatus(array $rowData, bool $isExsting, $product = null): int
+    {
+        $status = $rowData['status'] ?? ($isExisting ? $product?->status : 0);
+
+        return match (true) {
+            is_string($status) && strtolower($status) === 'true' => 1,
+            is_bool($status)                                     => (int) $status,
+            default                                              => 0,
+        };
+    }
+
+    /**
+     * return the parent id if existing product which has parent id
+     * otherwise returns the parent id according to parent column data for row
+     */
+    protected function getParentId(array $rowData, ?int $parentId): ?int
+    {
+        if ($parentId) {
+            return $parentId;
+        }
+
+        if (! empty($rowData['parent'])) {
+            return $this->getExistingProduct($rowData['parent'])?->id;
+        }
+
+        return null;
+    }
+
+    /**
      * Prepare row data to save into the database
      */
     protected function prepareRowForDb(array $rowData): array
@@ -1006,14 +1014,6 @@ class Importer extends AbstractImporter
         $rowData['channel'] = $rowData['channel'] ?? core()->getDefaultChannelCode();
 
         return $rowData;
-    }
-
-    /**
-     * Get Existing product through sku
-     */
-    public function getExistingProduct(string $sku)
-    {
-        return $this->productRepository->findOneByField('sku', $sku);
     }
 
     /**

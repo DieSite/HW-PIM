@@ -9,7 +9,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 
 class ImportVoorraadEurogrosJob implements ShouldQueue
 {
@@ -47,7 +46,7 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
         $fullPath = storage_path('app/'.$this->path);
 
         if (file_exists($fullPath)) {
-            (new EurogrosVoorraadImport)->queue($fullPath);
+            (new EurogrosVoorraadImport())->queue($fullPath);
         }
     }
 

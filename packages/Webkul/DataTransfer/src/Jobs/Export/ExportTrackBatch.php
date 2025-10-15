@@ -19,11 +19,11 @@ class ExportTrackBatch implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    protected $exportBatch;
-
     public $tries = 3;
 
     public $timeout = 300; // Adjust as needed
+
+    protected $exportBatch;
 
     /**
      * Create a new job instance.

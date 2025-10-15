@@ -10,15 +10,13 @@ use Webkul\WooCommerce\Services\WooCommerceService;
 
 class ProductHelperController extends Controller
 {
-    public function __construct(private readonly ProductService $productService)
-    {
-    }
+    public function __construct(private readonly ProductService $productService) {}
 
     public function redirectToFrontend(Product $product)
     {
         $connector = app(WooCommerceService::class);
 
-        if ( $product->parent !== null ) {
+        if ($product->parent !== null) {
             $product = $product->parent;
         }
 
@@ -28,7 +26,7 @@ class ProductHelperController extends Controller
             ['sku' => $product->sku]
         );
 
-        if ( isset($products[0]) ) {
+        if (isset($products[0])) {
             return redirect($products[0]['permalink']);
         }
 

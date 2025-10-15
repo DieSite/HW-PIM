@@ -11,11 +11,6 @@ use Webkul\Product\Repositories\ProductRepository;
 class ElasticSearch extends AbstractIndexer
 {
     /**
-     * @var int
-     */
-    private $batchSize;
-
-    /**
      * Attributes
      *
      * @var array
@@ -56,6 +51,11 @@ class ElasticSearch extends AbstractIndexer
      * @var \Webkul\Core\Contracts\Locale
      */
     protected $locale;
+
+    /**
+     * @var int
+     */
+    private $batchSize;
 
     /**
      * Create a new indexer instance.

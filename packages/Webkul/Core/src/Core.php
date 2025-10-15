@@ -898,6 +898,53 @@ class Core
     }
 
     /**
+     * Get max upload size from the php.ini file.
+     *
+     * @return string
+     */
+    public function getMaxUploadSize()
+    {
+        return ini_get('upload_max_filesize');
+    }
+
+    /**
+     * Get All timezones list with offset in name
+     */
+    public function getTimeZones(): array
+    {
+        $timezones = \DateTimeZone::listIdentifiers();
+
+        $formattedTimezones = [];
+
+        foreach ($timezones as $index => $timezone) {
+            $now = Carbon::now($timezone);
+
+            $offset = $now->offset / 60;
+
+            $formattedName = sprintf('%s (%+03d:%02d)', $timezone, $offset / 60, abs($offset % 60));
+
+            $formattedTimezones[] = [
+                'id'        => $timezone,
+                'code'      => $timezone,
+                'label'     => $formattedName,
+            ];
+        }
+
+        return $formattedTimezones;
+    }
+
+    public function getCurrencyLabel(string $currency, ?string $language): ?string
+    {
+        $primaryLang = \Locale::getPrimaryLanguage($language);
+
+        try {
+            return Currencies::getName($currency, $primaryLang);
+        } catch (MissingResourceException) {
+            return '['.$currency.']';
+        }
+    }
+
+    /**
      * Array merge.
      *
      * @return array
@@ -979,52 +1026,5 @@ class Core
         $field = implode('.', $fields);
 
         return Config::get($field, $configFieldInfo['default'] ?? null);
-    }
-
-    /**
-     * Get max upload size from the php.ini file.
-     *
-     * @return string
-     */
-    public function getMaxUploadSize()
-    {
-        return ini_get('upload_max_filesize');
-    }
-
-    /**
-     * Get All timezones list with offset in name
-     */
-    public function getTimeZones(): array
-    {
-        $timezones = \DateTimeZone::listIdentifiers();
-
-        $formattedTimezones = [];
-
-        foreach ($timezones as $index => $timezone) {
-            $now = Carbon::now($timezone);
-
-            $offset = $now->offset / 60;
-
-            $formattedName = sprintf('%s (%+03d:%02d)', $timezone, $offset / 60, abs($offset % 60));
-
-            $formattedTimezones[] = [
-                'id'        => $timezone,
-                'code'      => $timezone,
-                'label'     => $formattedName,
-            ];
-        }
-
-        return $formattedTimezones;
-    }
-
-    public function getCurrencyLabel(string $currency, ?string $language): ?string
-    {
-        $primaryLang = \Locale::getPrimaryLanguage($language);
-
-        try {
-            return Currencies::getName($currency, $primaryLang);
-        } catch (MissingResourceException) {
-            return '['.$currency.']';
-        }
     }
 }

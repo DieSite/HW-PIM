@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Intervention\Image\Facades\Image;
+use Spatie\Image\Enums\Fit;
+use Spatie\Image\Image;
 use Webkul\DAM\Helpers\AssetHelper;
 
 /**
@@ -116,17 +117,95 @@ class FileController
         }
 
         if ($this->isImageFile($path)) {
-            try {
-                $image = $this->resizeImage(Storage::disk('private')->get($path), 300);
-                Storage::disk('private')->put($thumbnailPath, (string) $image->encode());
+            $image = $this->resizeImage(Storage::disk('private')->get($path), 300);
+            $image->save(Storage::disk('private')->path($thumbnailPath));
 
-                return response($image->encode(), 200)->header('Content-Type', Storage::disk('private')->mimeType($path));
-            } catch (\Intervention\Image\Exception\NotReadableException $e) {
+            $contents = Storage::disk('private')->get($thumbnailPath);
+            $mimeType = Storage::disk('private')->mimeType($thumbnailPath);
 
-            }
+            return response($contents, 200)
+                ->header('Content-Type', $mimeType);
         }
 
         return $this->getDefaultThumbnailImage($path);
+    }
+
+    /**
+     * Generate and return a preview of an image file at a specified custom size.
+     *
+     * This function checks if the user is authenticated before processing. It first verifies if
+     * a preview of the specified size already exists for the given file path. If a preview exists,
+     * it returns the existing preview. If the preview does not exist, and the original file is an image,
+     * the method resizes the image to the specified width while maintaining the aspect ratio and stores
+     * the resized image for future requests. The function also returns the original media file if it
+     * matches certain types such as SVG, PDF, video, or audio formats. Unauthorized access or non-existence
+     * of the file results in respective HTTP error responses.
+     */
+    public function preview()
+    {
+        if (! Auth::check()) {
+            return abort(403, 'Unauthorized');
+        }
+
+        $customSize = intval(request()->get('size'));
+
+        // Determine the maximum supported image preview size
+        $maxSize = 1920; // Example maximum size
+
+        // Validate custom size against the maximum allowed size
+        $customSize = min($maxSize, $customSize);
+        $path = urldecode(request()->path);
+        $previewDirectory = 'preview/'.$customSize;
+
+        $previewPath = $previewDirectory.'/'.$path;
+
+        if (Storage::disk('private')->exists($previewPath)) {
+            return $this->getFileResponse($previewPath);
+        }
+
+        if (Storage::disk('private')->exists($path)) {
+            $mimeType = Storage::disk('private')->mimeType($path);
+
+            if ($this->isImageFile($path) && $customSize > 0) {
+                $image = $this->resizeImage(Storage::disk('private')->get($path), $customSize);
+                $image->save(Storage::disk('private')->path($previewPath));
+
+                $content = Storage::disk('private')->get($previewPath);
+                $mimeType = Storage::disk('private')->mimeType($previewPath);
+
+                return response($content, 200)->header('Content-Type', $mimeType);
+            } elseif ($this->isSupportedMediaFile($mimeType)) {
+                return response(Storage::disk('private')->get($path), 200)->header('Content-Type', $mimeType);
+            }
+        }
+
+        return $this->getDefaultPreviewImage($path);
+    }
+
+    /**
+     * Retrieve a default thumbnail image based on the file type.
+     *
+     * This method uses the helper to fetch a thumbnail placeholder.
+     *
+     * @param  string  $path
+     * @return \Illuminate\Http\Response
+     */
+    public function getDefaultThumbnailImage($path)
+    {
+        return $this->getDefaultImage($path, 'grid');
+    }
+
+    /**
+     * Retrieve a default preview image based on the file extension.
+     *
+     * This method uses the helper to fetch a preview placeholder.
+     *
+     * @param  string  $path
+     * @return \Illuminate\Http\Response
+     */
+    public function getDefaultPreviewImage($path)
+    {
+        return $this->getDefaultImage($path, 'preview');
     }
 
     /**
@@ -170,62 +249,9 @@ class FileController
      */
     private function resizeImage($file, $width)
     {
-        return Image::make($file)->resize($width, null, function ($constraint) {
-            $constraint->aspectRatio();
-        });
-    }
 
-    /**
-     * Generate and return a preview of an image file at a specified custom size.
-     *
-     * This function checks if the user is authenticated before processing. It first verifies if
-     * a preview of the specified size already exists for the given file path. If a preview exists,
-     * it returns the existing preview. If the preview does not exist, and the original file is an image,
-     * the method resizes the image to the specified width while maintaining the aspect ratio and stores
-     * the resized image for future requests. The function also returns the original media file if it
-     * matches certain types such as SVG, PDF, video, or audio formats. Unauthorized access or non-existence
-     * of the file results in respective HTTP error responses.
-     */
-    public function preview()
-    {
-        if (! Auth::check()) {
-            return abort(403, 'Unauthorized');
-        }
-
-        $customSize = intval(request()->get('size'));
-
-        // Determine the maximum supported image preview size
-        $maxSize = 1920; // Example maximum size
-
-        // Validate custom size against the maximum allowed size
-        $customSize = min($maxSize, $customSize);
-        $path = urldecode(request()->path);
-        $previewDirectory = 'preview/'.$customSize;
-
-        $previewPath = $previewDirectory.'/'.$path;
-
-        if (Storage::disk('private')->exists($previewPath)) {
-            return $this->getFileResponse($previewPath);
-        }
-
-        if (Storage::disk('private')->exists($path)) {
-            $mimeType = Storage::disk('private')->mimeType($path);
-
-            if ($this->isImageFile($path) && $customSize > 0) {
-                try {
-                    $image = $this->resizeImage(Storage::disk('private')->get($path), $customSize);
-                    Storage::disk('private')->put($previewPath, (string) $image->encode());
-
-                    return response($image->encode(), 200)->header('Content-Type', $mimeType);
-                } catch (\Intervention\Image\Exception\NotReadableException $e) {
-                    // Log or handle exception
-                }
-            } elseif ($this->isSupportedMediaFile($mimeType)) {
-                return response(Storage::disk('private')->get($path), 200)->header('Content-Type', $mimeType);
-            }
-        }
-
-        return $this->getDefaultPreviewImage($path);
+        return Image::load($file)
+            ->fit(Fit::Max, $width, 9999); // 9999 is effectively "unlimited height"
     }
 
     /**
@@ -236,9 +262,9 @@ class FileController
     private function isSupportedMediaFile($mimeType)
     {
         return Str::startsWith($mimeType, 'image/') ||
-               Str::startsWith($mimeType, 'application/pdf') ||
-               Str::startsWith($mimeType, 'video/') ||
-               Str::startsWith($mimeType, 'audio/');
+            Str::startsWith($mimeType, 'application/pdf') ||
+            Str::startsWith($mimeType, 'video/') ||
+            Str::startsWith($mimeType, 'audio/');
     }
 
     /**
@@ -268,31 +294,5 @@ class FileController
         }
 
         return response()->json(['error' => trans('Placeholder not found')], 404);
-    }
-
-    /**
-     * Retrieve a default thumbnail image based on the file type.
-     *
-     * This method uses the helper to fetch a thumbnail placeholder.
-     *
-     * @param  string  $path
-     * @return \Illuminate\Http\Response
-     */
-    public function getDefaultThumbnailImage($path)
-    {
-        return $this->getDefaultImage($path, 'grid');
-    }
-
-    /**
-     * Retrieve a default preview image based on the file extension.
-     *
-     * This method uses the helper to fetch a preview placeholder.
-     *
-     * @param  string  $path
-     * @return \Illuminate\Http\Response
-     */
-    public function getDefaultPreviewImage($path)
-    {
-        return $this->getDefaultImage($path, 'preview');
     }
 }

@@ -15,6 +15,10 @@ class DeleteProductFromWooCommerce implements ShouldQueue
 {
     use DataTransferMappingTrait, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public const ACTION_GET = 'getAllProduct';
+
+    public const DELETE_PRODUCT = 'deleteProduct';
+
     public $tries = 5;
 
     public $timeout = 300000;
@@ -24,10 +28,6 @@ class DeleteProductFromWooCommerce implements ShouldQueue
     protected $connectorService;
 
     protected $credential;
-
-    public const ACTION_GET = 'getAllProduct';
-
-    public const DELETE_PRODUCT = 'deleteProduct';
 
     /**
      * Create a new job instance.

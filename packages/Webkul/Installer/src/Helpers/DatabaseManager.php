@@ -80,14 +80,6 @@ class DatabaseManager
     }
 
     /**
-     * Storage Link.
-     */
-    private function storageLink()
-    {
-        Artisan::call('storage:link');
-    }
-
-    /**
      * Generate New Application Key
      */
     public function generateKey()
@@ -96,5 +88,13 @@ class DatabaseManager
             Artisan::call('key:generate');
         } catch (Exception $e) {
         }
+    }
+
+    /**
+     * Storage Link.
+     */
+    private function storageLink()
+    {
+        Artisan::call('storage:link');
     }
 }

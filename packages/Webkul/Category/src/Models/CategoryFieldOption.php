@@ -16,6 +16,10 @@ class CategoryFieldOption extends TranslatableModel implements CategoryFieldOpti
     use HasFactory;
     use HistoryTrait;
 
+    public $timestamps = false;
+
+    public $translatedAttributes = ['label'];
+
     /** Tags for History */
     protected $historyTags = ['category_field'];
 
@@ -26,10 +30,6 @@ class CategoryFieldOption extends TranslatableModel implements CategoryFieldOpti
         'category_field_id',
         'id',
     ];
-
-    public $timestamps = false;
-
-    public $translatedAttributes = ['label'];
 
     protected $fillable = [
         'code',

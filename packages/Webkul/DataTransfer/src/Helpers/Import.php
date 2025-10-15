@@ -505,7 +505,7 @@ class Import
 
         $source->rewind();
 
-        $spreadsheet = new Spreadsheet;
+        $spreadsheet = new Spreadsheet();
 
         $sheet = $spreadsheet->getActiveSheet();
 

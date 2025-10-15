@@ -13,6 +13,12 @@ use Webkul\DataTransfer\Repositories\JobTrackBatchRepository;
 
 class Exporter extends CategoryExporter
 {
+    protected $mediaTypeFields = [
+        FieldValidator::FILE_FIELD_TYPE,
+        FieldValidator::IMAGE_FIELD_TYPE,
+        EventServiceProvider::ASSET_ATTRIBUTE_TYPE,
+    ];
+
     /**
      * Create a new instance.
      *
@@ -27,11 +33,31 @@ class Exporter extends CategoryExporter
         parent::__construct($exportBatchRepository, $exportFileBuffer, $categoryFieldRepository);
     }
 
-    protected $mediaTypeFields = [
-        FieldValidator::FILE_FIELD_TYPE,
-        FieldValidator::IMAGE_FIELD_TYPE,
-        EventServiceProvider::ASSET_ATTRIBUTE_TYPE,
-    ];
+    /**
+     * Copy media file from a source path to a destination path.
+     */
+    public function copyMedia(string $sourcePath, string $destinationPath, bool $isAssetField = false)
+    {
+        if ($isAssetField && Storage::disk('private')->exists($sourcePath)) {
+            Storage::writeStream($destinationPath, Storage::disk('private')->readStream($sourcePath));
+
+            return;
+        }
+
+        parent::copyMedia($sourcePath, $destinationPath);
+    }
+
+    /**
+     * Generates a public URL for a given file path
+     */
+    public function makePublicUrlMedia(string $filePath, bool $isAssetField = false): string
+    {
+        if ($isAssetField) {
+            return route('admin.dam.file.fetch', [$filePath]);
+        }
+
+        return Storage::url($filePath);
+    }
 
     /**
      * Sets category field values for a product. If an category field is not present in the given values array
@@ -96,31 +122,5 @@ class Exporter extends CategoryExporter
         }
 
         return $fieldValues;
-    }
-
-    /**
-     * Copy media file from a source path to a destination path.
-     */
-    public function copyMedia(string $sourcePath, string $destinationPath, bool $isAssetField = false)
-    {
-        if ($isAssetField && Storage::disk('private')->exists($sourcePath)) {
-            Storage::writeStream($destinationPath, Storage::disk('private')->readStream($sourcePath));
-
-            return;
-        }
-
-        parent::copyMedia($sourcePath, $destinationPath);
-    }
-
-    /**
-     * Generates a public URL for a given file path
-     */
-    public function makePublicUrlMedia(string $filePath, bool $isAssetField = false): string
-    {
-        if ($isAssetField) {
-            return route('admin.dam.file.fetch', [$filePath]);
-        }
-
-        return Storage::url($filePath);
     }
 }

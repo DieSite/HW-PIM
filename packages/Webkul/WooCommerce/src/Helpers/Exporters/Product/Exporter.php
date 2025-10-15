@@ -86,24 +86,24 @@ class Exporter extends AbstractExporter
 
     public const ACTION_FROM = 'wordpress';
 
-    /*
-     * For exporting file
-     */
-    protected bool $exportsFile = false;
-
     public $credential;
-
-    protected $mappingFields = [];
-
-    protected $customAttributes = [];
 
     public $channel;
 
     public $currency;
 
-    protected $mediaExport = false;
-
     public $locale;
+
+    /*
+     * For exporting file
+     */
+    protected bool $exportsFile = false;
+
+    protected $mappingFields = [];
+
+    protected $customAttributes = [];
+
+    protected $mediaExport = false;
 
     protected $mainAttributes = [
         'sku',
@@ -131,20 +131,36 @@ class Exporter extends AbstractExporter
      */
     protected $attributes = [];
 
+    protected $wrapper = [
+        'Length'                => 'dimensions',
+        'width'                 => 'dimensions',
+        'height'                => 'dimensions',
+        '_bol_ean'              => 'meta_data',
+        '_expected_week'        => 'meta_data',
+        'maximale_breedte'      => 'meta_data',
+        'maximale_lengte'       => 'meta_data',
+        'maximale_diagonaal'    => 'meta_data',
+        'prijs_per_m'           => 'meta_data',
+        'sale_prijs_per_m'      => 'meta_data',
+        'prijs_rond_per_m'      => 'meta_data',
+        'sale_prijs_rond_per_m' => 'meta_data',
+        '_yoast_wpseo_title'    => 'meta_data',
+        '_yoast_wpseo_metadesc' => 'meta_data',
+    ];
+
     /**
      * Create a new instance of the exporter.
      */
     public function __construct(
-        protected JobTrackBatchRepository       $exportBatchRepository,
-        protected FileExportFileBuffer          $exportFileBuffer,
+        protected JobTrackBatchRepository $exportBatchRepository,
+        protected FileExportFileBuffer $exportFileBuffer,
         protected DataTransferMappingRepository $dataTransferMappingRepository,
-        protected AttributeRepository           $attributeRepository,
-        protected CredentialRepository          $credentialRepository,
-        protected WooCommerceService            $connectorService,
-        protected AttributeMappingRepository    $attributeMappingRepository,
-        protected ProductRepository             $productRepository
-    )
-    {
+        protected AttributeRepository $attributeRepository,
+        protected CredentialRepository $credentialRepository,
+        protected WooCommerceService $connectorService,
+        protected AttributeMappingRepository $attributeMappingRepository,
+        protected ProductRepository $productRepository
+    ) {
         parent::__construct($exportBatchRepository, $exportFileBuffer);
         $this->setLogger(JobLogger::make("UpdateExport-$this->id"));
         $this->initAttributes();
@@ -171,14 +187,6 @@ class Exporter extends AbstractExporter
     }
 
     /**
-     * Load all attributes to use later
-     */
-    protected function initAttributes(): void
-    {
-        $this->attributes = collect($this->attributeRepository->get(['code', 'type']))->keyBy('code')->toArray();
-    }
-
-    /**
      * Start the export process
      */
     public function exportBatch(JobTrackBatchContract $batch, $filePath): bool
@@ -193,28 +201,6 @@ class Exporter extends AbstractExporter
         $this->updateBatchState($batch->id, ExportHelper::STATE_PROCESSED);
 
         return true;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-
-    /**
-     * {@inheritdoc}
-     */
-    protected function getResults()
-    {
-        $filters = $this->getFilters();
-
-        $sku = $filters['productSKU'] ?? null;
-
-        $query = $this->source->whereNull('parent_id');
-
-        if (!empty($sku)) {
-            $query->whereIn('sku', explode(',', $sku));
-        }
-
-        return $query->get('sku')->getIterator();
     }
 
     public function exportProduct(JobTrackBatchContract $batch)
@@ -246,148 +232,15 @@ class Exporter extends AbstractExporter
         $this->booleanVariation = $this->getAttributeCodesFromType('boolean');
     }
 
-    protected function getProductBatches($batchData)
-    {
-        $allProducts = [];
-        $skus = array_column($batchData, 'sku');
-
-        $allProducts = $this->productRepository
-            ->with(['attribute_family', 'parent', 'super_attributes', 'variants'])
-            ->whereIn('sku', $skus)
-            ->get()
-            ->toArray();
-
-        return $allProducts;
-    }
-
-    protected function exportModelsAndProducts($item)
-    {
-        $item['code'] = $item['sku'];
-        $item['type'] = !empty($item['variants']) ? 'variable' : 'simple';
-        $mapping = $this->getDataTransferMapping($item['code']) ?? null;
-        $formattedData = $this->formatData($item);
-
-        if (empty($mapping)) {
-            $result = $this->connectorService->requestApiAction(
-                self::ACTION_ADD,
-                $formattedData,
-                ['credential' => $this->id]
-            );
-            $reResult = $this->handleAfterApiRequest($item, $result);
-        } else {
-            $result = $this->connectorService->requestApiAction(
-                self::ACTION_UPDATE,
-                $formattedData,
-                ['credential' => $this->id, 'id' => $mapping[0]['externalId']]
-            );
-
-            $reResult = $this->handleAfterApiRequest($item, $result, null, $mapping);
-        }
-
-        $this->exportVariants($item, $reResult);
-    }
-
-    protected function exportVariants($item, $reResult)
-    {
-        $varResult = null;
-        if (!empty($reResult) && !empty($item['variants']) && !empty($reResult['id']) && !empty($item['super_attributes'])) {
-            foreach ($item['variants'] as $varItem) {
-                $formattedVariation = $this->formatVariation($varItem, $item['super_attributes']);
-                $mapping = $this->getDataTransferMapping($varItem['sku'], self::UNOPIM_ENTITY_NAME);
-
-                if (!$mapping) {
-                    $this->reMappingExistingProductVariations($reResult['id'], $this->id);
-
-                    $mapping = $this->getDataTransferMapping($varItem['sku'], self::UNOPIM_ENTITY_NAME);
-                }
-
-                if ($mapping) {
-                    $varResult = $this->connectorService->requestApiAction(
-                        self::ACTION_UPDATE_VARIATION,
-                        $formattedVariation,
-                        [
-                            'product' => $reResult['id'],
-                            'id' => $mapping[0]['externalId'],
-                            'credential' => $this->id,
-                        ]
-                    );
-
-                    $this->updateDataTransferMappingByCode($varItem['sku'], $mapping[0]);
-                }
-
-                if (empty($mapping)) {
-                    $varResult = $this->connectorService->requestApiAction(
-                        self::ACTION_ADD_VARIATION,
-                        $formattedVariation,
-                        ['product' => $reResult['id'], 'credential' => $this->id]
-                    );
-
-                    $this->createDataTransferMapping($varItem['sku'], $varResult['id'], $reResult['id'], self::UNOPIM_ENTITY_NAME);
-                }
-
-                $this->createVariantImageMapping($varItem['sku'], $varResult);
-            }
-        }
-    }
-
-    protected function createVariantImageMapping($itemCode, $result)
-    {
-        $image = !empty($result['image']) ? $result['image'] : null;
-
-        if ($image) {
-            $imageId = !empty($image['id']) ? $image['id'] : null;
-            $name = $image['yt'] ?? $image['name'];
-
-            if ($imageId) {
-                $code = $itemCode . '-' . $name;
-                $imageMapping = $this->getDataTransferMapping($code, 'image');
-
-                if ($imageMapping) {
-                    $this->updateDataTransferMappingByCode($code, $imageMapping[0]);
-                } else {
-                    $this->createDataTransferMapping($code, $imageId, null, 'image');
-                }
-            }
-        }
-    }
-
-    protected function reMappingExistingProductVariations($productId, $credentialId)
-    {
-        $exisitingProductVariations = $this->connectorService->requestApiAction(
-            'getVariation',
-            null,
-            ['product' => $productId, 'credential' => $credentialId]
-        );
-
-        if (isset($exisitingProductVariations['code']) && $exisitingProductVariations['code'] === 200) {
-            foreach ($exisitingProductVariations as $productVariation) {
-                if (!isset($productVariation['id'])) {
-                    continue;
-                }
-
-                $externalId = $productVariation['id'];
-                $identifier = $productVariation['sku'];
-
-                $mapping = $this->getDataTransferMapping($identifier, self::UNOPIM_ENTITY_NAME);
-
-                if ($mapping) {
-                    $this->updateDataTransferMappingByCode($identifier, $mapping[0]);
-                } else {
-                    $this->createDataTransferMapping($identifier, $externalId);
-                }
-            }
-        }
-    }
-
     public function formatData($item)
     {
         $formatted = [
-            'name' => $item['code'],
-            'slug' => $item['code'],
-            'sku' => $item['code'],
-            'status' => !empty($item['status']) ? ($item['status'] === 1 ? 'publish' : 'draft') : 'draft',
-            'type' => $item['type'],
-            'description' => !empty($item['description']) ? $item['description'] : '',
+            'name'        => $item['code'],
+            'slug'        => $item['code'],
+            'sku'         => $item['code'],
+            'status'      => ! empty($item['status']) ? ($item['status'] === 1 ? 'publish' : 'draft') : 'draft',
+            'type'        => $item['type'],
+            'description' => ! empty($item['description']) ? $item['description'] : '',
         ];
 
         $values = $item['values'];
@@ -399,12 +252,12 @@ class Exporter extends AbstractExporter
         /* main attributes */
         foreach ($this->mappingFields as $name => $field) {
             if (is_array($duplicateAttributes) && array_key_exists($field, $duplicateAttributes)) {
-                if (!empty($this->wrapper[$name])) {
+                if (! empty($this->wrapper[$name])) {
                     $value = is_array($duplicateAttributes[$field]) ? Arr::first($duplicateAttributes[$field]) : $duplicateAttributes[$field];
                     if ($this->wrapper[$name] === 'meta_data') {
-                        $formatted[$this->wrapper[$name]][] = ['key' => strtolower($name), 'value' => (string)$value];
+                        $formatted[$this->wrapper[$name]][] = ['key' => strtolower($name), 'value' => (string) $value];
                     } else {
-                        $formatted[$this->wrapper[$name]][strtolower($name)] = (string)$value;
+                        $formatted[$this->wrapper[$name]][strtolower($name)] = (string) $value;
                     }
 
                 } else {
@@ -421,10 +274,10 @@ class Exporter extends AbstractExporter
         }
 
         /* default values */
-        if (isset($this->defaultValues) && !empty($this->defaultValues)) {
+        if (isset($this->defaultValues) && ! empty($this->defaultValues)) {
             foreach ($this->defaultValues as $name => $value) {
                 if ($value !== '') {
-                    if (!empty($this->wrapper[$name])) {
+                    if (! empty($this->wrapper[$name])) {
                         $formatted[$this->wrapper[$name]][strtolower($name)] = $value;
                     } else {
                         $formatted[$name] = $value;
@@ -437,11 +290,11 @@ class Exporter extends AbstractExporter
         $formatted['virtual'] = false;
 
         /* categories */
-        $categories = collect($attributes['categories'] ?? [])->reject(fn($code) => strtolower($code) === 'uncategorized')->map(function ($code) {
+        $categories = collect($attributes['categories'] ?? [])->reject(fn ($code) => strtolower($code) === 'uncategorized')->map(function ($code) {
 
             $categoryMapping = $this->getDataTransferMapping($code, self::UNOPIM_CATEGORY_ENTITY);
 
-            return !empty($categoryMapping[0]['externalId']) ? ['id' => $categoryMapping[0]['externalId']] : null;
+            return ! empty($categoryMapping[0]['externalId']) ? ['id' => $categoryMapping[0]['externalId']] : null;
         })->filter()->values()->toArray();
 
         unset($attributes['categories']);
@@ -481,34 +334,34 @@ class Exporter extends AbstractExporter
 
             $attributeMappingMaat = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
             $formatted['attributes'][] = [
-                'id' => $attributeMappingMaat[0]['externalId'],
-                'visible' => true,
+                'id'        => $attributeMappingMaat[0]['externalId'],
+                'visible'   => true,
                 'variation' => true,
-                'options' => $maat->unique()->toArray(),
+                'options'   => $maat->unique()->toArray(),
             ];
 
             $attributeMappingOnderkleed = $this->getDataTransferMapping('onderkleed', self::UNOPIM_ATTRIBUTE_ENTITY);
             $formatted['attributes'][] = [
-                'id' => $attributeMappingOnderkleed[0]['externalId'],
-                'visible' => true,
+                'id'        => $attributeMappingOnderkleed[0]['externalId'],
+                'visible'   => true,
                 'variation' => true,
-                'options' => $onderkleed->unique()->sortDesc(SORT_NATURAL)->toArray(),
+                'options'   => $onderkleed->unique()->sortDesc(SORT_NATURAL)->toArray(),
             ];
 
             $attributeMappingMaatgroep = $this->getDataTransferMapping('maatgroep', self::UNOPIM_ATTRIBUTE_ENTITY);
             $formatted['attributes'][] = [
-                'id' => $attributeMappingMaatgroep[0]['externalId'],
-                'visible' => true,
+                'id'        => $attributeMappingMaatgroep[0]['externalId'],
+                'visible'   => true,
                 'variation' => false,
-                'options' => $maatgroep->unique()->toArray(),
+                'options'   => $maatgroep->unique()->toArray(),
             ];
 
             $attributeMappingFestonerenBanderen = $this->getDataTransferMapping('festoneren_banderen', self::UNOPIM_ATTRIBUTE_ENTITY);
             $formatted['attributes'][] = [
-                'id' => $attributeMappingMaatgroep[0]['externalId'],
-                'visible' => true,
+                'id'        => $attributeMappingMaatgroep[0]['externalId'],
+                'visible'   => true,
                 'variation' => false,
-                'options' => $festoneren_banderen->unique()->toArray(),
+                'options'   => $festoneren_banderen->unique()->toArray(),
             ];
 
             $maat = $maat->sort(function ($a, $b) {
@@ -518,10 +371,10 @@ class Exporter extends AbstractExporter
 
                 // Als een waarde numeriek is en de andere niet,
                 // dan komt de niet-numerieke waarde eerst
-                if ($aIsNumeric && !$bIsNumeric) {
+                if ($aIsNumeric && ! $bIsNumeric) {
                     return 1;
                 }
-                if (!$aIsNumeric && $bIsNumeric) {
+                if (! $aIsNumeric && $bIsNumeric) {
                     return -1;
                 }
 
@@ -536,19 +389,19 @@ class Exporter extends AbstractExporter
                 ['id' => $attributeMappingMaat[0]['externalId'], 'option' => $maat->first()],
                 ['id' => $attributeMappingOnderkleed[0]['externalId'], 'option' => $onderkleed->first()],
             ];
-            if (!empty($attributeMappingFestonerenBanderen)) {
+            if (! empty($attributeMappingFestonerenBanderen)) {
                 $formatted['default_attributes'][] = ['id' => $attributeMappingFestonerenBanderen[0]['externalId'], 'option' => $festoneren_banderen->first()];
             }
 
             $tags = $this->getTags($item);
-            if (!is_null($tags)) {
+            if (! is_null($tags)) {
                 $formatted['tags'] = $tags;
             }
 
             $formatted['upsell_ids'] = $this->getUpsellProducts($item);
 
             $meta = $formatted['meta_data'] ?? [];
-            if (!empty($item['values']['common']['afbeelding_zonder_logo'])) {
+            if (! empty($item['values']['common']['afbeelding_zonder_logo'])) {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($item['values']['common']['afbeelding_zonder_logo'])];
             } else {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => ''];
@@ -563,61 +416,286 @@ class Exporter extends AbstractExporter
         return $formatted;
     }
 
-    private function getUpsellProducts(array $item): array
+    public function formatVariation($item, $superAttributes = [])
     {
-        $crossSellProducts = [];
+        $variantAttributes = ! empty($superAttributes) ? array_column($superAttributes, 'code') : [];
+        $attributes = $this->formatAttributes($item['values']);
 
-        $connector = app(WooCommerceService::class);
+        $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
 
-        foreach (Arr::get($item, 'values.associations.cross_sells', []) as $crossSellSku) {
-            if ($crossSellSku === $item['sku']) {
-                continue;
-            }
-
-            $crossSellItems = $connector->requestApiAction(
-                'getProductWithSku',
-                [],
-                ['sku' => $crossSellSku]
-            );
-
-            $ids = collect($crossSellItems)->pluck('id')->reject(fn($value) => is_null($value))->toArray();
-
-            $crossSellProducts = array_merge($crossSellProducts, $ids);
+        $formatted = [
+            'attributes' => [],
+        ];
+        if (isset($attributes['sku'])) {
+            $formatted['sku'] = $attributes['sku'];
         }
 
-        return $crossSellProducts;
-    }
+        /* add possible variant fields */
+        foreach (['regular_price', 'stock_quantity', 'weight', 'Length', 'width', 'height', 'backorders_allowed', 'description'] as $varField) {
+            $fieldAlias = ! empty($this->mappingFields[$varField]) ? $this->mappingFields[$varField] : null;
 
-    private function getTags(array $item): ?array
-    {
-        $isUitverkoop = false;
-        $isVoorraadkorting = false;
+            if ($fieldAlias && isset($attributes[$fieldAlias])) {
+                if (! empty($this->wrapper[$varField])) {
+                    $formatted[$this->wrapper[$varField]][strtolower($varField)] = (string) $attributes[$fieldAlias];
+                } else {
+                    $attribute = $this->attributes[$fieldAlias] ?? [];
+                    if ($attribute['type'] == 'price') {
+                        $formatted[$varField] = $attributes[$fieldAlias][$this->currency];
+                    } else {
+                        $formatted[$varField] = $attributes[$fieldAlias];
+                    }
+                    $this->addDependentField($formatted, $varField, $attributes[$fieldAlias]);
+                }
+            }
+        }
 
-        foreach (Arr::get($item, 'variants', []) as $variant) {
-            $voorraadEurogros = $variant['values']['common']['voorraad_eurogros'] ?? 0;
-            $voorraadDeMunk = $variant['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
-            $voorraadHW = $variant['values']['common']['voorraad_hw_5_korting'] ?? 0;
+        $priceArray = ['regular_price', 'sale_price', 'price'];
 
-            $stock = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
+        foreach ($this->defaultValues as $name => $value) {
+            if (! in_array($name, $variantAttributes)) {
+                if ($value !== '') {
+                    if (! empty($this->wrapper[$name])) {
+                        $formatted[$this->wrapper[$name]][strtolower($name)] = $value;
+                    } else {
+                        if (in_array($name, $formatted) && ! in_array($name, $priceArray)) {
+                            continue;
+                        }
+                        $formatted[$name] = $value;
+                        $this->addDependentField($formatted, $name, $value);
+                    }
+                }
+            }
+        }
 
-            if ($stock > 0) {
-                $isVoorraadkorting = true;
+        foreach ($variantAttributes as $varAttribute) {
+            if (is_array($attributes) && array_key_exists($varAttribute, $attributes)) {
+                $attributeMapping = $this->getDataTransferMapping($varAttribute, self::UNOPIM_ATTRIBUTE_ENTITY);
+                $attribute = $this->attributes[$varAttribute] ?? [];
 
-                if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
-                    $isUitverkoop = true;
+                if ($attribute && $attribute['type'] == 'boolean') {
+                    if ($attributes[$varAttribute] === true) {
+                        $attributes[$varAttribute] = 'Yes';
+                    } else {
+                        $attributes[$varAttribute] = 'No';
+                    }
+                }
+
+                if (! empty($attributeMapping[0]['externalId']) && ! empty($attributes[$varAttribute])) {
+                    $optionValue = $attributes[$varAttribute];
+                    $formatted['attributes'][] = [
+                        'id'     => $attributeMapping[0]['externalId'],
+                        'option' => (string) $optionValue,
+                    ];
+                }
+            }
+        }
+
+        foreach ($attributes as $code => $value) {
+            if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
+                $image = $this->formatImageData($code, $value, $imagesToExport, $item['sku'], true);
+
+                if ($image) {
+                    $formatted['image'] = $image;
                     break;
                 }
             }
         }
 
-        if ($isUitverkoop && $isVoorraadkorting) {
-            return [['id' => self::UITVERKOOP_TAG_ID], ['id' => self::VOORRAAD_TAG_ID]];
-        } elseif ($isUitverkoop) {
-            return [['id' => self::UITVERKOOP_TAG_ID]];
-        } elseif ($isVoorraadkorting) {
-            return [['id' => self::VOORRAAD_TAG_ID]];
+        /* to get items out of trash */
+        $formatted['visible'] = $item['status'] === 1 ? true : false;
+
+        /* get enable or disable variant */
+        $formatted['status'] = $item['status'] === 1 ? 'publish' : 'private';
+
+        return $formatted;
+    }
+
+    public function checkImagesExported($code, $imageUrl)
+    {
+        $imageName = $this->getImageName($imageUrl);
+        $code = $code.'-'.$imageName;
+
+        $imageMapping = $this->getDataTransferMapping($code, 'image');
+
+        if (! $imageMapping) {
+            return false;
+        }
+
+        return $imageMapping[0]['externalId'];
+    }
+
+    public function getImageName($imageurl)
+    {
+        $getCode = explode('/', $imageurl);
+        $getName = end($getCode);
+
+        if ($getName) {
+            return $getName;
+        }
+
+        return null;
+    }
+
+    /**
+     * Load all attributes to use later
+     */
+    protected function initAttributes(): void
+    {
+        $this->attributes = collect($this->attributeRepository->get(['code', 'type']))->keyBy('code')->toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getResults()
+    {
+        $filters = $this->getFilters();
+
+        $sku = $filters['productSKU'] ?? null;
+
+        $query = $this->source->whereNull('parent_id');
+
+        if (! empty($sku)) {
+            $query->whereIn('sku', explode(',', $sku));
+        }
+
+        return $query->get('sku')->getIterator();
+    }
+
+    protected function getProductBatches($batchData)
+    {
+        $allProducts = [];
+        $skus = array_column($batchData, 'sku');
+
+        $allProducts = $this->productRepository
+            ->with(['attribute_family', 'parent', 'super_attributes', 'variants'])
+            ->whereIn('sku', $skus)
+            ->get()
+            ->toArray();
+
+        return $allProducts;
+    }
+
+    protected function exportModelsAndProducts($item)
+    {
+        $item['code'] = $item['sku'];
+        $item['type'] = ! empty($item['variants']) ? 'variable' : 'simple';
+        $mapping = $this->getDataTransferMapping($item['code']) ?? null;
+        $formattedData = $this->formatData($item);
+
+        if (empty($mapping)) {
+            $result = $this->connectorService->requestApiAction(
+                self::ACTION_ADD,
+                $formattedData,
+                ['credential' => $this->id]
+            );
+            $reResult = $this->handleAfterApiRequest($item, $result);
         } else {
-            return [];
+            $result = $this->connectorService->requestApiAction(
+                self::ACTION_UPDATE,
+                $formattedData,
+                ['credential' => $this->id, 'id' => $mapping[0]['externalId']]
+            );
+
+            $reResult = $this->handleAfterApiRequest($item, $result, null, $mapping);
+        }
+
+        $this->exportVariants($item, $reResult);
+    }
+
+    protected function exportVariants($item, $reResult)
+    {
+        $varResult = null;
+        if (! empty($reResult) && ! empty($item['variants']) && ! empty($reResult['id']) && ! empty($item['super_attributes'])) {
+            foreach ($item['variants'] as $varItem) {
+                $formattedVariation = $this->formatVariation($varItem, $item['super_attributes']);
+                $mapping = $this->getDataTransferMapping($varItem['sku'], self::UNOPIM_ENTITY_NAME);
+
+                if (! $mapping) {
+                    $this->reMappingExistingProductVariations($reResult['id'], $this->id);
+
+                    $mapping = $this->getDataTransferMapping($varItem['sku'], self::UNOPIM_ENTITY_NAME);
+                }
+
+                if ($mapping) {
+                    $varResult = $this->connectorService->requestApiAction(
+                        self::ACTION_UPDATE_VARIATION,
+                        $formattedVariation,
+                        [
+                            'product'    => $reResult['id'],
+                            'id'         => $mapping[0]['externalId'],
+                            'credential' => $this->id,
+                        ]
+                    );
+
+                    $this->updateDataTransferMappingByCode($varItem['sku'], $mapping[0]);
+                }
+
+                if (empty($mapping)) {
+                    $varResult = $this->connectorService->requestApiAction(
+                        self::ACTION_ADD_VARIATION,
+                        $formattedVariation,
+                        ['product' => $reResult['id'], 'credential' => $this->id]
+                    );
+
+                    $this->createDataTransferMapping($varItem['sku'], $varResult['id'], $reResult['id'], self::UNOPIM_ENTITY_NAME);
+                }
+
+                $this->createVariantImageMapping($varItem['sku'], $varResult);
+            }
+        }
+    }
+
+    protected function createVariantImageMapping($itemCode, $result)
+    {
+        $image = ! empty($result['image']) ? $result['image'] : null;
+
+        if ($image) {
+            $imageId = ! empty($image['id']) ? $image['id'] : null;
+            $name = $image['yt'] ?? $image['name'];
+
+            if ($imageId) {
+                $code = $itemCode.'-'.$name;
+                $imageMapping = $this->getDataTransferMapping($code, 'image');
+
+                if ($imageMapping) {
+                    $this->updateDataTransferMappingByCode($code, $imageMapping[0]);
+                } else {
+                    $this->createDataTransferMapping($code, $imageId, null, 'image');
+                }
+            }
+        }
+    }
+
+    protected function reMappingExistingProductVariations($productId, $credentialId)
+    {
+        $exisitingProductVariations = $this->connectorService->requestApiAction(
+            'getVariation',
+            null,
+            ['product' => $productId, 'credential' => $credentialId]
+        );
+
+        if (isset($exisitingProductVariations['code']) && $exisitingProductVariations['code'] === 200) {
+            foreach ($exisitingProductVariations as $productVariation) {
+                if (! isset($productVariation['id'])) {
+                    continue;
+                }
+
+                $externalId = $productVariation['id'];
+                $identifier = $productVariation['sku'];
+
+                $mapping = $this->getDataTransferMapping($identifier, self::UNOPIM_ENTITY_NAME);
+
+                if ($mapping) {
+                    $this->updateDataTransferMappingByCode($identifier, $mapping[0]);
+                } else {
+                    $this->createDataTransferMapping($identifier, $externalId);
+                }
+            }
         }
     }
 
@@ -633,7 +711,7 @@ class Exporter extends AbstractExporter
         foreach ($attributes as $code => $value) {
             $attribute = $this->attributes[$code] ?? [];
 
-            if ($attribute && $attribute['type'] == 'price' && !in_array($code, $priceArray)) {
+            if ($attribute && $attribute['type'] == 'price' && ! in_array($code, $priceArray)) {
                 $value = $value[$this->currency];
             }
 
@@ -649,21 +727,21 @@ class Exporter extends AbstractExporter
                 }
             }
 
-            if ($this->mediaExport && in_array($code, $imagesToExport) && !is_array($value)) {
+            if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
                 $formattedImageData = $this->formatImageData($code, $value, $imagesToExport, $item['code']);
                 foreach ($formattedImageData as $image) {
                     $imageAttrs[] = $image;
                 }
             } else {
-                if (!in_array($code, $this->mainAttributes)) {
+                if (! in_array($code, $this->mainAttributes)) {
                     $attributeMapping = $this->getDataTransferMapping($code, self::UNOPIM_ATTRIBUTE_ENTITY);
                     if (isset($this->customAttributes)) {
-                        if (!in_array($code, $this->selectAttributeCodes) && !in_array($code, $this->multiSelectVariation) && !in_array($code, $this->booleanVariation)) {
+                        if (! in_array($code, $this->selectAttributeCodes) && ! in_array($code, $this->multiSelectVariation) && ! in_array($code, $this->booleanVariation)) {
                             if (in_array($code, $this->customAttributes)) {
 
                                 if (isset($item['parent_id']) && in_array($code, ['maat', 'onderkleed'])) {
                                     $customAttrs[] = [
-                                        'id' => $attributeMapping[0]['externalId'],
+                                        'id'     => $attributeMapping[0]['externalId'],
                                         'option' => $value,
                                     ];
 
@@ -673,7 +751,7 @@ class Exporter extends AbstractExporter
                                 Log::debug('Value: {value} with attribute {attribute}', ['code' => $code, 'value' => $value, 'attribute' => $attribute]);
                                 $optionValueMapping = $this->getDataTransferMapping($value, self::ATTRIBUTE_OPTION_ENTITY_NAME);
 
-                                if (!$optionValueMapping) {
+                                if (! $optionValueMapping) {
                                     $this->createOptions($code, $value, $this->locale, self::ATTRIBUTE_OPTION_ENTITY_NAME);
                                     $optionValueMapping = $this->getDataTransferMapping($value, self::ATTRIBUTE_OPTION_ENTITY_NAME);
                                 }
@@ -687,10 +765,10 @@ class Exporter extends AbstractExporter
                                         }
                                     }
                                     $customAttr = [
-                                        'id' => $attributeMapping[0]['externalId'],
-                                        'visible' => true,
+                                        'id'        => $attributeMapping[0]['externalId'],
+                                        'visible'   => true,
                                         'variation' => false,
-                                        'options' => is_array($value) ? $value : [$value],
+                                        'options'   => is_array($value) ? $value : [$value],
                                     ];
 
                                     $customAttrs[] = $customAttr;
@@ -701,21 +779,21 @@ class Exporter extends AbstractExporter
                         }
                     }
 
-                    if (!$this->enableSelect) {
-                        if (isset($attributeMapping) && !empty($attributeMapping)) {
-                            if (!in_array($attributeMapping[0]['code'], $this->selectAttributeCodes) && !in_array($attributeMapping[0]['code'], $this->multiSelectVariation) && !in_array($attributeMapping[0]['code'], $this->booleanVariation)) {
+                    if (! $this->enableSelect) {
+                        if (isset($attributeMapping) && ! empty($attributeMapping)) {
+                            if (! in_array($attributeMapping[0]['code'], $this->selectAttributeCodes) && ! in_array($attributeMapping[0]['code'], $this->multiSelectVariation) && ! in_array($attributeMapping[0]['code'], $this->booleanVariation)) {
                                 $attributeMapping = [];
                             }
                         }
                     }
 
-                    if (!empty($attributeMapping[0]['externalId'])) {
+                    if (! empty($attributeMapping[0]['externalId'])) {
                         $variantAttributes = []; // Super attributes disabled
-                        $variation = !empty($variantAttributes) && in_array($code, $variantAttributes);
+                        $variation = ! empty($variantAttributes) && in_array($code, $variantAttributes);
 
                         if (isset($item['parent_id']) && in_array($code, ['maat', 'onderkleed'])) {
                             $customAttrs[] = [
-                                'id' => $attributeMapping[0]['externalId'],
+                                'id'     => $attributeMapping[0]['externalId'],
                                 'option' => $value,
                             ];
 
@@ -723,8 +801,8 @@ class Exporter extends AbstractExporter
                         }
 
                         $customAttr = [
-                            'id' => $attributeMapping[0]['externalId'],
-                            'visible' => true,
+                            'id'        => $attributeMapping[0]['externalId'],
+                            'visible'   => true,
                             'variation' => $variation,
                         ];
 
@@ -764,7 +842,7 @@ class Exporter extends AbstractExporter
         foreach ($imageValues as $value) {
             $imageUrl = $this->generateImageUrl($value);
 
-            if (!$imageUrl) {
+            if (! $imageUrl) {
                 continue;
             }
 
@@ -782,114 +860,20 @@ class Exporter extends AbstractExporter
         return $images;
     }
 
-    public function formatVariation($item, $superAttributes = [])
-    {
-        $variantAttributes = !empty($superAttributes) ? array_column($superAttributes, 'code') : [];
-        $attributes = $this->formatAttributes($item['values']);
-
-        $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
-
-        $formatted = [
-            'attributes' => [],
-        ];
-        if (isset($attributes['sku'])) {
-            $formatted['sku'] = $attributes['sku'];
-        }
-
-        /* add possible variant fields */
-        foreach (['regular_price', 'stock_quantity', 'weight', 'Length', 'width', 'height', 'backorders_allowed', 'description'] as $varField) {
-            $fieldAlias = !empty($this->mappingFields[$varField]) ? $this->mappingFields[$varField] : null;
-
-            if ($fieldAlias && isset($attributes[$fieldAlias])) {
-                if (!empty($this->wrapper[$varField])) {
-                    $formatted[$this->wrapper[$varField]][strtolower($varField)] = (string)$attributes[$fieldAlias];
-                } else {
-                    $attribute = $this->attributes[$fieldAlias] ?? [];
-                    if ($attribute['type'] == 'price') {
-                        $formatted[$varField] = $attributes[$fieldAlias][$this->currency];
-                    } else {
-                        $formatted[$varField] = $attributes[$fieldAlias];
-                    }
-                    $this->addDependentField($formatted, $varField, $attributes[$fieldAlias]);
-                }
-            }
-        }
-
-        $priceArray = ['regular_price', 'sale_price', 'price'];
-
-        foreach ($this->defaultValues as $name => $value) {
-            if (!in_array($name, $variantAttributes)) {
-                if ($value !== '') {
-                    if (!empty($this->wrapper[$name])) {
-                        $formatted[$this->wrapper[$name]][strtolower($name)] = $value;
-                    } else {
-                        if (in_array($name, $formatted) && !in_array($name, $priceArray)) {
-                            continue;
-                        }
-                        $formatted[$name] = $value;
-                        $this->addDependentField($formatted, $name, $value);
-                    }
-                }
-            }
-        }
-
-        foreach ($variantAttributes as $varAttribute) {
-            if (is_array($attributes) && array_key_exists($varAttribute, $attributes)) {
-                $attributeMapping = $this->getDataTransferMapping($varAttribute, self::UNOPIM_ATTRIBUTE_ENTITY);
-                $attribute = $this->attributes[$varAttribute] ?? [];
-
-                if ($attribute && $attribute['type'] == 'boolean') {
-                    if ($attributes[$varAttribute] === true) {
-                        $attributes[$varAttribute] = 'Yes';
-                    } else {
-                        $attributes[$varAttribute] = 'No';
-                    }
-                }
-
-                if (!empty($attributeMapping[0]['externalId']) && !empty($attributes[$varAttribute])) {
-                    $optionValue = $attributes[$varAttribute];
-                    $formatted['attributes'][] = [
-                        'id' => $attributeMapping[0]['externalId'],
-                        'option' => (string)$optionValue,
-                    ];
-                }
-            }
-        }
-
-        foreach ($attributes as $code => $value) {
-            if ($this->mediaExport && in_array($code, $imagesToExport) && !is_array($value)) {
-                $image = $this->formatImageData($code, $value, $imagesToExport, $item['sku'], true);
-
-                if ($image) {
-                    $formatted['image'] = $image;
-                    break;
-                }
-            }
-        }
-
-        /* to get items out of trash */
-        $formatted['visible'] = $item['status'] === 1 ? true : false;
-
-        /* get enable or disable variant */
-        $formatted['status'] = $item['status'] === 1 ? 'publish' : 'private';
-
-        return $formatted;
-    }
-
     protected function addDependentField(&$formatted, $key, $value)
     {
         switch ($key) {
             case 'stock_quantity':
-                $formatted['stock_quantity'] = (int)$formatted['stock_quantity'];
+                $formatted['stock_quantity'] = (int) $formatted['stock_quantity'];
                 $formatted['manage_stock'] = true;
-                $formatted['in_stock'] = (bool)$value;
+                $formatted['in_stock'] = (bool) $value;
                 break;
             case 'reviews_allowed':
             case 'featured':
-                $formatted[$key] = (bool)$value;
+                $formatted[$key] = (bool) $value;
                 break;
             case 'backorders_allowed':
-                $formatted['backorders'] = ((bool)$formatted['backorders_allowed']) ? 'yes' : 'no';
+                $formatted['backorders'] = ((bool) $formatted['backorders_allowed']) ? 'yes' : 'no';
                 unset($formatted['backorders_allowed']);
                 break;
         }
@@ -900,7 +884,7 @@ class Exporter extends AbstractExporter
         $attributeData = [];
         $sections = ['common', 'locale_specific', 'channel_specific', 'channel_locale_specific'];
         foreach ($attributes as $fieldType => $fieldData) {
-            if (!in_array($fieldType, $sections)) {
+            if (! in_array($fieldType, $sections)) {
                 $attributeData[$fieldType] = $fieldData;
 
                 continue;
@@ -936,53 +920,68 @@ class Exporter extends AbstractExporter
     {
         $damAsset = \DB::table('dam_assets')->where('id', $image)->first();
 
-        if ($damAsset && !empty($damAsset->path)) {
+        if ($damAsset && ! empty($damAsset->path)) {
             $image = $damAsset->path;
         }
 
         return Storage::disk('private')->url($image);
     }
 
-    public function checkImagesExported($code, $imageUrl)
+    private function getUpsellProducts(array $item): array
     {
-        $imageName = $this->getImageName($imageUrl);
-        $code = $code . '-' . $imageName;
+        $crossSellProducts = [];
 
-        $imageMapping = $this->getDataTransferMapping($code, 'image');
+        $connector = app(WooCommerceService::class);
 
-        if (!$imageMapping) {
-            return false;
+        foreach (Arr::get($item, 'values.associations.cross_sells', []) as $crossSellSku) {
+            if ($crossSellSku === $item['sku']) {
+                continue;
+            }
+
+            $crossSellItems = $connector->requestApiAction(
+                'getProductWithSku',
+                [],
+                ['sku' => $crossSellSku]
+            );
+
+            $ids = collect($crossSellItems)->pluck('id')->reject(fn ($value) => is_null($value))->toArray();
+
+            $crossSellProducts = array_merge($crossSellProducts, $ids);
         }
 
-        return $imageMapping[0]['externalId'];
+        return $crossSellProducts;
     }
 
-    public function getImageName($imageurl)
+    private function getTags(array $item): ?array
     {
-        $getCode = explode('/', $imageurl);
-        $getName = end($getCode);
+        $isUitverkoop = false;
+        $isVoorraadkorting = false;
 
-        if ($getName) {
-            return $getName;
+        foreach (Arr::get($item, 'variants', []) as $variant) {
+            $voorraadEurogros = $variant['values']['common']['voorraad_eurogros'] ?? 0;
+            $voorraadDeMunk = $variant['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
+            $voorraadHW = $variant['values']['common']['voorraad_hw_5_korting'] ?? 0;
+
+            $stock = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
+
+            if ($stock > 0) {
+                $isVoorraadkorting = true;
+
+                if (isset($variant['values']['common']['uitverkoop_15_korting']) && $variant['values']['common']['uitverkoop_15_korting']) {
+                    $isUitverkoop = true;
+                    break;
+                }
+            }
         }
 
-        return null;
+        if ($isUitverkoop && $isVoorraadkorting) {
+            return [['id' => self::UITVERKOOP_TAG_ID], ['id' => self::VOORRAAD_TAG_ID]];
+        } elseif ($isUitverkoop) {
+            return [['id' => self::UITVERKOOP_TAG_ID]];
+        } elseif ($isVoorraadkorting) {
+            return [['id' => self::VOORRAAD_TAG_ID]];
+        } else {
+            return [];
+        }
     }
-
-    protected $wrapper = [
-        'Length' => 'dimensions',
-        'width' => 'dimensions',
-        'height' => 'dimensions',
-        '_bol_ean' => 'meta_data',
-        '_expected_week' => 'meta_data',
-        'maximale_breedte' => 'meta_data',
-        'maximale_lengte' => 'meta_data',
-        'maximale_diagonaal' => 'meta_data',
-        'prijs_per_m' => 'meta_data',
-        'sale_prijs_per_m' => 'meta_data',
-        'prijs_rond_per_m' => 'meta_data',
-        'sale_prijs_rond_per_m' => 'meta_data',
-        '_yoast_wpseo_title' => 'meta_data',
-        '_yoast_wpseo_metadesc' => 'meta_data',
-    ];
 }

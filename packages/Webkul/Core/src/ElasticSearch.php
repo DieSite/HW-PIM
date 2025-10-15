@@ -19,6 +19,24 @@ class ElasticSearch
     ];
 
     /**
+     * Dynamically pass methods to the default connection.
+     *
+     * @return mixed
+     */
+    public function __call(string $method, array $parameters)
+    {
+        return call_user_func_array([$this->makeConnection(), $method], $parameters);
+    }
+
+    /**
+     * Get the default connection.
+     */
+    public function getDefaultConnection(): string
+    {
+        return config('elasticsearch.connection');
+    }
+
+    /**
      * Make a new connection.
      *
      *
@@ -72,14 +90,6 @@ class ElasticSearch
     }
 
     /**
-     * Get the default connection.
-     */
-    public function getDefaultConnection(): string
-    {
-        return config('elasticsearch.connection');
-    }
-
-    /**
      * Get the configuration for a named connection.
      *
      *
@@ -96,15 +106,5 @@ class ElasticSearch
         }
 
         return $config;
-    }
-
-    /**
-     * Dynamically pass methods to the default connection.
-     *
-     * @return mixed
-     */
-    public function __call(string $method, array $parameters)
-    {
-        return call_user_func_array([$this->makeConnection(), $method], $parameters);
     }
 }

@@ -83,14 +83,6 @@ class Exporter extends AbstractExporter
     }
 
     /**
-     * {@inheritdoc}
-     */
-    protected function getResults()
-    {
-        return $this->source->orderBy('id', 'asc')->all()?->getIterator();
-    }
-
-    /**
      * Prepare products from current batch
      */
     public function prepareProducts(JobTrackBatchContract $batch, $filePath)
@@ -135,6 +127,14 @@ class Exporter extends AbstractExporter
         }, $data['super_attributes'] ?? []);
 
         return implode(',', $configurable_attributes);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getResults()
+    {
+        return $this->source->orderBy('id', 'asc')->all()?->getIterator();
     }
 
     /**

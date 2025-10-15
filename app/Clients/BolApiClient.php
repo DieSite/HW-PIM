@@ -32,7 +32,7 @@ class BolApiClient
      */
     public function __construct($credentialIdOrObject = null, $skipCache = false)
     {
-        $this->client = new Client;
+        $this->client = new Client();
         $this->baseUrl = config('bolcom.api_url');
 
         if ($credentialIdOrObject instanceof BolComCredential) {

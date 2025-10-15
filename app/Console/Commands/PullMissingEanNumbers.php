@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Storage;
 
 class PullMissingEanNumbers extends Command
 {
+    const EAN_NUMBER_REDIS_KEY = 'already_found_missing_ean_numbers';
+
     /**
      * The name and signature of the console command.
      *
@@ -23,8 +25,6 @@ class PullMissingEanNumbers extends Command
      * @var string
      */
     protected $description = 'Command description';
-
-    const EAN_NUMBER_REDIS_KEY = 'already_found_missing_ean_numbers';
 
     /**
      * Execute the console command.
@@ -54,13 +54,15 @@ class PullMissingEanNumbers extends Command
             $ean = $definition['EAN'];
             $exists = Product::where('values->common->ean', $ean)->exists();
 
-            if ( $exists ) {
+            if ($exists) {
                 $progressBar->advance();
+
                 continue;
             }
 
-            if ( EurogrosMissingEanNumber::whereEan($ean)->exists() ) {
+            if (EurogrosMissingEanNumber::whereEan($ean)->exists()) {
                 $progressBar->advance();
+
                 continue;
             }
 
@@ -75,6 +77,6 @@ class PullMissingEanNumbers extends Command
 
         $progressBar->finish();
 
-        $this->info('Found ' . count($missingEANs) . ' missing EAN numbers.');
+        $this->info('Found '.count($missingEANs).' missing EAN numbers.');
     }
 }

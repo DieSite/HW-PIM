@@ -53,6 +53,18 @@ class AdminApiServiceProvider extends ServiceProvider
     }
 
     /**
+     * Registers acl to entire application
+     *
+     * @return void
+     */
+    public function registerACL()
+    {
+        $this->app->singleton('api-acl', function () {
+            return $this->createACL();
+        });
+    }
+
+    /**
      * Register package config.
      *
      * @return void
@@ -136,18 +148,6 @@ class AdminApiServiceProvider extends ServiceProvider
             'admin_api::integrations.api-keys.edit',
         ], function ($view) {
             $view->with('acl', $this->createACL());
-        });
-    }
-
-    /**
-     * Registers acl to entire application
-     *
-     * @return void
-     */
-    public function registerACL()
-    {
-        $this->app->singleton('api-acl', function () {
-            return $this->createACL();
         });
     }
 

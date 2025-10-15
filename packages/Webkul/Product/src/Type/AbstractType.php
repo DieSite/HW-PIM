@@ -157,7 +157,6 @@ abstract class AbstractType
         if (! empty($data[self::PRODUCT_VALUES_KEY])) {
             $data = $this->prepareProductValues($data, $product);
 
-
             $product->values = $data[self::PRODUCT_VALUES_KEY];
         }
 
@@ -355,66 +354,6 @@ abstract class AbstractType
     }
 
     /**
-     * process values by value type like files and images
-     */
-    protected function processValues(int $productId, array $values, array $productValues = [], bool $isCommonAttribute = false): array
-    {
-        $values = array_filter(
-            ! empty($productValues)
-                ? array_merge($productValues, $values)
-                : $values
-        );
-
-        foreach ($values as $field => $fieldValue) {
-            if (is_array($fieldValue)) {
-                $attribute = $this->attributeRepository->findOneByField('code', $field);
-                $type = $attribute?->type;
-
-                if ($type === 'image' || $type === 'gallery' || $type === 'file') {
-                    $path = 'product'.DIRECTORY_SEPARATOR.$productId.DIRECTORY_SEPARATOR.$field;
-
-                    if ($type === 'gallery') {
-                        $values[$field] = array_map(function ($val) use ($path) {
-                            return $val instanceof UploadedFile
-                                ? $this->fileStorer->store($path, $val, [FileStorer::HASHED_FOLDER_NAME_KEY => true])
-                                : $val;
-                        }, $fieldValue);
-
-                        $values[$field] = array_values($values[$field]);
-                    } elseif (! empty($fieldValue) && current($fieldValue) instanceof UploadedFile) {
-                        $values[$field] = $this->fileStorer->store($path, current($fieldValue), [FileStorer::HASHED_FOLDER_NAME_KEY => true]);
-                    }
-
-                    continue;
-                }
-            }
-
-            if (
-                $isCommonAttribute
-                && $this->attributeRepository->findWhere([
-                    'type' => AttributeTypes::PRICE_ATTRIBUTE_TYPE,
-                    'code' => $field,
-                ])->first()?->toArray()
-            ) {
-
-                $fieldValue = $this->processCommonPriceValues($field, $fieldValue, $productValues);
-            }
-
-            if (is_array($fieldValue)) {
-                $fieldValue = array_filter($fieldValue);
-
-                if (empty($fieldValue)) {
-                    unset($values[$field]);
-                } else {
-                    $values[$field] = array_is_list($fieldValue) ? implode(',', $fieldValue) : $fieldValue;
-                }
-            }
-        }
-
-        return $values;
-    }
-
-    /**
      * Copy product.
      *
      * @return \Webkul\Product\Contracts\Product
@@ -442,40 +381,6 @@ abstract class AbstractType
         $this->copyRelationships($copiedProduct);
 
         return $copiedProduct;
-    }
-
-    /**
-     * Copy relationships.
-     *
-     * @param  \Webkul\Product\Models\Product  $product
-     * @return void
-     */
-    protected function copyRelationships($product)
-    {
-        $attributesToSkip = config('products.copy.skip_attributes') ?? [];
-
-        if (! in_array('product_relations', $attributesToSkip)) {
-            DB::table('product_relations')->insert([
-                'parent_id' => $this->product->id,
-                'child_id'  => $product->id,
-            ]);
-        }
-    }
-
-    /**
-     * Copy product image video.
-     */
-    private function copyMedia($product, $media, $copiedMedia): void
-    {
-        $path = explode('/', $media->path);
-
-        $copiedMedia->path = 'product/'.$product->id.'/'.end($path);
-
-        $copiedMedia->save();
-
-        Storage::makeDirectory('product/'.$product->id);
-
-        Storage::copy($media->path, $copiedMedia->path);
     }
 
     /**
@@ -645,5 +550,99 @@ abstract class AbstractType
         }
 
         return $product;
+    }
+
+    /**
+     * process values by value type like files and images
+     */
+    protected function processValues(int $productId, array $values, array $productValues = [], bool $isCommonAttribute = false): array
+    {
+        $values = array_filter(
+            ! empty($productValues)
+                ? array_merge($productValues, $values)
+                : $values
+        );
+
+        foreach ($values as $field => $fieldValue) {
+            if (is_array($fieldValue)) {
+                $attribute = $this->attributeRepository->findOneByField('code', $field);
+                $type = $attribute?->type;
+
+                if ($type === 'image' || $type === 'gallery' || $type === 'file') {
+                    $path = 'product'.DIRECTORY_SEPARATOR.$productId.DIRECTORY_SEPARATOR.$field;
+
+                    if ($type === 'gallery') {
+                        $values[$field] = array_map(function ($val) use ($path) {
+                            return $val instanceof UploadedFile
+                                ? $this->fileStorer->store($path, $val, [FileStorer::HASHED_FOLDER_NAME_KEY => true])
+                                : $val;
+                        }, $fieldValue);
+
+                        $values[$field] = array_values($values[$field]);
+                    } elseif (! empty($fieldValue) && current($fieldValue) instanceof UploadedFile) {
+                        $values[$field] = $this->fileStorer->store($path, current($fieldValue), [FileStorer::HASHED_FOLDER_NAME_KEY => true]);
+                    }
+
+                    continue;
+                }
+            }
+
+            if (
+                $isCommonAttribute
+                && $this->attributeRepository->findWhere([
+                    'type' => AttributeTypes::PRICE_ATTRIBUTE_TYPE,
+                    'code' => $field,
+                ])->first()?->toArray()
+            ) {
+
+                $fieldValue = $this->processCommonPriceValues($field, $fieldValue, $productValues);
+            }
+
+            if (is_array($fieldValue)) {
+                $fieldValue = array_filter($fieldValue);
+
+                if (empty($fieldValue)) {
+                    unset($values[$field]);
+                } else {
+                    $values[$field] = array_is_list($fieldValue) ? implode(',', $fieldValue) : $fieldValue;
+                }
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * Copy relationships.
+     *
+     * @param  \Webkul\Product\Models\Product  $product
+     * @return void
+     */
+    protected function copyRelationships($product)
+    {
+        $attributesToSkip = config('products.copy.skip_attributes') ?? [];
+
+        if (! in_array('product_relations', $attributesToSkip)) {
+            DB::table('product_relations')->insert([
+                'parent_id' => $this->product->id,
+                'child_id'  => $product->id,
+            ]);
+        }
+    }
+
+    /**
+     * Copy product image video.
+     */
+    private function copyMedia($product, $media, $copiedMedia): void
+    {
+        $path = explode('/', $media->path);
+
+        $copiedMedia->path = 'product/'.$product->id.'/'.end($path);
+
+        $copiedMedia->save();
+
+        Storage::makeDirectory('product/'.$product->id);
+
+        Storage::copy($media->path, $copiedMedia->path);
     }
 }

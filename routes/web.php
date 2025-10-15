@@ -11,7 +11,6 @@
 |
 */
 
-
 use App\Http\Controllers\ProductHelperController;
 
 Route::post('/product/met_onderkleed_price', [ProductHelperController::class, 'price']);

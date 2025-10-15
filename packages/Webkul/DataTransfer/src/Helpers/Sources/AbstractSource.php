@@ -32,11 +32,6 @@ abstract class AbstractSource
     protected bool $foundWrongQuoteFlag = false;
 
     /**
-     * Read next line from source
-     */
-    abstract protected function getNextRow(): array|bool;
-
-    /**
      * Return the key of the current row
      */
     public function getCurrentRowNumber(): int
@@ -117,4 +112,9 @@ abstract class AbstractSource
     {
         return $this->columnNames;
     }
+
+    /**
+     * Read next line from source
+     */
+    abstract protected function getNextRow(): array|bool;
 }

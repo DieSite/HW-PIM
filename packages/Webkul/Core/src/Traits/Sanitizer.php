@@ -22,7 +22,7 @@ trait Sanitizer
     public function sanitizeSVG(string $path, ?string $mimeType, ?string $disk): void
     {
         if ($this->isFileSVG($mimeType)) {
-            $sanitizer = new MainSanitizer;
+            $sanitizer = new MainSanitizer();
 
             $dirtySVG = Storage::disk($disk)->get($path);
 

@@ -20,11 +20,11 @@ class ImportTrackBatch implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    protected $importBatch;
-
     public $tries = 3;
 
     public $timeout = 300; // Adjust as needed
+
+    protected $importBatch;
 
     /**
      * Create a new job instance.

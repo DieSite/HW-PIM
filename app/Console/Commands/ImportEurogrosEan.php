@@ -9,6 +9,8 @@ use Webkul\Product\Repositories\ProductRepository;
 
 class ImportEurogrosEan extends Command
 {
+    const FILE = 'Voorraad/Voorraadlijst/Voorraad_Eurogros.csv';
+
     /**
      * The name and signature of the console command.
      *
@@ -22,8 +24,6 @@ class ImportEurogrosEan extends Command
      * @var string
      */
     protected $description = 'Command description';
-
-    const FILE = 'Voorraad/Voorraadlijst/Voorraad_Eurogros.csv';
 
     /**
      * Execute the console command.
@@ -105,6 +105,7 @@ class ImportEurogrosEan extends Command
         $values = $product->values;
 
         $maat = $values['common']['maat'] ?? '';
+
         return " | Product {$values['common']['productnaam']} - ($maat) gevonden voor EAN";
     }
 

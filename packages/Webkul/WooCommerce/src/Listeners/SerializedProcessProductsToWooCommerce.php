@@ -45,8 +45,9 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
         if ($exception instanceof ModelNotFoundException) {
             // Log dat het product niet meer bestaat, maar markeer de job niet als mislukt
             \Log::info('Product bestaat niet meer voor WooCommerce synchronisatie', [
-                'product_id' => $this->product->id
+                'product_id' => $this->product->id,
             ]);
+
             return;
         }
 

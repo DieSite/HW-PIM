@@ -57,11 +57,11 @@ class Exporter extends AbstractExporter
 
     public const OPTIONS_KEY = 'options';
 
+    public const ATTRIBUTE_OPTION_ENTITY_NAME = 'option';
+
     protected $systemStatus;
 
     protected $selectedLocale;
-
-    public const ATTRIBUTE_OPTION_ENTITY_NAME = 'option';
 
     /*
      * For exporting file
@@ -79,6 +79,11 @@ class Exporter extends AbstractExporter
      * @var array
      */
     protected $attributes = [];
+
+    protected $matcher = [
+        'name'                   => 'name',
+        'code'                   => 'slug',
+    ];
 
     /**
      * Create a new instance of the exporter.
@@ -123,22 +128,6 @@ class Exporter extends AbstractExporter
         return true;
     }
 
-    protected function getResults()
-    {
-        $codes = [];
-        $filters = $this->getFilters();
-        $attributeFilter = $filters['attributes'] ?? null;
-        $credentialId = $filters['credential'];
-        $codes = $this->connectorService->getCustomAttributes($credentialId);
-
-        if (! empty($attributeFilter)) {
-            $attributesToExport = explode(',', $attributeFilter);
-            $codes = array_intersect($codes, $attributesToExport);
-        }
-
-        return $this->source->with('options')->whereIn('code', $codes)->get()->getIterator();
-    }
-
     public function exportAttribute(JobTrackBatchContract $batch)
     {
         foreach ($batch->data as $rawData) {
@@ -167,6 +156,31 @@ class Exporter extends AbstractExporter
 
             $this->createdItemsCount++;
         }
+    }
+
+    public function prepareAttribute(array $rawData, $mapping = []): array
+    {
+        $rawData['name'] = ! empty($rawData['name']) ? $rawData['name'] : $rawData['code'];
+        $data = $this->prepareDataWithMatcher($rawData, $this->matcher);
+        $data['type'] = 'select';
+
+        return $data;
+    }
+
+    protected function getResults()
+    {
+        $codes = [];
+        $filters = $this->getFilters();
+        $attributeFilter = $filters['attributes'] ?? null;
+        $credentialId = $filters['credential'];
+        $codes = $this->connectorService->getCustomAttributes($credentialId);
+
+        if (! empty($attributeFilter)) {
+            $attributesToExport = explode(',', $attributeFilter);
+            $codes = array_intersect($codes, $attributesToExport);
+        }
+
+        return $this->source->with('options')->whereIn('code', $codes)->get()->getIterator();
     }
 
     protected function createAttribute(array $rawData): array
@@ -205,15 +219,6 @@ class Exporter extends AbstractExporter
         return $response;
     }
 
-    public function prepareAttribute(array $rawData, $mapping = []): array
-    {
-        $rawData['name'] = ! empty($rawData['name']) ? $rawData['name'] : $rawData['code'];
-        $data = $this->prepareDataWithMatcher($rawData, $this->matcher);
-        $data['type'] = 'select';
-
-        return $data;
-    }
-
     protected function exportOptionsAndCreateMapping(array $rawData)
     {
         $options = [];
@@ -243,6 +248,18 @@ class Exporter extends AbstractExporter
         }
     }
 
+    protected function formatData($option)
+    {
+        $localWiseLabel = collect($option['translations'])->firstWhere('locale', $this->selectedLocale ?? '');
+
+        $formattedOptions = [
+            'slug'        => $option['code'],
+            'name'        => $localWiseLabel ? $localWiseLabel['label'] : ($option['label'] ?? $option['code']),
+        ];
+
+        return $formattedOptions;
+    }
+
     /**
      * Get locale-specific fields from the raw data.
      */
@@ -258,21 +275,4 @@ class Exporter extends AbstractExporter
 
         return $data['additional_data']['locale_specific'][$locale] ?? [];
     }
-
-    protected function formatData($option)
-    {
-        $localWiseLabel = collect($option['translations'])->firstWhere('locale', $this->selectedLocale ?? '');
-
-        $formattedOptions = [
-            'slug'        => $option['code'],
-            'name'        => $localWiseLabel ? $localWiseLabel['label'] : ($option['label'] ?? $option['code']),
-        ];
-
-        return $formattedOptions;
-    }
-
-    protected $matcher = [
-        'name'                   => 'name',
-        'code'                   => 'slug',
-    ];
 }

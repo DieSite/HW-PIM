@@ -5,6 +5,11 @@
             "operators": {
                 "=>": "align"
             }
-        }
+        },
+        "new_with_parentheses": {
+            "anonymous_class": false,
+            "named_class": true
+        },
+        "ordered_class_elements": true
     }
 }

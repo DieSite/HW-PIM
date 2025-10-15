@@ -351,20 +351,6 @@ class DefaultUser extends Command
     }
 
     /**
-     * Method for asking default choice based on the list of options.
-     */
-    protected function askForDefaultValues(string $key, string $question, array $choices): string
-    {
-        $choice = select(
-            label: $question,
-            options: $choices,
-            default: env($key)
-        );
-
-        return $choice;
-    }
-
-    /**
      * Get All timezones list with offset in name
      */
     public function getTimeZones(): array
@@ -384,6 +370,20 @@ class DefaultUser extends Command
         }
 
         return $formattedTimezones;
+    }
+
+    /**
+     * Method for asking default choice based on the list of options.
+     */
+    protected function askForDefaultValues(string $key, string $question, array $choices): string
+    {
+        $choice = select(
+            label: $question,
+            options: $choices,
+            default: env($key)
+        );
+
+        return $choice;
     }
 
     /**

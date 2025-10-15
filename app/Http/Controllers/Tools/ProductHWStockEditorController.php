@@ -59,7 +59,7 @@ class ProductHWStockEditorController extends Controller
 
             $values = $product->values;
 
-            if (((int)$values['common']['voorraad_hw_5_korting']) === ((int)$data['voorraad_hw_5_korting'])) {
+            if (((int) $values['common']['voorraad_hw_5_korting']) === ((int) $data['voorraad_hw_5_korting'])) {
                 continue;
             }
 

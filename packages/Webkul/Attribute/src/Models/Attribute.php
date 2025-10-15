@@ -33,22 +33,9 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
 
     const CHECKBOX_FIELD_TYPE = 'checkbox';
 
+    const NON_DELETABLE_ATTRIBUTE_CODE = 'sku';
+
     public $translatedAttributes = ['name'];
-
-    protected $historyTags = ['attribute'];
-
-    protected $fillable = [
-        'code',
-        'type',
-        'enable_wysiwyg',
-        'position',
-        'is_required',
-        'is_unique',
-        'validation',
-        'regex_pattern',
-        'value_per_locale',
-        'value_per_channel',
-    ];
 
     /**
      * Attribute type fields.
@@ -69,7 +56,20 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
         'checkbox'    => 'text_value',
     ];
 
-    const NON_DELETABLE_ATTRIBUTE_CODE = 'sku';
+    protected $historyTags = ['attribute'];
+
+    protected $fillable = [
+        'code',
+        'type',
+        'enable_wysiwyg',
+        'position',
+        'is_required',
+        'is_unique',
+        'validation',
+        'regex_pattern',
+        'value_per_locale',
+        'value_per_channel',
+    ];
 
     /**
      * These columns history will not be generated
@@ -84,16 +84,6 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
     public function options(): HasMany
     {
         return $this->hasMany(AttributeOptionProxy::modelClass());
-    }
-
-    /**
-     * Returns attribute value table column based attribute type
-     *
-     * @return string
-     */
-    protected function getColumnNameAttribute()
-    {
-        return $this->attributeTypeFields[$this->type];
     }
 
     /**
@@ -172,7 +162,7 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
             $validations[] = match ($this->validation) {
                 'regex'   => 'regex: "'.$this->regex_pattern.'"',
                 'number'  => 'numeric',
-                'decimal' => new Decimal,
+                'decimal' => new Decimal(),
                 default   => $this->validation
             };
         }
@@ -207,14 +197,6 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
         }
 
         return $validations;
-    }
-
-    /**
-     * Create a new factory instance for the model
-     */
-    protected static function newFactory(): Factory
-    {
-        return AttributeFactory::new();
     }
 
     /**
@@ -379,7 +361,7 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
 
         switch ($this->type) {
             case self::BOOLEAN_FIELD_TYPE:
-                $rules[] = new BooleanString;
+                $rules[] = new BooleanString();
 
                 break;
             case self::DATETIME_FIELD_TYPE:
@@ -404,5 +386,23 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
         }
 
         return $rules;
+    }
+
+    /**
+     * Returns attribute value table column based attribute type
+     *
+     * @return string
+     */
+    protected function getColumnNameAttribute()
+    {
+        return $this->attributeTypeFields[$this->type];
+    }
+
+    /**
+     * Create a new factory instance for the model
+     */
+    protected static function newFactory(): Factory
+    {
+        return AttributeFactory::new();
     }
 }

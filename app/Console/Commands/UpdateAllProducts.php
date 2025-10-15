@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Services\ProductService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Event;
 use Webkul\Product\Models\Product;
 
 class UpdateAllProducts extends Command

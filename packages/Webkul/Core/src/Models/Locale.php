@@ -37,14 +37,6 @@ class Locale extends Model implements AuditableContract, LocaleContract
     ];
 
     /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return LocaleFactory::new();
-    }
-
-    /**
      * Returns the users associated with this locale
      * users that have ui locale as this locale
      */
@@ -74,6 +66,14 @@ class Locale extends Model implements AuditableContract, LocaleContract
         }
 
         return false;
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return LocaleFactory::new();
     }
 
     /**

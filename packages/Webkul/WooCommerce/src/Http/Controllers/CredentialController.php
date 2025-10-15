@@ -14,8 +14,6 @@ class CredentialController
 {
     use RestApiRequestTrait;
 
-    protected $credential;
-
     public const READONLY_CREDENTIALS = 'credentailsReadonlyUrls';
 
     public const QUICK_EXPORT_CODE = 'woocommerce_product_quick_export';
@@ -33,6 +31,8 @@ class CredentialController
     public const OTHER_MAPPING_SECTION = 'woocommerce_other_mappings';
 
     public const OTHER_MAPPING = 'woocommerce_connector_othermapping';
+
+    protected $credential;
 
     /**
      * Create a new controller instance.

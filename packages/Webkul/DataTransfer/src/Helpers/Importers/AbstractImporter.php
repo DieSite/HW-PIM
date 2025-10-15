@@ -53,6 +53,15 @@ abstract class AbstractImporter
      */
     public const ERROR_CODE_COLUMNS_NUMBER = 'wrong_columns_number';
 
+    public const BATCH_SIZE = 100;
+
+    /**
+     * The name of the queue the job should be sent to.
+     *
+     * @var string|null
+     */
+    public $queue;
+
     /**
      * Error message templates.
      */
@@ -65,8 +74,6 @@ abstract class AbstractImporter
         self::ERROR_CODE_WRONG_QUOTES        => 'data_transfer::app.validation.errors.wrong-quotes',
         self::ERROR_CODE_COLUMNS_NUMBER      => 'data_transfer::app.validation.errors.column-numbers',
     ];
-
-    public const BATCH_SIZE = 100;
 
     /**
      * Is linking required
@@ -133,13 +140,6 @@ abstract class AbstractImporter
     protected $jobLogger;
 
     /**
-     * The name of the queue the job should be sent to.
-     *
-     * @var string|null
-     */
-    public $queue;
-
-    /**
      * Create a new helper instance.
      *
      * @return void
@@ -155,16 +155,6 @@ abstract class AbstractImporter
      * Import data rows
      */
     abstract public function importBatch(ImportJobBatchContract $importBatchContract): bool;
-
-    /**
-     * Initialize Product error messages
-     */
-    protected function initErrorMessages(): void
-    {
-        foreach ($this->errorMessages as $errorCode => $message) {
-            $this->errorHelper->addErrorMessage($errorCode, trans($message));
-        }
-    }
 
     /**
      * Import instance.
@@ -276,56 +266,6 @@ abstract class AbstractImporter
     }
 
     /**
-     * Save validated batches
-     */
-    protected function saveValidatedBatches(): self
-    {
-        $source = $this->getSource();
-
-        $batchRows = [];
-
-        $source->rewind();
-
-        /**
-         * Clean previous saved batches
-         */
-        $this->importBatchRepository->deleteWhere([
-            'job_track_id' => $this->import->id,
-        ]);
-
-        while (
-            $source->valid()
-            || count($batchRows)
-        ) {
-            if (
-                count($batchRows) == self::BATCH_SIZE
-                || ! $source->valid()
-            ) {
-                $this->importBatchRepository->create([
-                    'job_track_id' => $this->import->id,
-                    'data'         => $batchRows,
-                ]);
-
-                $batchRows = [];
-            }
-
-            if ($source->valid()) {
-                $rowData = $source->current();
-
-                if ($this->validateRow($rowData, $source->getCurrentRowNumber())) {
-                    $batchRows[] = $this->prepareRowForDb($rowData);
-                }
-
-                $this->processedRowsCount++;
-
-                $source->next();
-            }
-        }
-
-        return $this;
-    }
-
-    /**
      * Start the import process
      */
     public function importData(?ImportJobBatchContract $importBatch = null): bool
@@ -378,14 +318,6 @@ abstract class AbstractImporter
     }
 
     /**
-     * Get the queue name for the worker.
-     */
-    protected function getQueue(): ?string
-    {
-        return $this->queue;
-    }
-
-    /**
      * Link resource data.
      */
     public function linkData(ImportJobBatchContract $importBatch): bool
@@ -403,52 +335,6 @@ abstract class AbstractImporter
         $this->indexBatch($importBatch);
 
         return true;
-    }
-
-    /**
-     * Add errors to error aggregator
-     */
-    protected function addErrors(string $code, mixed $errors): void
-    {
-        $this->errorHelper->addError(
-            $code,
-            null,
-            implode('", "', $errors)
-        );
-    }
-
-    /**
-     * Add row as skipped
-     *
-     * @param  int|null  $rowNumber
-     * @param  string|null  $columnName
-     * @param  string|null  $errorMessage
-     * @return $this
-     */
-    protected function skipRow($rowNumber, string $errorCode, $columnName = null, $errorMessage = null): self
-    {
-        $this->errorHelper->addError(
-            $errorCode,
-            $rowNumber,
-            $columnName,
-            $errorMessage
-        );
-
-        $this->errorHelper->addRowToSkip($rowNumber);
-
-        return $this;
-    }
-
-    /**
-     * Prepare row data to save into the database
-     */
-    protected function prepareRowForDb(array $rowData): array
-    {
-        $rowData = array_map(function ($value) {
-            return $value === '' ? null : $value;
-        }, $rowData);
-
-        return $rowData;
     }
 
     /**
@@ -505,5 +391,119 @@ abstract class AbstractImporter
         }
 
         return $this->indexingRequired;
+    }
+
+    /**
+     * Initialize Product error messages
+     */
+    protected function initErrorMessages(): void
+    {
+        foreach ($this->errorMessages as $errorCode => $message) {
+            $this->errorHelper->addErrorMessage($errorCode, trans($message));
+        }
+    }
+
+    /**
+     * Save validated batches
+     */
+    protected function saveValidatedBatches(): self
+    {
+        $source = $this->getSource();
+
+        $batchRows = [];
+
+        $source->rewind();
+
+        /**
+         * Clean previous saved batches
+         */
+        $this->importBatchRepository->deleteWhere([
+            'job_track_id' => $this->import->id,
+        ]);
+
+        while (
+            $source->valid()
+            || count($batchRows)
+        ) {
+            if (
+                count($batchRows) == self::BATCH_SIZE
+                || ! $source->valid()
+            ) {
+                $this->importBatchRepository->create([
+                    'job_track_id' => $this->import->id,
+                    'data'         => $batchRows,
+                ]);
+
+                $batchRows = [];
+            }
+
+            if ($source->valid()) {
+                $rowData = $source->current();
+
+                if ($this->validateRow($rowData, $source->getCurrentRowNumber())) {
+                    $batchRows[] = $this->prepareRowForDb($rowData);
+                }
+
+                $this->processedRowsCount++;
+
+                $source->next();
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Get the queue name for the worker.
+     */
+    protected function getQueue(): ?string
+    {
+        return $this->queue;
+    }
+
+    /**
+     * Add errors to error aggregator
+     */
+    protected function addErrors(string $code, mixed $errors): void
+    {
+        $this->errorHelper->addError(
+            $code,
+            null,
+            implode('", "', $errors)
+        );
+    }
+
+    /**
+     * Add row as skipped
+     *
+     * @param  int|null  $rowNumber
+     * @param  string|null  $columnName
+     * @param  string|null  $errorMessage
+     * @return $this
+     */
+    protected function skipRow($rowNumber, string $errorCode, $columnName = null, $errorMessage = null): self
+    {
+        $this->errorHelper->addError(
+            $errorCode,
+            $rowNumber,
+            $columnName,
+            $errorMessage
+        );
+
+        $this->errorHelper->addRowToSkip($rowNumber);
+
+        return $this;
+    }
+
+    /**
+     * Prepare row data to save into the database
+     */
+    protected function prepareRowForDb(array $rowData): array
+    {
+        $rowData = array_map(function ($value) {
+            return $value === '' ? null : $value;
+        }, $rowData);
+
+        return $rowData;
     }
 }
