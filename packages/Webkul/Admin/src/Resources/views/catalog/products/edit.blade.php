@@ -54,7 +54,8 @@
                         </button>
                     @endif
 
-                    <a href="{{ route('product.frontend', ['product' => $product->id]) }}" class="secondary-button" target="_blank">
+                    <a href="{{ route('product.frontend', ['product' => $product->id]) }}" class="secondary-button"
+                       target="_blank">
                         Naar frontend
                     </a>
 
@@ -65,6 +66,33 @@
                 </div>
             </div>
         </div>
+
+        @isset($product->additional['product_sku_already_exists'])
+            <div id="alert-border-2" class="flex items-center mt-5 p-4 mb-4 text-red-800 border-t-4 border-red-300 bg-red-50 dark:text-red-400 dark:bg-gray-800 dark:border-red-800" role="alert">
+                <svg class="shrink-0 w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/>
+                </svg>
+                <div class="ms-3 text-sm font-medium">
+                    Het lijkt er op dat dit product al bestaat op de WordPress website. Ga naar de frontend om het product
+                    te bekijken. Het kan ook om een variatie gaan. Verwijder het product met SKU {{ $product->sku }} in
+                    WordPress en sla opnieuw op.
+                </div>
+            </div>
+        @endisset
+
+        @isset($product->additional['product_sync_error'])
+            <div id="alert-border-2" class="flex items-center mt-5 p-4 mb-4 text-red-800 border-t-4 border-red-300 bg-red-50 dark:text-red-400 dark:bg-gray-800 dark:border-red-800" role="alert">
+                <svg class="shrink-0 w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/>
+                </svg>
+                <div class="ms-3 text-sm font-medium">
+                    Het lijkt er op dat er iets mis is bij het synchroniseren van het product met de WordPress website:<br/>
+                    <div class="italic p-2 my-2 border-t border-b border-red-300">{{ $product->additional['product_sync_error'] }}</div>
+                    Probeer de fout op te lossen of bel Luuk!
+                </div>
+            </div>
+        @endisset
+
 
         @php
             $channels = core()->getAllChannels();
@@ -200,9 +228,12 @@
                         </p>
 
                         <div class="mb-2.5">
-                            <select name="status" class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
-                                <option value="1" @selected(old('status', $product->status) == 1)>✓ Ingeschakeld</option>
-                                <option value="0" @selected(old('status', $product->status) == 0)>✗ Uitgeschakeld</option>
+                            <select name="status"
+                                    class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                                <option value="1" @selected(old('status', $product->status) == 1)>✓ Ingeschakeld
+                                </option>
+                                <option value="0" @selected(old('status', $product->status) == 0)>✗ Uitgeschakeld
+                                </option>
                             </select>
                         </div>
                     </div>
@@ -449,13 +480,13 @@
         })
             .then(response => response.json())
             .then(data => {
-                if(confirm('(Vergeet niet op te slaan na het bevestigen van de teksten)\n\nMeta titel: ' + data.meta_title + "\n\n" + 'Meta beschrijving: \n' + data.meta_description)) {
+                if (confirm('(Vergeet niet op te slaan na het bevestigen van de teksten)\n\nMeta titel: ' + data.meta_title + "\n\n" + 'Meta beschrijving: \n' + data.meta_description)) {
                     const input = document.querySelector('input[name="values[common][meta_titel]"]');
                     input.value = data.meta_title;
 
                     // Trigger zowel 'input' als 'change' events
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                    input.dispatchEvent(new Event('change', {bubbles: true}));
 
                     tinymce.get("meta_beschrijving").setContent(data.meta_description);
                 }
@@ -480,13 +511,13 @@
         })
             .then(response => response.json())
             .then(data => {
-                if(confirm('De zonder onderkleed prijs is: €' + data.original_price + '\nBerekende prijs is: €' + data.price + "\n(Vergeet niet op te slaan na het bevestigen van de prijs)")) {
+                if (confirm('De zonder onderkleed prijs is: €' + data.original_price + '\nBerekende prijs is: €' + data.price + "\n(Vergeet niet op te slaan na het bevestigen van de prijs)")) {
                     const input = document.querySelector('input[name="values[common][prijs][EUR]"]');
                     input.value = data.price;
 
                     // Trigger zowel 'input' als 'change' events
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                    input.dispatchEvent(new Event('change', {bubbles: true}));
                 }
             })
             .catch(error => {

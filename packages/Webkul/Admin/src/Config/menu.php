@@ -180,6 +180,12 @@ return [
         'name'       => 'Eurogros vooraadlijst downloaden',
         'route'      => 'admin.tools.eurgros.vooraadlijst',
         'sort'       => 14,
+    ], [
+        'key'        => 'tools.errored-products',
+        'name'       => 'Producten met fouten',
+        'route'      => 'admin.tools.errored-products.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
     ],
 
     /**

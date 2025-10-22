@@ -241,6 +241,11 @@ class ProductController extends Controller
                 $product->bolComCredentials()->sync($syncData);
             }
 
+            $additional = $product->additional ?? [];
+
+            unset($additional['product_sku_already_exists']);
+            $product->additional = sizeof($additional) > 0 ? $additional : null;
+
             $product->saveQuietly();
 
             if ($ean !== null && $product->bol_com_sync) {
