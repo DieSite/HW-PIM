@@ -66,7 +66,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
         // Retrieve credential
         $this->credential = $this->connectorService->getCredentialForQuickExport();
-        if (!$this->credential) {
+        if (! $this->credential) {
             return Log::error('No default credentials set for quick export.');
         }
 
@@ -76,7 +76,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             return Log::warning('Auto-sync setting is disabled. Product cannot be synced.');
         }
 
-        if (!isset($quickSettings['quick_channel'], $quickSettings['quick_locale'], $quickSettings['quick_currency'])) {
+        if (! isset($quickSettings['quick_channel'], $quickSettings['quick_locale'], $quickSettings['quick_currency'])) {
             return Log::error('Quick export settings are incomplete in the default credentials.');
         }
 
@@ -90,10 +90,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
         // Prepare product data
         $this->batch['code'] = $this->batch['sku'];
-        $this->batch['type'] = !empty($this->batch['variants']) ? 'variable' : 'simple';
+        $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
         $productData = $this->formatData($this->batch);
 
-        if (!isset($productData['sku'])) {
+        if (! isset($productData['sku'])) {
             Log::debug('Product data', ['product_data' => $productData]);
         }
 
@@ -140,7 +140,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             ['sku' => $parent->sku]
         );
 
-        if (!isset($parentProduct[0])) {
+        if (! isset($parentProduct[0])) {
             Log::debug('Parent product not found.');
 
             return;
@@ -152,7 +152,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             ['sku' => $productData['sku'], 'product' => $parentProduct[0]['id']]
         );
 
-        if (!isset($existingProduct[0])) {
+        if (! isset($existingProduct[0])) {
             $result = $this->connectorService->requestApiAction(
                 self::ACTION_ADD_VARIATION,
                 $productData,
@@ -174,10 +174,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
             } else {
-                throw new \Exception('Error occurred (400): ' . json_encode($result));
+                throw new \Exception('Error occurred (400): '.json_encode($result));
             }
         } else {
-            throw new \Exception("Error occurred ($result[code]): " . json_encode($result));
+            throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
         }
     }
 
@@ -190,7 +190,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             ['sku' => $productData['sku']]
         );
 
-        if (!isset($existingProduct[0])) {
+        if (! isset($existingProduct[0])) {
             $result = $this->connectorService->requestApiAction(
                 self::ACTION_ADD,
                 $productData,
@@ -212,10 +212,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
             } else {
-                throw new \Exception("Error occurred ($result[code]): " . json_encode($result));
+                throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
             }
         } else {
-            throw new \Exception("Error occurred ($result[code]): " . json_encode($result));
+            throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
         }
     }
 }
