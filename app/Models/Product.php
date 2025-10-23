@@ -11,5 +11,6 @@ class Product extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'additional' => 'array',
     ];
 }
