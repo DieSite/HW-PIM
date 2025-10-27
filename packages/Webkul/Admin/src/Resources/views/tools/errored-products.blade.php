@@ -37,7 +37,7 @@
                                     <template v-if="products.length > 0">
                                         <x-admin::table.tbody.tr v-for="product in products">
                                             <x-admin::table.td v-text="product.productnaam"/>
-                                            <x-admin::table.td v-text="product.maat != null && product.maat.length > 0 ? product.maat : 'hoofdproduct'"/>
+                                            <x-admin::table.td v-text="product.maat != null && product.maat !== 'null' && product.maat.length > 0 ? product.maat : 'hoofdproduct'"/>
                                             <x-admin::table.td>
                                                 <a :href="'/admin/catalog/products/edit/' + product.id">Bekijken</a>
                                             </x-admin::table.td>
