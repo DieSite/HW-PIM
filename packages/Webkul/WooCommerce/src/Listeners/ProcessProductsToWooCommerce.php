@@ -166,31 +166,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             );
         }
 
-        if ($result['code'] == 200) {
-            Log::debug("Product $productData[sku] updated successfully");
-        } elseif ($result['code'] == 201) {
-            Log::debug("Product $productData[sku] created successfully");
-        } elseif ($result['code'] == 400) {
-            if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
-                throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
-            } else {
-                throw new \Exception('Error occurred (400): '.json_encode($result));
-            }
-        } else {
-            if ($result['code'] == 500) {
-                $errorMessage = $result['error']['message'] ?? '';
-
-                if (str_starts_with($errorMessage, 'Uncaught Exception: Ongeldig product. ')) {
-                    throw new \Exception("Er is een fout opgetreden. Waarschijnlijk bestaat het product al als variant,
-                    maar moet dit een hoofdproduct zijn. Klik op 'Naar frontend' en controleer de productvariaties.
-                    Waarschijnlijk is er een product met \"Iedere onderkleed\" en \"Iedere maat\" wat al de sku
-                    $productData[sku] heeft.");
-                }
-            }
-
-            // Acts as an "else" case for both if-statements.
-            throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
-        }
+        $this->handleWoocommerceResponse($result, $productData);
     }
 
     /**
@@ -219,6 +195,15 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             );
         }
 
+        $this->handleWoocommerceResponse($result, $productData);
+    }
+
+    /**
+     * @throws WoocommerceProductSkuExistsException
+     * @throws \Exception
+     */
+    private function handleWoocommerceResponse(array $result, array $productData): void
+    {
         if ($result['code'] == 200) {
             Log::debug("Product $productData[sku] updated successfully");
         } elseif ($result['code'] == 201) {
@@ -231,7 +216,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             }
         } else {
             if ($result['code'] == 500) {
-                $errorMessage = $result['error']['message'] ?? '';
+                $errorMessage = $result['data']['error']['message'] ?? '';
 
                 if (str_starts_with($errorMessage, 'Uncaught Exception: Ongeldig product. ')) {
                     throw new \Exception("Er is een fout opgetreden. Waarschijnlijk bestaat het product al als variant,
