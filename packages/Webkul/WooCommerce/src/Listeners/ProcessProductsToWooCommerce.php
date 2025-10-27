@@ -187,7 +187,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                     $productData[sku] heeft.");
                 }
             }
-˚
+
             // Acts as an "else" case for both if-statements.
             throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
         }
