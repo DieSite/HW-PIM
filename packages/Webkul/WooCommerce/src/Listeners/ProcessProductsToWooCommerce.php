@@ -181,6 +181,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
     }
 
+    /**
+     * @throws WoocommerceProductSkuExistsException
+     */
     private function processToParentProduct(array $productData)
     {
         // Check if product exists via SKU
@@ -215,6 +218,18 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
             }
         } else {
+            if ($result['code'] == 500) {
+                $errorMessage = $result['error']['message'] ?? '';
+
+                if (str_starts_with($errorMessage, 'Uncaught Exception: Ongeldig product. ')) {
+                    throw new \Exception("Er is een fout opgetreden. Waarschijnlijk bestaat het product al als variant,
+                    maar moet dit een hoofdproduct zijn. Klik op 'Naar frontend' en controleer de productvariaties.
+                    Waarschijnlijk is er een product met \"Iedere onderkleed\" en \"Iedere maat\" wat al de sku
+                    $productData[sku] heeft.");
+                }
+            }
+
+            // Acts as an "else" case for both if-statements.
             throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
         }
     }
