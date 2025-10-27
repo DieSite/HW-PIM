@@ -167,9 +167,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         if ($result['code'] == 200) {
-            Log::info("Product $productData[sku] updated successfully");
+            Log::debug("Product $productData[sku] updated successfully");
         } elseif ($result['code'] == 201) {
-            Log::info("Product $productData[sku] created successfully");
+            Log::debug("Product $productData[sku] created successfully");
         } elseif ($result['code'] == 400) {
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
@@ -177,6 +177,18 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 throw new \Exception('Error occurred (400): '.json_encode($result));
             }
         } else {
+            if ($result['code'] == 500) {
+                $errorMessage = $result['error']['message'] ?? '';
+
+                if (str_starts_with($errorMessage, 'Uncaught Exception: Ongeldig product. ')) {
+                    throw new \Exception("Er is een fout opgetreden. Waarschijnlijk bestaat het product al als variant,
+                    maar moet dit een hoofdproduct zijn. Klik op 'Naar frontend' en controleer de productvariaties.
+                    Waarschijnlijk is er een product met \"Iedere onderkleed\" en \"Iedere maat\" wat al de sku
+                    $productData[sku] heeft.");
+                }
+            }
+˚
+            // Acts as an "else" case for both if-statements.
             throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
         }
     }
