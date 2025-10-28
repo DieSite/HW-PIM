@@ -5,6 +5,14 @@
             type="text/x-template"
             id="v-product-stock-editor-template"
         >
+            <form id="go-to-page-form" action="{{ route('admin.tools.product-stock-editor.index',  ['brand' => $current_brand]) }}" method="GET">
+                @if($current_brand)
+                    <input type="hidden" name="brand" value="{{ $current_brand }}">
+                @endif
+                @isset($search)
+                    <input type="hidden" name="search" value="{{ $search }}">
+                @endisset
+            </form>
             <!-- Input Form -->
             <x-admin::form
                 :action="route('admin.tools.product-stock-editor.post',  ['brand' => $current_brand])"
@@ -25,6 +33,7 @@
                         </select>
 
                         <input @class('px-3') @keyup.enter="doSearch()" v-model="search" placeholder="Zoeken op titel">
+                        <input @class('px-3') form="go-to-page-form" name="page" placeholder="Ga naar pagina">
                     </div>
 
                     <div v-if="products.current_page === products.last_page" class="flex gap-x-2.5 items-center">

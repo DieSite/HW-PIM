@@ -39,6 +39,7 @@ class ProductStockEditorController extends Controller
 
         if (request()->has('search')) {
             $builder = $builder->where('values->common->productnaam', 'LIKE', '%'.request()->input('search').'%');
+            $data['search'] = request()->input('search');
         }
 
         $data['products'] = $builder->paginate(perPage: 249)
