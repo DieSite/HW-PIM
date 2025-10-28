@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use Illuminate\Queue\Events\JobFailed as QueueJobFailed;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\ParallelTesting;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
@@ -10,6 +12,8 @@ use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\DriverInterface;
+use Laravel\Horizon\Events\JobFailed as HorizonJobFailed;
+use Sentry\Laravel\Integration;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -38,6 +42,14 @@ class AppServiceProvider extends ServiceProvider
 
         ParallelTesting::setUpTestDatabase(function (string $database, int $token) {
             Artisan::call('db:seed');
+        });
+
+        Event::listen(HorizonJobFailed::class, function (HorizonJobFailed $event) {
+            Integration::captureUnhandledException($event->exception);
+        });
+
+        Event::listen(QueueJobFailed::class, function (QueueJobFailed $event) {
+            Integration::captureUnhandledException($event->exception);
         });
     }
 
