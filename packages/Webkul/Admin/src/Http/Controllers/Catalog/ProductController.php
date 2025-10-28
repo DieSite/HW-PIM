@@ -244,6 +244,7 @@ class ProductController extends Controller
             $additional = $product->additional ?? [];
 
             unset($additional['product_sku_already_exists']);
+            unset($additional['product_sync_error']);
             $product->additional = sizeof($additional) > 0 ? $additional : null;
 
             $product->saveQuietly();
