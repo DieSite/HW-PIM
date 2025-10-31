@@ -10,6 +10,23 @@ return [
         'info' => 'admin::app.configuration.index.general.info',
         'sort' => 1,
     ], [
+        'key'    => 'general.discounts',
+        'name'   => 'Kortingen',
+        'info'   => 'Kortingen die worden doorgevoerd in het WordPress systeem',
+        'sort'   => 2,
+    ], [
+        'key'    => 'general.discounts.settings',
+        'name'   => 'Kortingen',
+        'info'   => 'Kortingen die worden doorgevoerd in het WordPress systeem',
+        'sort'   => 1,
+        'fields' => [
+            [
+                'name'          => 'afhaalkorting',
+                'title'         => 'Afhaalkorting (in %, dus voor 10%, vul in 10)',
+                'type'          => 'number',
+            ],
+        ],
+    ], [
         'key'  => 'general.magic_ai',
         'name' => 'admin::app.configuration.index.general.magic-ai.title',
         'info' => 'admin::app.configuration.index.general.magic-ai.info',

@@ -317,8 +317,16 @@ class Exporter extends AbstractExporter
 
         if (isset($item['parent_id'])) {
             $formatted['parent_id'] = $item['parent_id'];
+            $afhaalkorting = (int) core()->getConfigData('general.discounts.settings.afhaalkorting');
+            $regularPrice = $formatted['regular_price'];
+            $regularPrice = str_replace(',', '', $regularPrice);
+            $regularPrice = (float) $regularPrice;
+            $discounted = $regularPrice / 100 * (100 - $afhaalkorting);
+            $discounted = round($discounted, 2);
+            Log::debug('Afhaalkorting', ['afhaalkorting' => $afhaalkorting, 'regularPrice' => $regularPrice, 'original' => $formatted['regular_price']]);
             $meta = $formatted['meta_data'] ?? [];
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
+            $meta[] = ['key' => 'afhaalkorting_price', 'value' => $discounted];
             $formatted['meta_data'] = $meta;
         } else {
             $onderkleed = collect();

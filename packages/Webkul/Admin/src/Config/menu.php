@@ -151,6 +151,13 @@ return [
         'sort'   => 9,
         'icon'   => 'icon-configuration',
     ], [
+        'key'    => 'configuration.discounts',
+        'name'   => 'Kortingen',
+        'route'  => 'admin.configuration.edit',
+        'params' => ['general', 'discounts'],
+        'sort'   => 1,
+        'icon'   => '',
+    ], [
         'key'    => 'configuration.magic-ai',
         'name'   => 'admin::app.components.layouts.sidebar.magic-ai',
         'route'  => 'admin.configuration.edit',
