@@ -215,6 +215,9 @@ class ProductController extends Controller
             $ean = $product->values['common']['ean'] ?? null;
             $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
             $deliveryCode = $request->has('bol_com_sync') ? $request->input('bol_com_delivery_code') : null;
+            $product->bol_price_override = $request->input('bol_price_override') ?: null;
+
+            Log::debug('BOL.com price override', ['bol_price_override' => $product->bol_price_override]);
 
             $selectedCredentialIds = $request->has('bol_com_sync')
                 ? $request->input('bol_com_credentials', [])

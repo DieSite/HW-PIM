@@ -78,6 +78,7 @@ class SyncProductWithBolComJob implements ShouldQueue
                 'error'      => $e->getMessage(),
             ]);
 
+
             throw new Exception('Failed to sync with Bol.com in job ', previous: $e);
         }
     }

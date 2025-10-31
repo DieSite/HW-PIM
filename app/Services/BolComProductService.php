@@ -169,7 +169,7 @@ class BolComProductService
      */
     protected function updateProductOnBolCom(Product $product, BolApiClient $apiClient, $reference, $deliveryCode)
     {
-        $data = $this->buildContentData($product);
+        $data = $this->buildContentData($product, true);
 
         Log::debug('BOL.com content data', $data);
         try {
@@ -197,9 +197,9 @@ class BolComProductService
      */
     protected function updateProductPrice(Product $product, BolApiClient $apiClient, $reference)
     {
-        $priceData = $product->values['common']['prijs'] ?? [];
-        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
-        $price = (float) number_format($price, 2, '.', '');
+        $price = $this->getProductPrice($product);
+
+        Log::debug('BOL.com price', ['price' => $price]);
 
         $data = [
             'pricing' => [
@@ -275,9 +275,10 @@ class BolComProductService
         $ean = $data['ean'];
         $title = $data['productnaam'];
         $sku = $product->sku;
-        $priceData = $data['prijs'] ?? [];
-        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
-        $price = (float) number_format($price, 2, '.', '');
+
+        $price = $this->getProductPrice($product);
+
+        Log::debug('BOL.com price', ['price' => $price]);
 
         $stockSources = [
             'voorraad_eurogros',
@@ -318,7 +319,7 @@ class BolComProductService
         ];
     }
 
-    protected function buildContentData(Product $product): array
+    protected function buildContentData(Product $product, bool $forUpdate = false): array
     {
         $values = $product->values['common'] ?? [];
 
@@ -517,7 +518,7 @@ class BolComProductService
             'attributes' => $attributes,
         ];
 
-        if (! empty($parties)) {
+        if (! empty($parties) && !$forUpdate) {
             $data['parties'] = $parties;
         }
 
@@ -546,5 +547,26 @@ class BolComProductService
         }
 
         return Storage::disk('private')->url($image);
+    }
+
+    public function getProductPrice(Product $product, bool $excludeOverride = false): float
+    {
+        $values = $product->values['common'] ?? [];
+
+        if ($product->bol_price_override && !$excludeOverride) {
+            $priceData = ['EUR' => $product->bol_price_override];
+        } else {
+            $priceData = $values['prijs'] ?? 0;
+
+            if (isset($values['merk'])) {
+                $snake = \Str::snake($values['merk']);
+                $discount = config("bolcom.bol_discounts.$snake", 1);
+                $priceData['EUR'] = $priceData['EUR'] * $discount;
+            }
+        }
+
+        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
+
+        return (float) number_format($price, 2, '.', '');
     }
 }

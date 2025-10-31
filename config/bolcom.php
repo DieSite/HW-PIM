@@ -15,4 +15,10 @@ return [
     'api_url'       => env('BOLCOM_API_URL', 'https://api.bol.com'),
 
     'email_recipients' => explode(',', env('BOLCOM_EMAIL_RECIPIENTS', '')),
+
+    'bol_discounts' => [
+        'de_munk'  => 0.92,
+        'eurogros' => 0.95,
+        'karpi'    => 0.95,
+    ],
 ];

@@ -54,6 +54,7 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
         'bol_com_sync'          => 'boolean',
         'bol_com_credential_id' => 'integer',
         'bol_com_reference'     => 'string',
+        'bol_price_override'    => 'decimal:2'
     ];
 
     /**

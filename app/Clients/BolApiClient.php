@@ -7,6 +7,7 @@ use App\Models\BolComCredential;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Sentry\State\Scope;
 
 class BolApiClient
 {
@@ -101,6 +102,14 @@ class BolApiClient
      */
     protected function request($method, $endpoint, $options = [])
     {
+        \Sentry\configureScope(function (Scope $scope) use ($method, $endpoint, $options) {
+            $scope->setContext('bolcom_request', [
+                'method'  => $method,
+                'url'     => $this->baseUrl.$endpoint,
+                'options' => $options,
+            ]);
+        });
+
         try {
             $headers = $this->authHelper->getAuthHeaders();
             $headers['Content-Type'] = 'application/vnd.retailer.v10+json';

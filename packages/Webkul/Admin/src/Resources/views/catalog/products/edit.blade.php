@@ -313,6 +313,41 @@
                             </div>
                         @endif
 
+                        @if(!$bolSyncDisabled)
+                            <div class="mt-3">
+                                <label for="bol_price_override"
+                                       class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
+                                    Prijs overschrijven
+                                </label>
+                                <input
+                                    type="number"
+                                    name="bol_price_override"
+                                    id="bol_price_override"
+                                    value="{{ $product->bol_price_override ?? '' }}"
+                                    class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                    step="0.01"
+                                    min="0"
+                                    {{ $bolSyncDisabled ? 'disabled' : '' }}
+                                >
+                            </div>
+
+                            <div class="mt-3">
+                                <label for="bol_default_price"
+                                       class="block text-xs text-gray-600 dark:text-gray-300 font-medium mb-1">
+                                    Standaard Bol.com prijs (zonder overschrijven)
+                                </label>
+                                <input
+                                    type="number"
+                                    id="bol_default_price"
+                                    value="{{ app(\App\Services\BolComProductService::class)->getProductPrice($product) }}"
+                                    class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                    style="cursor:not-allowed;"
+                                    disabled
+                                >
+                            </div>
+                        @endif
+
+
                         <!-- Delivery Time Dropdown -->
                         @if(!$bolSyncDisabled)
                             <div class="mt-3">
