@@ -13,7 +13,7 @@ class UpdateAllProducts extends Command
      *
      * @var string
      */
-    protected $signature = 'app:update-all-products';
+    protected $signature = 'app:update-all-products {--skip=}';
 
     /**
      * The console command description.
@@ -31,8 +31,16 @@ class UpdateAllProducts extends Command
         $amount = $builder->count();
         $this->output->progressStart($amount);
 
-        $builder->chunk(100, function ($products) {
+        $skip = $this->option('skip') ?? 0;
+        $count = 0;
+
+        $builder->chunk(100, function ($products) use (&$count, $skip) {
             foreach ($products as $product) {
+                if ($count++ < $skip) {
+                    $this->output->progressAdvance();
+
+                    continue;
+                }
                 app(ProductService::class)->triggerWCSyncForParent($product);
                 $this->output->progressAdvance();
             }
