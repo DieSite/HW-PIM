@@ -32,7 +32,7 @@
                                 ]"
                             >
                             </span>
-                            
+
                         </label>
                     </p>
                     <span class="text-sm text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-800 dark:hover:text-white"  >@lang("Select All")</span>
@@ -50,19 +50,19 @@
                                 v-for="record in $parent.available.records"
                                 >
                                 <div class="grid image-card relative overflow-hidden transition-all hover:border-gray-400 group">
-                                    <img 
+                                    <img
                                         :src="record.path"
                                         :alt="record.file_name"
                                         class="w-full h-full object-cover object-center"
                                     >
-                                
+
                                     <!-- ################ -->
                                     <div class="flex flex-col justify-center invisible w-full p-3 bg-black dark:bg-cherry-800 absolute top-0 bottom-0 opacity-80 transition-all group-hover:visible">
                                         <!-- Actions -->
                                         <div class="flex justify-center">
                                             <!-- delete icon -->
                                             @if (bouncer()->hasPermission('dam.asset.destroy'))
-                                                <span 
+                                                <span
                                                     class="icon-delete text-2xl p-1.5 rounded-md cursor-pointer text-white hover:text-cherry-800 hover:bg-violet-100 dark:hover:bg-black"
                                                     @click="deleteImage(record.id)"
                                                 >
@@ -71,7 +71,7 @@
 
                                             <!-- edit icon -->
                                             @if (bouncer()->hasPermission('dam.asset.edit'))
-                                                <div 
+                                                <div
                                                     class="icon-edit text-2xl p-1.5 rounded-md cursor-pointer text-white hover:text-cherry-800 hover:bg-violet-100 dark:hover:bg-black"
                                                     @click="editImage(record.id)"
                                                 >
@@ -82,7 +82,7 @@
                                 </div>
                                 <!-- { "id": 3, "file_name": "image-2.jpg", "file_type": "image", "file_size": 421, "mime_type": "image/jpg", "extension": "jpg", "path": "/x/y/z3/image-2.jpg", "created_at": "2024-09-26 12:52:19", "updated_at": "2024-09-26 12:52:19", "actions": [] } -->
                                 <!-- <a :href="'/admin/dam/assets/edit/' + record.id"> -->
-                                
+
                                 <!-- ########### -->
                                 <div class="flex gap-2 items-center mt-2.5">
                                     <!-- Mass Actions -->
@@ -127,7 +127,7 @@
 
             data: function () {
                 return {
-                 
+
                 }
             },
             computed: {
@@ -151,7 +151,7 @@
                     this.$emitter.emit('open-delete-modal', {
                         agree: () => {
                             this.$axios
-                                .delete(`{{ route('admin.dam.assets.destroy', '') }}/${recordId}`)
+                                .delete(`{{ route('admin.dam.assets.destroy', ['id' => null]) }}/${recordId}`)
                                 .then(({
                                     data
                                 }) => {
@@ -173,7 +173,7 @@
                     document.removeEventListener('click', this.closeContextMenu);
                 },
                 editImage(recordId) {
-                    window.location.href = `{{ route('admin.dam.assets.edit', '') }}/${recordId}`;                    
+                    window.location.href = `{{ route('admin.dam.assets.edit', '') }}/${recordId}`;
                 }
             }
         });

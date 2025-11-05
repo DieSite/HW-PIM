@@ -23,17 +23,17 @@ Route::group([
     Route::group(['prefix' => 'assets'], function () {
         Route::controller(AssetController::class)->group(function () {
             Route::get('', 'index')->name('admin.dam.assets.index');
-            Route::get('/edit/{id}', 'edit')->name('admin.dam.assets.edit')->where('id', '[0-9]+');
+            Route::get('/edit/{id?}', 'edit')->name('admin.dam.assets.edit')->where('id', '[0-9]+');
             Route::get('show/{id}', 'show')->name('admin.dam.assets.show');
             Route::put('update/{id}', 'update')->name('admin.dam.assets.update');
 
             Route::post('/upload', 'upload')->name('admin.dam.assets.upload');
             Route::post('/re-upload', 'reUpload')->name('admin.dam.assets.re_upload');
-            Route::delete('/destroy/{id}', 'destroy')->name('admin.dam.assets.destroy');
+            Route::delete('/destroy/{id?}', 'destroy')->name('admin.dam.assets.destroy');
             Route::post('/mass-update', 'massUpdate')->name('admin.dam.assets.mass_update');
             Route::post('/mass-delete', 'massDestroy')->name('admin.dam.assets.mass_delete');
 
-            Route::get('download/{id}', 'download')->name('admin.dam.assets.download');
+            Route::get('download/{id?}', 'download')->name('admin.dam.assets.download');
             Route::get('custom-download/{id}', 'customDownload')->name('admin.dam.assets.custom_download');
 
             Route::post('rename', 'rename')->name('admin.dam.assets.rename');
