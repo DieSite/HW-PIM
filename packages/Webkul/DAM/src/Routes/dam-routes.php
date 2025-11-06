@@ -34,7 +34,7 @@ Route::group([
             Route::post('/mass-delete', 'massDestroy')->name('admin.dam.assets.mass_delete');
 
             Route::get('download/{id?}', 'download')->name('admin.dam.assets.download');
-            Route::get('custom-download/{id}', 'customDownload')->name('admin.dam.assets.custom_download');
+            Route::get('custom-download/{id?}', 'customDownload')->name('admin.dam.assets.custom_download');
 
             Route::post('rename', 'rename')->name('admin.dam.assets.rename');
             Route::post('/moved', 'moved')->name('admin.dam.assets.moved');
