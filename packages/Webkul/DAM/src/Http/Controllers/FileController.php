@@ -117,8 +117,17 @@ class FileController
         }
 
         if ($this->isImageFile($path)) {
-            $image = $this->resizeImage(Storage::disk('private')->get($path), 300);
-            $image->save(Storage::disk('private')->path($thumbnailPath));
+            $tempContent = Storage::disk('private')->get($path);
+            Storage::disk('local')->put($path, $tempContent);
+
+            Storage::disk('local')->put($thumbnailPath, '');
+
+            $image = $this->resizeImage(Storage::disk('local')->path($path), 300);
+            $image->save(Storage::disk('local')->path($thumbnailPath));
+
+            $newContent = Storage::disk('local')->get($thumbnailPath);
+            Storage::disk('private')->put($thumbnailPath, $newContent);
+            Storage::disk('local')->delete($path);
 
             $contents = Storage::disk('private')->get($thumbnailPath);
             $mimeType = Storage::disk('private')->mimeType($thumbnailPath);

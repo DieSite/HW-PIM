@@ -77,19 +77,19 @@ Route::group([
 
     Route::controller(DirectoryController::class)->prefix('directory')->group(function () {
         Route::get('', 'index')->name('admin.dam.directory.index');
-        Route::get('/children-directory/{id}', 'childrenDirectory')->name('admin.dam.directory.children');
-        Route::get('/directory-assets/{id}', 'directoryAssets')->name('admin.dam.directory.assets');
+        Route::get('/children-directory/{id?}', 'childrenDirectory')->name('admin.dam.directory.children');
+        Route::get('/directory-assets/{id?}', 'directoryAssets')->name('admin.dam.directory.assets');
         Route::post('/store', 'store')->name('admin.dam.directory.store');
         Route::post('/update', 'update')->name('admin.dam.directory.update');
-        Route::delete('/destroy/{id}', 'destroy')->name('admin.dam.directory.destroy');
+        Route::delete('/destroy/{id?}', 'destroy')->name('admin.dam.directory.destroy');
         Route::post('/copy', 'copy')->name('admin.dam.directory.copy');
-        Route::get('zip-download/{id}', 'downloadArchive')->name('admin.dam.directory.zip_download');
+        Route::get('zip-download/{id?}', 'downloadArchive')->name('admin.dam.directory.zip_download');
         Route::post('/copy-structure', 'copyStructure')->name('admin.dam.directory.copy_structure');
         Route::post('/moved', 'moved')->name('admin.dam.directory.moved');
     });
 
     Route::controller(ActionRequestController::class)->prefix('action-request')->group(function () {
-        Route::get('/status/{eventType}', 'fetchStatus')->name('admin.dam.action_request.status');
+        Route::get('/status/{eventType?}', 'fetchStatus')->name('admin.dam.action_request.status');
     });
 
     Route::controller(AssetPickerController::class)->prefix('picker')->group(function () {
