@@ -20,7 +20,7 @@ use Webkul\WooCommerce\Repositories\CredentialRepository;
 
 class OptionController extends Controller
 {
-    public const DEFAULT_PER_PAGE = 20;
+    public const DEFAULT_PER_PAGE = 50;
 
     public const EXCLUDE_MEDIA_TYPE = ['images', 'gallery'];
 
