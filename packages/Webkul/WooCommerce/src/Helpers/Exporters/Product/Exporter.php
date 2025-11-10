@@ -5,6 +5,8 @@ namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Sentry\Severity;
+use Sentry\State\Scope;
 use Webkul\Attribute\Repositories\AttributeRepository;
 use Webkul\DataTransfer\Contracts\JobTrackBatch as JobTrackBatchContract;
 use Webkul\DataTransfer\Helpers\Export as ExportHelper;
@@ -19,6 +21,8 @@ use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
 use Webkul\WooCommerce\Services\WooCommerceService;
 use Webkul\WooCommerce\Traits\DataTransferMappingTrait;
 use Webkul\WooCommerce\Traits\RestApiRequestTrait;
+
+use function Sentry\captureMessage;
 
 class Exporter extends AbstractExporter
 {
@@ -419,7 +423,22 @@ class Exporter extends AbstractExporter
             $formatted['menu_order'] = Arr::get($item, 'values.common.sorteer_volgorde', 0);
         }
 
+        $foundMerk = false;
+        foreach ($formatted['attributes'] as $attribute) {
+            if ($attribute['id'] == '1') {
+                $foundMerk = true;
+                break;
+            }
+        }
+
         Log::debug('Formatted', ['formatted' => $formatted]);
+
+        if (! $foundMerk) {
+            \Sentry::configureScope(function (Scope $scope) use ($formatted) {
+                $scope->setContext('formatted', $formatted);
+            });
+            captureMessage('Merk niet gevonden in formatted data', Severity::warning());
+        }
 
         return $formatted;
     }
