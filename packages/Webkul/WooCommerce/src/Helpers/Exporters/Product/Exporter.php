@@ -431,7 +431,7 @@ class Exporter extends AbstractExporter
             }
         }
 
-        Log::debug('Formatted', ['formatted' => $formatted]);
+        Log::info('Formatted', ['formatted' => $formatted]);
 
         if (! $foundMerk) {
             \Sentry::configureScope(function (Scope $scope) use ($formatted) {
