@@ -307,6 +307,9 @@ class Exporter extends AbstractExporter
 
         $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
 
+        Log::info('1 FORMATTED', ['formatted' => $formatted]);
+        Log::info('1 ATTRIBUTES', ['attributes' => $attributes]);
+
         $this->formatAdditionalData($formatted, $attributes, $imagesToExport, $item);
 
         $voorraadEurogros = $item['values']['common']['voorraad_eurogros'] ?? 0;
