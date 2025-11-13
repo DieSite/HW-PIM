@@ -13,7 +13,7 @@ class UpdateAllProducts extends Command
      *
      * @var string
      */
-    protected $signature = 'app:update-all-products {--skip=}';
+    protected $signature = 'app:update-all-products {--skip=} {--sku=}';
 
     /**
      * The console command description.
@@ -28,6 +28,11 @@ class UpdateAllProducts extends Command
     public function handle()
     {
         $builder = Product::whereNull('parent_id');
+
+        if ($this->option('sku')) {
+            $builder = $builder->where('sku', 'LIKE', $this->option('sku').'%');
+        }
+
         $amount = $builder->count();
         $this->output->progressStart($amount);
 
