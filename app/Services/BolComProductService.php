@@ -518,10 +518,6 @@ class BolComProductService
             'attributes' => $attributes,
         ];
 
-        if (! empty($parties) && !$forUpdate) {
-            $data['parties'] = $parties;
-        }
-
         if (! empty($assets)) {
             $data['assets'] = $assets;
         }
