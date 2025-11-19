@@ -470,21 +470,20 @@ class BolComProductService
             ];
         }
 
-        $parties = [];
-
-        if (! empty($merk)) {
-            $parties[] = [
-                'name' => $merk,
-                'type' => 'Brand',
-                'role' => 'BRAND',
-            ];
-        }
-
         if (! empty($shape)) {
             $attributes[] = [
                 'id'     => 'Shape',
                 'values' => [
                     'value' => $shape,
+                ],
+            ];
+        }
+
+        if (!empty($merk)) {
+            $attributes[] = [
+                'id'     => 'Brand',
+                'values' => [
+                    'value' => $merk,
                 ],
             ];
         }
