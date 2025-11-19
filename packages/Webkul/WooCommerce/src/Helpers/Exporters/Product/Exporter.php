@@ -307,8 +307,8 @@ class Exporter extends AbstractExporter
 
         $imagesToExport = array_intersect($this->mediaMappings, $this->imageAttributeCodes);
 
-        Log::info('1 FORMATTED', ['formatted' => $formatted]);
-        Log::info('1 ATTRIBUTES', ['attributes' => $attributes]);
+        Log::debug('1 FORMATTED', ['formatted' => $formatted]);
+        Log::debug('1 ATTRIBUTES', ['attributes' => $attributes]);
 
         $this->formatAdditionalData($formatted, $attributes, $imagesToExport, $item);
 
@@ -434,13 +434,24 @@ class Exporter extends AbstractExporter
             }
         }
 
-        Log::info('Formatted', ['formatted' => $formatted]);
+        Log::debug('Formatted', ['formatted' => $formatted]);
 
         if (! $foundMerk) {
             \Sentry::configureScope(function (Scope $scope) use ($formatted) {
                 $scope->setContext('formatted', $formatted);
             });
             captureMessage('Merk niet gevonden in formatted data', Severity::warning());
+        }
+
+        if (! isset($formatted['parent_id']) // Is parent product and has no images
+            && (! isset($formatted['images'])
+                || ! is_array($formatted['images'])
+                || count($formatted['images']) < 1)) {
+            \Sentry::configureScope(function (Scope $scope) use ($formatted, $item) {
+                $scope->setContext('formatted', $formatted);
+                $scope->setContext('item', $item);
+            });
+            throw new \Exception('Het lijkt er op dat er voor dit product geen afbeeldingen zijn opgeslagen. Probeer het opnieuw.');
         }
 
         return $formatted;

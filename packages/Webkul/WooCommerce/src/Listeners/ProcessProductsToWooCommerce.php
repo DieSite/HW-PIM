@@ -91,13 +91,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         // Prepare product data
         $this->batch['code'] = $this->batch['sku'];
         $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
-        $productData = $this->formatData($this->batch);
-
-        if (! isset($productData['sku'])) {
-            Log::debug('Product data', ['product_data' => $productData]);
-        }
 
         try {
+            $productData = $this->formatData($this->batch);
+
             if (isset($productData['parent_id'])) {
                 $this->processToVariation($productData);
             } else {
