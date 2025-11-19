@@ -120,6 +120,17 @@ class BolApiClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (Exception $e) {
+            if ($e instanceof \GuzzleHttp\Exception\ClientException) {
+                \Sentry\configureScope(function (Scope $scope) use ($e) {
+                    $scope->setContext('bolcom_response', [
+                        'body'            => $e->getResponse()->getBody()->getContents(),
+                        'status'          => $e->getResponse()->getStatusCode(),
+                        'headers'         => $e->getResponse()->getHeaders(),
+                        'response_object' => $e->getResponse(),
+                    ]);
+                });
+            }
+
             throw new Exception('Bol.com API error', previous: $e);
         }
     }
