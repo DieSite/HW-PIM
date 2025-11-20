@@ -186,7 +186,8 @@ class BolComProductService
         Log::debug('BOL.com response', $response);
 
         $this->updateProductPrice($product, $apiClient, $reference);
-        $this->updateProductStock($product, $apiClient, $reference);
+        $stockResponse = $this->updateProductStock($product, $apiClient, $reference);
+        Log::info('StockResponse', ['response' => $stockResponse]);
         $this->updateProductDetails($product, $apiClient, $reference, $deliveryCode);
 
         return true;
