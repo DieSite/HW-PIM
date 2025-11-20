@@ -230,8 +230,10 @@ class BolComProductService
 
         $stock = 0;
         foreach ($stockSources as $source) {
+            Log::info('BOL.com stock', ['source' => $stockData[$source] ?? 'unknown', 'title' => $source]);
             $stock += (int) ($stockData[$source] ?? 0);
         }
+        Log::info('BOL.com stock', ['stock' => $stock]);
 
         $data = [
             'amount'            => $stock,
