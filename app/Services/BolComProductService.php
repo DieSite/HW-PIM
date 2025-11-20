@@ -224,7 +224,6 @@ class BolComProductService
 
         $stockSources = [
             'voorraad_eurogros',
-            'voorraad_5_korting',
             'voorraad_5_korting_handmatig',
             'voorraad_hw_5_korting',
         ];
