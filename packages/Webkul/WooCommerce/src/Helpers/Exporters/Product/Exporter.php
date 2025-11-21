@@ -434,6 +434,12 @@ class Exporter extends AbstractExporter
             }
         }
 
+        foreach ($formatted['attributes'] as &$attribute) {
+            foreach ($attribute['options'] as &$option) {
+                $option = (string) $option;
+            }
+        }
+
         Log::debug('Formatted', ['formatted' => $formatted]);
 
         if (! $foundMerk) {
@@ -447,10 +453,14 @@ class Exporter extends AbstractExporter
             && (! isset($formatted['images'])
                 || ! is_array($formatted['images'])
                 || count($formatted['images']) < 1)) {
-            \Sentry::configureScope(function (Scope $scope) use ($formatted, $item) {
+            \Sentry::configureScope(function (Scope $scope) use ($formatted, $item, $imagesToExport) {
                 $scope->setContext('formatted', $formatted);
                 $scope->setContext('item', $item);
+                $scope->setContext('imagesToExport', $imagesToExport);
+                $scope->setContext('mediaMappings', $this->mediaMappings);
+                $scope->setContext('imageAttributeCodes', $this->imageAttributeCodes);
             });
+
             throw new \Exception('Het lijkt er op dat er voor dit product geen afbeeldingen zijn opgeslagen. Probeer het opnieuw.');
         }
 
@@ -766,6 +776,10 @@ class Exporter extends AbstractExporter
                 } else {
                     $value = 'No';
                 }
+            }
+
+            if (in_array($code, $imagesToExport) && count($value) === 1) {
+                $value = $value[0];
             }
 
             if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
