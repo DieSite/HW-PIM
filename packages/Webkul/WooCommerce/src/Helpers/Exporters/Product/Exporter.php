@@ -459,9 +459,9 @@ class Exporter extends AbstractExporter
             \Sentry::configureScope(function (Scope $scope) use ($formatted, $item, $imagesToExport) {
                 $scope->setContext('formatted', $formatted);
                 $scope->setContext('item', $item);
-                $scope->setContext('imagesToExport', $imagesToExport);
-                $scope->setContext('mediaMappings', $this->mediaMappings);
-                $scope->setContext('imageAttributeCodes', $this->imageAttributeCodes);
+                $scope->setContext('imagesToExport', ['imagesToExport' => $imagesToExport]);
+                $scope->setContext('mediaMappings', ['mediaMappings' => $this->mediaMappings]);
+                $scope->setContext('imageAttributeCodes', ['imageAttributeCodes' => $this->imageAttributeCodes]);
             });
 
             throw new \Exception('Het lijkt er op dat er voor dit product geen afbeeldingen zijn opgeslagen. Probeer het opnieuw.');
@@ -781,7 +781,7 @@ class Exporter extends AbstractExporter
                 }
             }
 
-            if (in_array($code, $imagesToExport) && is_array($value) && count($value) === 1) {
+            if (in_array($code, $imagesToExport) && is_array($value)) {
                 $value = $value[0];
             }
 
