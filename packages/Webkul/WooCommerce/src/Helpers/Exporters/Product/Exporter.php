@@ -782,7 +782,7 @@ class Exporter extends AbstractExporter
             }
 
             if (in_array($code, $imagesToExport) && is_array($value)) {
-                $value = $value[0];
+                $value = implode(',', $value);
             }
 
             if ($this->mediaExport && in_array($code, $imagesToExport) && ! is_array($value)) {
