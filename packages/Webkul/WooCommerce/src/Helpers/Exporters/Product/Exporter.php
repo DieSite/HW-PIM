@@ -778,7 +778,7 @@ class Exporter extends AbstractExporter
                 }
             }
 
-            if (in_array($code, $imagesToExport) && count($value) === 1) {
+            if (in_array($code, $imagesToExport) && is_array($value) && count($value) === 1) {
                 $value = $value[0];
             }
 
