@@ -435,7 +435,7 @@ class Exporter extends AbstractExporter
         }
 
         foreach ($formatted['attributes'] as &$attribute) {
-            if ( is_null($attribute['options']) ) {
+            if ( !isset($attribute['options']) ) {
                 continue;
             }
             foreach ($attribute['options'] as &$option) {
