@@ -435,7 +435,7 @@ class Exporter extends AbstractExporter
         }
 
         foreach ($formatted['attributes'] as &$attribute) {
-            if ( !isset($attribute['options']) ) {
+            if (! isset($attribute['options'])) {
                 continue;
             }
             foreach ($attribute['options'] as &$option) {
@@ -786,7 +786,7 @@ class Exporter extends AbstractExporter
             }
 
             if ($this->mediaExport && in_array($code, $imagesToExport)) {
-                if ( strlen($value) > 0 ) {
+                if (strlen($value) > 0) {
                     $formattedImageData = $this->formatImageData($code, $value, $imagesToExport, $item['code']);
                     foreach ($formattedImageData as $image) {
                         $imageAttrs[] = $image;
