@@ -31,17 +31,27 @@ class DownloadSaleMainImages extends Command
             $query->selectRaw('1')
                 ->from('products as p2')
                 ->whereColumn('p2.parent_id', 'products.id')
-                ->where('p2.values->common->voorraad_eurogros', '>', 0)
-                ->orWhere('p2.values->common->voorraad_5_korting_handmatig', '>', 0)
-                ->orWhere('p2.values->common->voorraad_hw_5_korting', '>', 0)
-                ->orWhere('p2.values->common->uitverkoop_15_korting', '>', 0);
-        })->get();
+                ->where(function ($query) {
+                    $query->where('p2.values->common->voorraad_eurogros', '>', 0)
+                        ->orWhere('p2.values->common->voorraad_5_korting_handmatig', '>', 0)
+                        ->orWhere('p2.values->common->voorraad_hw_5_korting', '>', 0)
+                        ->orWhere('p2.values->common->uitverkoop_15_korting', '>', 0);
+                });
+        })->whereNull('products.parent_id')->get();
 
         $progressBar = $this->output->createProgressBar(count($products));
         foreach ($products as $product) {
             $progressBar->advance();
-            $images = json_decode($product->values, true)['common']['afbeelding'];
-            $images = explode(',', $images);
+            if (is_array($product->values)) {
+                $decoded = $product->values;
+            } else {
+                $decoded = json_decode($product->values, true);
+            }
+            $images = $decoded['common']['afbeelding'];
+            if (! is_array($images)) {
+                $images = explode(',', $images);
+            }
+
             if (count($images) === 0) {
                 continue;
             }
