@@ -37,10 +37,12 @@ class DownloadSaleMainImages extends Command
                 ->orWhere('p2.values->common->uitverkoop_15_korting', '>', 0);
         })->get();
 
+        $progressBar = $this->output->createProgressBar(count($products));
         foreach ($products as $product) {
+            $progressBar->advance();
             $images = json_decode($product->values, true)['common']['afbeelding'];
             $images = explode(',', $images);
-            if ( sizeof($images) === 0 ) {
+            if (count($images) === 0) {
                 continue;
             }
 
@@ -56,5 +58,7 @@ class DownloadSaleMainImages extends Command
             $fileName = basename($image);
             Storage::disk('local')->put("stock_products/$fileName", $imageData);
         }
+
+        $progressBar->finish();
     }
 }
