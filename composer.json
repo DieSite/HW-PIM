@@ -22,7 +22,7 @@
         "barryvdh/laravel-dompdf": "^3.0",
         "diglactic/laravel-breadcrumbs": "^10.0",
         "elasticsearch/elasticsearch": "^8.10",
-        "enshrined/svg-sanitize": "^0.16.0",
+        "enshrined/svg-sanitize": "^0.22.0",
         "guzzlehttp/guzzle": "^7.0.1",
         "intervention/image": "^3.11",
         "kalnoy/nestedset": "^6.0",
