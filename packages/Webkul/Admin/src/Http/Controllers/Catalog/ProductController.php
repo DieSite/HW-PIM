@@ -215,15 +215,18 @@ class ProductController extends Controller
 
             $ean = $product->values['common']['ean'] ?? null;
             $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
-            $clearedAdditional = [];
+            $clearedAdditional = $product->additional;
+
+            unset($clearedAdditional['product_sku_already_exists']);
+            unset($clearedAdditional['product_sync_error']);
 
             $maat = $product->values['common']['maat'] ?? null;
 
             if (is_null($maat) && $product->bol_com_sync) {
-                $clearedAdditional[] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
+                $clearedAdditional['product_sync_error'] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
                 $product->bol_com_sync = false;
             } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
-                $clearedAdditional[] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
+                $clearedAdditional['product_sync_error'] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
                 $product->bol_com_sync = false;
             }
 
