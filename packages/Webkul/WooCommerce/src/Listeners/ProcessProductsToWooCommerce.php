@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Sentry;
 use Webkul\Product\Repositories\ProductRepository;
 use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
@@ -112,6 +113,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             $additional['product_sync_error'] = $e->getMessage();
             $product->additional = $additional;
             $product->save();
+            Sentry::captureException($e);
             throw $e;
         }
     }

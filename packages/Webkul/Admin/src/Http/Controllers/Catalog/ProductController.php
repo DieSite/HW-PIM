@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Str;
 use Webkul\Admin\DataGrids\Catalog\ProductDataGrid;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Admin\Http\Requests\MassDestroyRequest;
@@ -235,7 +236,7 @@ class ProductController extends Controller
                 $additional[] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
                 $product->additional = count($additional) > 0 ? $additional : null;
                 $product->bol_com_sync = false;
-            } elseif (\Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
+            } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
                 $additional = $product->additional ?? [];
                 $additional[] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
                 $product->additional = count($additional) > 0 ? $additional : null;
