@@ -564,9 +564,10 @@ class BolComProductService
             $priceData = ['EUR' => $product->bol_price_override];
         } else {
             $priceData = $values['prijs'] ?? 0;
+            $parentValues = $product->parent->values['common'] ?? [];
 
-            if (isset($values['merk'])) {
-                $snake = \Str::snake($values['merk']);
+            if (isset($parentValues['merk'])) {
+                $snake = \Str::snake($parentValues['merk']);
                 $discount = config("bolcom.bol_discounts.$snake", 1);
                 $priceData['EUR'] = $priceData['EUR'] * $discount;
             }
