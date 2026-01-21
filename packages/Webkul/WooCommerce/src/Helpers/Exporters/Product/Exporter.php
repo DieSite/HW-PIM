@@ -445,7 +445,7 @@ class Exporter extends AbstractExporter
 
         Log::debug('Formatted', ['formatted' => $formatted]);
 
-        if (! $foundMerk) {
+        if (! $foundMerk && !isset($item['parent_id'])) {
             \Sentry::configureScope(function (Scope $scope) use ($formatted) {
                 $scope->setContext('formatted', $formatted);
             });
