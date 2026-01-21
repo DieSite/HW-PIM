@@ -225,7 +225,7 @@ class ProductController extends Controller
             if (is_null($maat) && $product->bol_com_sync) {
                 $clearedAdditional['product_sync_error'] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
                 $product->bol_com_sync = false;
-            } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
+            } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen']) && $product->bol_com_sync) {
                 $clearedAdditional['product_sync_error'] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
                 $product->bol_com_sync = false;
             }
