@@ -340,7 +340,15 @@ class BolComProductService
         $colors = collect($colors)->map(fn ($color) => ['value' => $color])->toArray();
 
         $maat = $product->values['common']['maat'] ?? '';
-        [$width, $length] = explode('x', $maat);
+        if (\Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
+            throw new Exception('Maatwerk is niet toegestaan op Bol.com');
+        } elseif (str_contains($maat, 'x')) {
+            [$width, $length] = explode('x', $maat);
+        } else {
+            $roundSize = \Str::remove('Rond ', $maat);
+            [$width, $length] = [$roundSize, $roundSize];
+        }
+
         $width = preg_replace('/\D/', '', $width);
         $length = preg_replace('/\D/', '', $length);
 
