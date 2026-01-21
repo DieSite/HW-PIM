@@ -43,6 +43,7 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
         'parent_id',
         'status',
         'bol_com_sync',
+        'additional',
     ];
 
     /**

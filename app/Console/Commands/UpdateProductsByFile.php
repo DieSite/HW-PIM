@@ -52,6 +52,7 @@ class UpdateProductsByFile extends Command
                 $this->output->progressAdvance();
             }
         });
+        $builder->update(['additional' => null]);
 
         $this->output->progressFinish();
     }
