@@ -215,8 +215,17 @@ class ProductController extends Controller
 
             $ean = $product->values['common']['ean'] ?? null;
             $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
+            $clearedAdditional = [];
 
             $maat = $product->values['common']['maat'] ?? null;
+
+            if (is_null($maat) && $product->bol_com_sync) {
+                $clearedAdditional[] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
+                $product->bol_com_sync = false;
+            } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
+                $clearedAdditional[] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
+                $product->bol_com_sync = false;
+            }
 
             $selectedCredentialIds = $request->has('bol_com_sync')
                 ? $request->input('bol_com_credentials', [])
@@ -231,46 +240,30 @@ class ProductController extends Controller
                 })
                 ->get();
 
-            if (is_null($maat) && $product->bol_com_sync) {
-                $additional = $product->additional ?? [];
-                $additional[] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
-                $product->additional = count($additional) > 0 ? $additional : null;
-                $product->bol_com_sync = false;
-            } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen'])) {
-                $additional = $product->additional ?? [];
-                $additional[] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
-                $product->additional = count($additional) > 0 ? $additional : null;
-                $product->bol_com_sync = false;
-            } else {
-                $deliveryCode = $request->has('bol_com_sync') ? $request->input('bol_com_delivery_code') : null;
-                $product->bol_price_override = $request->input('bol_price_override') ?: null;
+            $deliveryCode = $request->has('bol_com_sync') ? $request->input('bol_com_delivery_code') : null;
+            $product->bol_price_override = $request->input('bol_price_override') ?: null;
 
-                Log::debug('BOL.com price override', ['bol_price_override' => $product->bol_price_override]);
+            Log::debug('BOL.com price override', ['bol_price_override' => $product->bol_price_override]);
 
-                $selectedCredentials = BolComCredential::whereIn('id', $selectedCredentialIds)->get();
+            $selectedCredentials = BolComCredential::whereIn('id', $selectedCredentialIds)->get();
 
-                if ($request->has('bol_com_sync') && $request->has('bol_com_credentials')) {
-                    $syncData = [];
-                    foreach ($selectedCredentialIds as $credentialId) {
-                        $syncData[$credentialId] = [
-                            'delivery_code' => $deliveryCode,
-                        ];
-                    }
-                    $product->bolComCredentials()->sync($syncData);
+            if ($request->has('bol_com_sync') && $request->has('bol_com_credentials')) {
+                $syncData = [];
+                foreach ($selectedCredentialIds as $credentialId) {
+                    $syncData[$credentialId] = [
+                        'delivery_code' => $deliveryCode,
+                    ];
                 }
+                $product->bolComCredentials()->sync($syncData);
+            }
 
-                $additional = $product->additional ?? [];
+            $product->additional = $clearedAdditional;
 
-                unset($additional['product_sku_already_exists']);
-                unset($additional['product_sync_error']);
-                $product->additional = count($additional) > 0 ? $additional : null;
+            $product->saveQuietly();
 
-                $product->saveQuietly();
-
-                if ($ean !== null && $product->bol_com_sync) {
-                    foreach ($selectedCredentials as $credential) {
-                        SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState);
-                    }
+            if ($ean !== null && $product->bol_com_sync) {
+                foreach ($selectedCredentials as $credential) {
+                    SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState);
                 }
             }
 
