@@ -339,7 +339,7 @@
                                 <input
                                     type="number"
                                     id="bol_default_price"
-                                    value="{{ app(\App\Services\BolComProductService::class)->getProductPrice($product) }}"
+                                    value="{{ app(\App\Services\BolComProductService::class)->getProductPrice($product, true) }}"
                                     class="w-full p-2 border border-gray-300 rounded-md text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                                     style="cursor:not-allowed;"
                                     disabled
