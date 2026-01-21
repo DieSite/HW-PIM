@@ -260,6 +260,9 @@ class ProductController extends Controller
                 $product->bolComCredentials()->sync($syncData);
             }
 
+            if ( sizeof($clearedAdditional) === 0 ) {
+                $clearedAdditional = null;
+            }
             $product->additional = $clearedAdditional;
 
             $product->saveQuietly();
