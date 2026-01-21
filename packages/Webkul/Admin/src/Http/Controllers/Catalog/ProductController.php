@@ -215,7 +215,7 @@ class ProductController extends Controller
 
             $ean = $product->values['common']['ean'] ?? null;
             $product->bol_com_sync = $request->has('bol_com_sync') ? 1 : 0;
-            $clearedAdditional = $product->additional;
+            $clearedAdditional = $product->additional ?? [];
 
             unset($clearedAdditional['product_sku_already_exists']);
             unset($clearedAdditional['product_sync_error']);
