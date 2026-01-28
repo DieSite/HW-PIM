@@ -2,7 +2,9 @@
 
 namespace App\Imports;
 
+use App\Models\BolComCredential;
 use App\Models\Product;
+use App\Services\ProductService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToModel;
@@ -17,15 +19,19 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
 
     public function model(array $row)
     {
-        if (! isset($row['ean']) || ! isset($row['vrd'])) {
+        if (!isset($row['ean']) || !isset($row['vrd'])) {
             return null;
         }
 
-        $ean = (string) $row['ean'];
+        $ean = (string)$row['ean'];
 
         $products = Product::whereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [$ean])
-            ->orWhereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [(int) $ean])
+            ->orWhereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [(int)$ean])
             ->get();
+
+        $productService = app(ProductService::class);
+
+        $bolCredentials = BolComCredential::all();
 
         foreach ($products as $product) {
             $values = json_decode($product->values, true);
@@ -34,6 +40,8 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
                 $values['common']['voorraad_eurogros'] = $row['vrd'];
                 $product->values = json_encode($values);
                 $product->save();
+
+                $productService->triggerFullExternalSync($product, $bolCredentials);
             }
         }
 

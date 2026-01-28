@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncProductWithBolComJob;
+use App\Models\BolComCredential;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use Str;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
@@ -113,8 +116,104 @@ class ProductService
         ])->dispatch();
     }
 
+    public function triggerFullExternalSync(Product $product, ?array $bolCredentials = null): void
+    {
+        if (is_null($bolCredentials)) {
+            $bolCredentials = BolComCredential::all();
+        }
+
+        if (is_null($product->parent)) {
+            $this->triggerWCSyncForParent($product);
+        } else {
+            $this->triggerWCSyncForChild($product);
+        }
+
+        $this->triggerBolSync($product, $bolCredentials, [], true);
+    }
+
     public function triggerWCSyncForChild(Product $product): void
     {
         $this->triggerWCSyncForParent($product->parent);
+    }
+
+    public function processBolSync(
+        Product $product,
+        bool $sync,
+        ?array $bolComCredentials,
+        ?string $deliveryCode,
+        ?float $bolPriceOverride,
+        $previousSyncState
+    ): void {
+        $ean = $product->values['common']['ean'] ?? null;
+        $product->bol_com_sync = $sync;
+        $clearedAdditional = $product->additional ?? [];
+
+        unset($clearedAdditional['product_sku_already_exists']);
+        unset($clearedAdditional['product_sync_error']);
+
+        $maat = $product->values['common']['maat'] ?? null;
+
+        if (is_null($maat) && $product->bol_com_sync) {
+            $clearedAdditional['product_sync_error'] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
+            $product->bol_com_sync = false;
+        } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen']) && $product->bol_com_sync) {
+            $clearedAdditional['product_sync_error'] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
+            $product->bol_com_sync = false;
+        }
+
+        $selectedCredentialIds = $sync
+            ? $bolComCredentials
+            : [];
+
+        $credentialsToDelete = $product->bolComCredentials()
+            ->when(! $sync, function ($query) {
+                return $query->whereNotNull('reference');
+            }, function ($query) use ($selectedCredentialIds) {
+                return $query->whereNotIn('bol_com_credentials.id', $selectedCredentialIds)
+                    ->whereNotNull('reference');
+            })
+            ->get();
+
+        $deliveryCode = $sync ? $deliveryCode : null;
+        $product->bol_price_override = $bolPriceOverride ?: null;
+
+        Log::debug('BOL.com price override', ['bol_price_override' => $product->bol_price_override]);
+
+        $selectedCredentials = BolComCredential::whereIn('id', $selectedCredentialIds)->get();
+
+        if ($sync && ! is_null($bolComCredentials)) {
+            $syncData = [];
+            foreach ($selectedCredentialIds as $credentialId) {
+                $syncData[$credentialId] = [
+                    'delivery_code' => $deliveryCode,
+                ];
+            }
+            $product->bolComCredentials()->sync($syncData);
+        }
+
+        if (count($clearedAdditional) === 0) {
+            $clearedAdditional = null;
+        }
+        $product->additional = $clearedAdditional;
+
+        $product->saveQuietly();
+
+        $this->triggerBolSync($product, $selectedCredentials, $credentialsToDelete, $previousSyncState);
+    }
+
+    public function triggerBolSync(Product $product, array $selectedCredentials, array $credentialsToDelete, bool $previousSyncState)
+    {
+        $ean = $product->values['common']['ean'] ?? null;
+        if ($ean !== null && $product->bol_com_sync) {
+            foreach ($selectedCredentials as $credential) {
+                SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState);
+            }
+        }
+
+        if ($ean !== null) {
+            foreach ($credentialsToDelete as $credential) {
+                SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState, null, true);
+            }
+        }
     }
 }
