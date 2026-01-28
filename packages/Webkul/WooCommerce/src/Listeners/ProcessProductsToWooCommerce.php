@@ -210,6 +210,11 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         } elseif ($result['code'] == 400) {
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
+            } elseif(str_contains($result['message'], 'Ongeldige parameter(s):') && isset($result['data']['details']['default_attributes']['data']['param'])) {
+                $param = $result['data']['details']['default_attributes']['data']['param'];
+                if ( $param === 'default_attributes[0][option]') {
+                    throw new \Exception('Er ging iets mis met het doorzetten naar Woocommerce. Heb je de variaties wel toegevoegd?');
+                }
             } else {
                 throw new \Exception("Error occurred ($result[code]): " . json_encode($result));
             }
