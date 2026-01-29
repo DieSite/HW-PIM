@@ -12,6 +12,7 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithProgressBar;
 use Maatwebsite\Excel\Concerns\WithUpserts;
+use Webkul\Product\Repositories\ProductRepository;
 
 class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, WithHeadingRow, WithProgressBar, WithUpserts
 {
@@ -30,6 +31,7 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
             ->get();
 
         $productService = app(ProductService::class);
+        $productRepository = app(ProductRepository::class);
 
         $bolCredentials = BolComCredential::all();
 
@@ -41,7 +43,9 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
                 $product->values = json_encode($values);
                 $product->save();
 
-                $productService->triggerFullExternalSync($product, $bolCredentials);
+                $webkulProduct = $productRepository->find($product->id);
+
+                $productService->triggerFullExternalSync($webkulProduct, $bolCredentials);
             }
         }
 
