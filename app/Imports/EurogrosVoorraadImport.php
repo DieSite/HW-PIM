@@ -33,7 +33,7 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
         $productService = app(ProductService::class);
         $productRepository = app(ProductRepository::class);
 
-        $bolCredentials = BolComCredential::all();
+        $bolCredentials = BolComCredential::all()->all();
 
         foreach ($products as $product) {
             $values = json_decode($product->values, true);
