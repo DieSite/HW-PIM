@@ -419,7 +419,7 @@ class Exporter extends AbstractExporter
             if (! empty($item['values']['common']['afbeelding_zonder_logo'])) {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($item['values']['common']['afbeelding_zonder_logo'])];
             } else {
-                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => ''];
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $formatted['image'] ?? $formatted['images'][0] ?? ''];
             }
             $formatted['meta_data'] = $meta;
 
