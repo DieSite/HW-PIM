@@ -198,7 +198,7 @@ class ProductService
 
         $product->saveQuietly();
 
-        $this->triggerBolSync($product, $selectedCredentials, $credentialsToDelete, $previousSyncState);
+        $this->triggerBolSync($product, $selectedCredentials->all(), $credentialsToDelete, $previousSyncState);
     }
 
     public function triggerBolSync(Product $product, array $selectedCredentials, array $credentialsToDelete, bool $previousSyncState)
