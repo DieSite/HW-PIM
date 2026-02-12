@@ -3,6 +3,7 @@
 namespace Webkul\WooCommerce\Http\Client;
 
 use Illuminate\Http\Client\Response;
+use Sentry\State\Scope;
 use Webkul\WooCommerce\Traits\RestApiEndpointsTrait;
 
 /**
@@ -165,6 +166,10 @@ class ApiClient
             $this->url = str_replace('v1', 'v2', $this->url);
             $url = $this->url.$endpoint;
         }
+
+        \Sentry::configureScope(function (Scope $scope) use ($url) {
+            $scope->setContext('wordpress_request', ['url' => $url]);
+        });
 
         // Setup authentication.
         $this->authenticate($url, $method, $parameters, $headers, $holdEndPoint);
