@@ -192,6 +192,10 @@ class ApiClient
         $timeout = $this->options['timeout'] ?? 300;
         $followRedirects = $this->options['followRedirects'] ?? true;
 
+        \Sentry::configureScope(function (Scope $scope) {
+            $scope->setContext('options', $this->options);
+        });
+
         \curl_setopt($this->ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
         if (! $verifySsl) {
             \curl_setopt($this->ch, CURLOPT_SSL_VERIFYHOST, $verifySsl);
@@ -201,7 +205,6 @@ class ApiClient
         }
 
         \curl_setopt($this->ch, CURLOPT_MAXREDIRS, 10);
-        \curl_setopt($this->ch, CURLOPT_CONNECTTIMEOUT, $timeout);
         \curl_setopt($this->ch, CURLOPT_CONNECTTIMEOUT, $timeout);
         \curl_setopt($this->ch, CURLOPT_TIMEOUT, $timeout);
         \curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, true);
