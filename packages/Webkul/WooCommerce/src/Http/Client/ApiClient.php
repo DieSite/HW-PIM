@@ -139,6 +139,10 @@ class ApiClient
     protected function createRequest($endpoint, $parameters = [], $data = [], $headers = [])
     {
         $holdEndPoint = $endpoint;
+
+        \Sentry::configureScope(function (Scope $scope) use ($endpoint) {
+            $scope->setContext('wordpress_endpoint', ['url' => $endpoint]);
+        });
         if (array_key_exists($endpoint, $this->apiEndpoints)) {
 
             if (in_array($endpoint, self::WORD_PRESS_END_POINT)) {
@@ -166,10 +170,6 @@ class ApiClient
             $this->url = str_replace('v1', 'v2', $this->url);
             $url = $this->url.$endpoint;
         }
-
-        \Sentry::configureScope(function (Scope $scope) use ($url) {
-            $scope->setContext('wordpress_request', ['url' => $url]);
-        });
 
         // Setup authentication.
         $this->authenticate($url, $method, $parameters, $headers, $holdEndPoint);
