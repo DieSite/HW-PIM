@@ -8,37 +8,39 @@ HW-PIM is a customized fork of [UnoPim](https://unopim.com/), an open-source Pro
 
 ## Common Commands
 
+All `php` commands must be run inside the `unopim-web` Docker container:
+
+```bash
+docker exec -it unopim-web php artisan <command>
+# or open a shell:
+docker exec -it unopim-web bash
+```
+
 ### Development
 
 ```bash
-# Start local dev server
-php artisan serve
+# Start containers (web + MySQL + queue worker)
+docker-compose up -d
 
-# Start queue worker (required for async jobs)
-php artisan queue:work
-
-# Build frontend assets
+# Build frontend assets (run on host)
 npm run dev       # development (Vite with hot reload)
 npm run build     # production
-
-# Docker Compose (web + MySQL + queue worker containers)
-docker-compose up -d
 ```
 
 ### Testing
 
 ```bash
 # Run all tests
-php artisan test
+docker exec -it unopim-web php artisan test
 
 # Run a specific test suite
-php artisan test --testsuite="Core Unit Test"
-php artisan test --testsuite="Api Feature Test"
-php artisan test --testsuite="User Feature Test"
-php artisan test --testsuite="Admin Feature Test"
+docker exec -it unopim-web php artisan test --testsuite="Core Unit Test"
+docker exec -it unopim-web php artisan test --testsuite="Api Feature Test"
+docker exec -it unopim-web php artisan test --testsuite="User Feature Test"
+docker exec -it unopim-web php artisan test --testsuite="Admin Feature Test"
 
 # Run a single test file
-php artisan test packages/Webkul/Core/tests/Unit/SomeTest.php
+docker exec -it unopim-web php artisan test packages/Webkul/Core/tests/Unit/SomeTest.php
 ```
 
 Test suites are defined in `phpunit.xml`. Tests live inside each package under `packages/Webkul/*/tests/`.
@@ -46,29 +48,29 @@ Test suites are defined in `phpunit.xml`. Tests live inside each package under `
 ### Artisan Commands (custom)
 
 ```bash
-php artisan unopim:install                  # Initial installation
-php artisan user:create                     # Create admin user
+docker exec -it unopim-web php artisan unopim:install                  # Initial installation
+docker exec -it unopim-web php artisan user:create                     # Create admin user
 
 # Bol.com sync
-php artisan fetch:bol-categories
-php artisan fetch:bol-catalog-product-details
-php artisan fetch:bol-content-status
-php artisan fetch:bol-upload-report
+docker exec -it unopim-web php artisan fetch:bol-categories
+docker exec -it unopim-web php artisan fetch:bol-catalog-product-details
+docker exec -it unopim-web php artisan fetch:bol-content-status
+docker exec -it unopim-web php artisan fetch:bol-upload-report
 
 # Product updates
-php artisan update:all-products
-php artisan update:all-parent-products
-php artisan update:products-by-file
+docker exec -it unopim-web php artisan update:all-products
+docker exec -it unopim-web php artisan update:all-parent-products
+docker exec -it unopim-web php artisan update:products-by-file
 
 # Eurogros vendor sync
-php artisan import:eurogros-voorraad
-php artisan import:eurogros-ean
+docker exec -it unopim-web php artisan import:eurogros-voorraad
+docker exec -it unopim-web php artisan import:eurogros-ean
 
 # Misc
-php artisan pull:from-sftp
-php artisan pull:from-do
-php artisan pull:missing-ean-numbers
-php artisan calculate:met-onderkleed-prices
+docker exec -it unopim-web php artisan pull:from-sftp
+docker exec -it unopim-web php artisan pull:from-do
+docker exec -it unopim-web php artisan pull:missing-ean-numbers
+docker exec -it unopim-web php artisan calculate:met-onderkleed-prices
 ```
 
 ## Architecture
@@ -118,7 +120,7 @@ Custom code specific to this HW deployment lives in `app/`:
 
 ### Queue
 
-Laravel Horizon manages background jobs. The queue driver is `database`. Run `php artisan horizon` for the dashboard or `php artisan queue:work` for a plain worker.
+Laravel Horizon manages background jobs. The queue driver is `database`. The `unopim-q` container runs the queue worker automatically. To run manually: `docker exec -it unopim-web php artisan queue:work`.
 
 ### Routes
 

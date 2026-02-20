@@ -93,6 +93,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->batch['code'] = $this->batch['sku'];
         $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
 
+        $productData = null;
         try {
             $productData = $this->formatData($this->batch);
 
@@ -102,11 +103,38 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 $this->processToParentProduct($productData);
             }
         } catch (WoocommerceProductSkuExistsException $e) {
-            $product = Product::whereSku($e->sku)->first();
-            $additional = $product->additional;
-            $additional['product_sku_already_exists'] = $e->externalId;
-            $product->additional = $additional;
-            $product->save();
+            Log::info("SKU conflict for {$e->sku} (WP ID: {$e->externalId}). Deleting conflicting product and retrying.");
+
+            try {
+                $this->deleteConflictingWooCommerceProduct($e->externalId);
+
+                if (isset($productData['parent_id'])) {
+                    $this->processToVariation($productData);
+                } else {
+                    $this->processToParentProduct($productData);
+                }
+
+                $product = Product::whereSku($e->sku)->first();
+                if ($product) {
+                    $additional = $product->additional ?? [];
+                    unset($additional['product_sku_already_exists']);
+                    $product->additional = $additional;
+                    $product->save();
+                }
+
+                Log::info("Re-sync successful for {$e->sku}.");
+            } catch (\Exception $retryException) {
+                Log::error("Auto-delete and retry failed for {$e->sku}: ".$retryException->getMessage());
+                Sentry::captureException($retryException);
+
+                $product = Product::whereSku($e->sku)->first();
+                if ($product) {
+                    $additional = $product->additional ?? [];
+                    $additional['product_sku_already_exists'] = $e->externalId;
+                    $product->additional = $additional;
+                    $product->save();
+                }
+            }
         } catch (\Exception $e) {
             $product = Product::whereSku($this->batch['sku'])->first();
             $additional = $product->additional;
@@ -195,6 +223,45 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         $this->handleWoocommerceResponse($result, $productData);
+    }
+
+    private function deleteConflictingWooCommerceProduct(string $externalId): void
+    {
+        $credentialId = $this->credential['id'];
+
+        $wpProduct = $this->connectorService->requestApiAction(
+            'getProduct',
+            [],
+            ['id' => $externalId, 'credential' => $credentialId]
+        );
+
+        if (isset($wpProduct['type']) && $wpProduct['type'] === 'variable') {
+            $variations = $this->connectorService->requestApiAction(
+                'getVariation',
+                [],
+                ['product' => $externalId, 'credential' => $credentialId]
+            );
+
+            if (is_array($variations)) {
+                foreach ($variations as $variation) {
+                    if (isset($variation['id'])) {
+                        $this->connectorService->requestApiAction(
+                            'deleteProductVariant',
+                            [],
+                            ['product' => $externalId, 'id' => $variation['id'], 'credential' => $credentialId, 'force' => 'true']
+                        );
+                    }
+                }
+            }
+        }
+
+        $this->connectorService->requestApiAction(
+            'deleteProduct',
+            [],
+            ['id' => $externalId, 'credential' => $credentialId, 'force' => 'true']
+        );
+
+        Log::info("Deleted WooCommerce product ID {$externalId} (and its variations if any).");
     }
 
     /**
