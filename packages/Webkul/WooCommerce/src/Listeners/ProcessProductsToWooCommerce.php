@@ -95,6 +95,11 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
 
         $productData = null;
+        $product = Product::whereSku($this->batch['sku'])->first();
+        $additional = $product->additional;
+        unset($additional['product_sync_error']);
+        $product->additional = $additional;
+        $product->save();
         try {
             $productData = $this->formatData($this->batch);
 
