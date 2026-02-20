@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
 use App\Models\Product;
 use Illuminate\Bus\Queueable;
@@ -104,37 +105,22 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             }
         } catch (WoocommerceProductSkuExistsException $e) {
             Log::info("SKU conflict for {$e->sku} (WP ID: {$e->externalId}). Deleting conflicting product and retrying.");
-
-            try {
-                $this->deleteConflictingWooCommerceProduct($e->externalId);
-
-                if (isset($productData['parent_id'])) {
-                    $this->processToVariation($productData);
-                } else {
-                    $this->processToParentProduct($productData);
-                }
-
-                $product = Product::whereSku($e->sku)->first();
-                if ($product) {
-                    $additional = $product->additional ?? [];
-                    unset($additional['product_sku_already_exists']);
-                    $product->additional = $additional;
-                    $product->save();
-                }
-
-                Log::info("Re-sync successful for {$e->sku}.");
-            } catch (\Exception $retryException) {
-                Log::error("Auto-delete and retry failed for {$e->sku}: ".$retryException->getMessage());
-                Sentry::captureException($retryException);
-
-                $product = Product::whereSku($e->sku)->first();
-                if ($product) {
-                    $additional = $product->additional ?? [];
-                    $additional['product_sku_already_exists'] = $e->externalId;
-                    $product->additional = $additional;
-                    $product->save();
-                }
-            }
+            $this->deleteAndRetry(
+                fn () => $this->deleteConflictingWooCommerceProduct($e->externalId, $e->sku),
+                $e->sku,
+                $productData,
+                'product_sku_already_exists',
+                $e->externalId
+            );
+        } catch (WoocommerceProductExistsAsVariationException $e) {
+            Log::info("Product {$e->sku} exists as a variation in WooCommerce. Finding and deleting conflicting product to retry.");
+            $this->deleteAndRetry(
+                fn () => $this->findAndDeleteConflictingWooCommerceProductBySku($e->sku),
+                $e->sku,
+                $productData,
+                'product_sync_error',
+                $e->getMessage()
+            );
         } catch (\Exception $e) {
             $product = Product::whereSku($this->batch['sku'])->first();
             $additional = $product->additional;
@@ -225,7 +211,65 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->handleWoocommerceResponse($result, $productData);
     }
 
-    private function deleteConflictingWooCommerceProduct(string $externalId): void
+    private function deleteAndRetry(callable $deleteFn, string $sku, ?array $productData, string $errorKey, mixed $errorValue): void
+    {
+        try {
+            $deleteFn();
+
+            if (isset($productData['parent_id'])) {
+                $this->processToVariation($productData);
+            } else {
+                $this->processToParentProduct($productData);
+            }
+
+            $product = Product::whereSku($sku)->first();
+            if ($product) {
+                $additional = $product->additional ?? [];
+                unset($additional[$errorKey]);
+                $product->additional = $additional;
+                $product->save();
+            }
+
+            Log::info("Re-sync successful for {$sku}.");
+        } catch (\Exception $retryException) {
+            Log::error("Auto-delete and retry failed for {$sku}: ".$retryException->getMessage());
+            Sentry::captureException($retryException);
+
+            $product = Product::whereSku($sku)->first();
+            if ($product) {
+                $additional = $product->additional ?? [];
+                $additional[$errorKey] = $errorValue;
+                $product->additional = $additional;
+                $product->save();
+            }
+        }
+    }
+
+    private function findAndDeleteConflictingWooCommerceProductBySku(string $sku): void
+    {
+        $credentialId = $this->credential['id'];
+
+        $results = $this->connectorService->requestApiAction(
+            'getProductWithSku',
+            [],
+            ['sku' => $sku, 'credential' => $credentialId]
+        );
+
+        if (! isset($results[0])) {
+            throw new \Exception("Could not find conflicting WooCommerce product with SKU {$sku}.");
+        }
+
+        $found = $results[0];
+
+        // If the result is a variation it will have a parent_id; otherwise use its own id
+        $productId = (! empty($found['parent_id']) && $found['parent_id'] > 0)
+            ? (string) $found['parent_id']
+            : (string) $found['id'];
+
+        $this->deleteConflictingWooCommerceProduct($productId);
+    }
+
+    private function deleteConflictingWooCommerceProduct(string $externalId, string $fallbackSku = ''): void
     {
         $credentialId = $this->credential['id'];
 
@@ -235,7 +279,23 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             ['id' => $externalId, 'credential' => $credentialId]
         );
 
-        if (isset($wpProduct['type']) && $wpProduct['type'] === 'variable') {
+        // Fetch failed — fall back to SKU-based search
+        if (empty($wpProduct['id'])) {
+            if ($fallbackSku) {
+                $this->findAndDeleteConflictingWooCommerceProductBySku($fallbackSku);
+            }
+
+            return;
+        }
+
+        // The ID belongs to a variation — delete its parent instead
+        if (! empty($wpProduct['parent_id']) && $wpProduct['parent_id'] > 0) {
+            $this->deleteConflictingWooCommerceProduct((string) $wpProduct['parent_id'], $fallbackSku);
+
+            return;
+        }
+
+        if (($wpProduct['type'] ?? '') === 'variable') {
             $variations = $this->connectorService->requestApiAction(
                 'getVariation',
                 [],
@@ -293,10 +353,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 $errorMessage = $result['data']['error']['message'] ?? '';
 
                 if (str_starts_with($errorMessage, 'Uncaught Exception: Ongeldig product. ')) {
-                    throw new \Exception("Er is een fout opgetreden. Waarschijnlijk bestaat het product al als variant,
-                    maar moet dit een hoofdproduct zijn. Klik op 'Naar frontend' en controleer de productvariaties.
-                    Waarschijnlijk is er een product met \"Iedere onderkleed\" en \"Iedere maat\" wat al de sku
-                    $productData[sku] heeft.");
+                    throw new WoocommerceProductExistsAsVariationException($productData['sku']);
                 }
             }
 
