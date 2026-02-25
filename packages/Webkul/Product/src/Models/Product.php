@@ -330,6 +330,21 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
         ];
     }
 
+    /**
+     * Scope: products that have total stock > 0 across all three inventory sources.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeInStock($query)
+    {
+        return $query->whereRaw(
+            "COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(`values`, '$.common.voorraad_eurogros')) AS DECIMAL(10,2)), 0) +
+             COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(`values`, '$.common.voorraad_5_korting_handmatig')) AS DECIMAL(10,2)), 0) +
+             COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(`values`, '$.common.voorraad_hw_5_korting')) AS DECIMAL(10,2)), 0) > 0"
+        );
+    }
+
     public function bolComCredentials(): BelongsToMany
     {
         return $this->belongsToMany(BolComCredential::class, 'product_bol_com_credentials')
