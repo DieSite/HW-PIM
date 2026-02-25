@@ -5,35 +5,18 @@ namespace App\Clients;
 use App\Helpers\BolComAuthenticationHelper;
 use App\Models\BolComCredential;
 use Exception;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
 use Sentry\State\Scope;
 
 class BolApiClient
 {
-    /**
-     * Base API URL
-     */
-    protected $baseUrl;
+    protected string $baseUrl;
 
-    /**
-     * The HTTP client instance
-     */
-    protected $client;
+    protected ?BolComAuthenticationHelper $authHelper;
 
-    /**
-     * Authentication helper
-     */
-    protected $authHelper;
-
-    /**
-     * Constructor
-     *
-     * @throws Exception
-     */
-    public function __construct($credentialIdOrObject = null, $skipCache = false)
+    public function __construct($credentialIdOrObject = null, bool $skipCache = false)
     {
-        $this->client = new Client();
         $this->baseUrl = config('bolcom.api_url');
 
         if ($credentialIdOrObject instanceof BolComCredential) {
@@ -45,88 +28,70 @@ class BolApiClient
         }
     }
 
-    /**
-     * @throws Exception
-     */
-    public function setCredential(BolComCredential $credential)
+    public function setCredential(BolComCredential $credential): static
     {
         $this->authHelper = new BolComAuthenticationHelper($credential->id, false);
 
         return $this;
     }
 
-    /**
-     * Make a GET request to the Bol.com API
-     *
-     * @throws Exception|GuzzleException
-     */
-    public function get($endpoint, $params = [])
+    public function get(string $endpoint, array $params = []): ?array
     {
         return $this->request('GET', $endpoint, ['query' => $params]);
     }
 
-    /**
-     * Make a POST request to the Bol.com API
-     *
-     * @throws Exception|GuzzleException
-     */
-    public function post($endpoint, $data = [])
+    public function post(string $endpoint, array $data = []): ?array
     {
         return $this->request('POST', $endpoint, ['json' => $data]);
     }
 
-    /**
-     * Make a PUT request to the Bol.com API
-     *
-     * @throws Exception|GuzzleException
-     */
-    public function put($endpoint, $data = [])
+    public function put(string $endpoint, array $data = []): ?array
     {
         return $this->request('PUT', $endpoint, ['json' => $data]);
     }
 
-    /**
-     * Make a DELETE request to the Bol.com API
-     *
-     * @throws GuzzleException
-     */
-    public function delete($endpoint)
+    public function delete(string $endpoint): ?array
     {
         return $this->request('DELETE', $endpoint);
     }
 
-    /**
-     * Make an HTTP request to the Bol.com API
-     *
-     * @throws Exception|GuzzleException
-     */
-    protected function request($method, $endpoint, $options = [])
+    protected function request(string $method, string $endpoint, array $options = []): ?array
     {
-        \Sentry\configureScope(function (Scope $scope) use ($method, $endpoint, $options) {
+        $url = $this->baseUrl.$endpoint;
+
+        \Sentry\configureScope(function (Scope $scope) use ($method, $url, $options) {
             $scope->setContext('bolcom_request', [
                 'method'  => $method,
-                'url'     => $this->baseUrl.$endpoint,
+                'url'     => $url,
                 'options' => $options,
             ]);
         });
 
         try {
             $headers = $this->authHelper->getAuthHeaders();
-            $headers['Content-Type'] = 'application/vnd.retailer.v10+json';
 
-            $response = $this->client->request($method, $this->baseUrl.$endpoint, array_merge([
-                'headers' => $headers,
-            ], $options));
+            $http = Http::withHeaders($headers);
 
-            return json_decode($response->getBody()->getContents(), true);
-        } catch (Exception $e) {
-            if ($e instanceof \GuzzleHttp\Exception\ClientException) {
+            $contentType = 'application/vnd.retailer.v10+json';
+
+            $response = match (strtoupper($method)) {
+                'GET'    => $http->get($url, $options['query'] ?? []),
+                'POST'   => $http->withBody(json_encode($options['json'] ?? []), $contentType)->post($url),
+                'PUT'    => $http->withBody(json_encode($options['json'] ?? []), $contentType)->put($url),
+                'DELETE' => $http->delete($url),
+                default  => throw new Exception("Unsupported HTTP method: {$method}"),
+            };
+
+            $response->throw();
+
+            return $response->json();
+        } catch (\Exception $e) {
+            if ($e instanceof RequestException) {
                 \Sentry\configureScope(function (Scope $scope) use ($e) {
                     $scope->setContext('bolcom_response', [
-                        'body'            => $e->getResponse()->getBody()->getContents(),
-                        'status'          => $e->getResponse()->getStatusCode(),
-                        'headers'         => $e->getResponse()->getHeaders(),
-                        'response_object' => $e->getResponse(),
+                        'body'    => $e->response->body(),
+                        'status'  => $e->response->status(),
+                        'headers' => $e->response->headers(),
                     ]);
                 });
             }

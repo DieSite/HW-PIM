@@ -3,31 +3,27 @@
 namespace App\Helpers;
 
 use Exception;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class BolComAuthenticationHelper
 {
     protected const TOKEN_URL = 'https://login.bol.com/token';
 
-    protected $client;
+    protected ?string $clientId = null;
 
-    protected $clientId;
-
-    protected $clientSecret;
+    protected ?string $clientSecret = null;
 
     protected $credentialsId;
 
-    protected $skipCache = false;
+    protected bool $skipCache;
 
     /**
      * @throws Exception
      */
-    public function __construct($credentialsId = null, $skipCache = false)
+    public function __construct($credentialsId = null, bool $skipCache = false)
     {
-        $this->client = new Client();
         $this->credentialsId = $credentialsId;
         $this->skipCache = $skipCache;
 
@@ -37,9 +33,9 @@ class BolComAuthenticationHelper
     }
 
     /**
-     * @throws GuzzleException
+     * @throws Exception
      */
-    public function getAccessToken()
+    public function getAccessToken(): string
     {
         $cacheKey = 'bolcom_access_token';
 
@@ -51,14 +47,13 @@ class BolComAuthenticationHelper
     }
 
     /**
-     * @throws GuzzleException
+     * @throws Exception
      */
     public function getAuthHeaders(): array
     {
         return [
             'Authorization' => 'Bearer '.$this->getAccessToken(),
             'Accept'        => 'application/vnd.retailer.v10+json',
-            'Content-Type'  => 'application/vnd.retailer.v10+json',
         ];
     }
 
@@ -80,21 +75,18 @@ class BolComAuthenticationHelper
     }
 
     /**
-     * @throws Exception|GuzzleException
+     * @throws Exception
      */
-    protected function requestNewAccessToken($cacheKey)
+    protected function requestNewAccessToken(string $cacheKey): string
     {
-        $response = $this->client->post(self::TOKEN_URL, [
-            'auth'    => [$this->clientId, $this->clientSecret],
-            'headers' => [
-                'Accept' => 'application/json',
-            ],
-            'form_params' => [
-                'grant_type' => 'client_credentials',
-            ],
-        ]);
+        $response = Http::withBasicAuth($this->clientId, $this->clientSecret)
+            ->accept('application/json')
+            ->asForm()
+            ->post(self::TOKEN_URL, ['grant_type' => 'client_credentials']);
 
-        $data = json_decode($response->getBody(), true);
+        $response->throw();
+
+        $data = $response->json();
 
         if (isset($data['access_token'])) {
             Cache::put($cacheKey, $data['access_token'], $data['expires_in']);
