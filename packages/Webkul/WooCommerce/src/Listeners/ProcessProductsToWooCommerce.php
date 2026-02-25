@@ -97,6 +97,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $product = Product::whereSku($this->batch->sku)->first();
         $additional = $product->additional;
         unset($additional['product_sync_error']);
+        if ( sizeof($additional) === 0 ) {
+            $additional = null;
+        }
         $product->additional = $additional;
         $product->save();
         try {
@@ -262,6 +265,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             if ($product) {
                 $additional = $product->additional ?? [];
                 unset($additional[$errorKey]);
+                if ( sizeof($additional) === 0 ) {
+                    $additional = null;
+                }
                 $product->additional = $additional;
                 $product->save();
             }
