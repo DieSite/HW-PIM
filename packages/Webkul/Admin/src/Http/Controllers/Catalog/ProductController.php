@@ -2,15 +2,12 @@
 
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
-use App\Jobs\SyncProductWithBolComJob;
-use App\Models\BolComCredential;
 use App\Services\BolComProductService;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Str;
 use Webkul\Admin\DataGrids\Catalog\ProductDataGrid;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Admin\Http\Requests\MassDestroyRequest;
@@ -212,12 +209,16 @@ class ProductController extends Controller
 
             $product = $this->productRepository->update($data, $id);
 
+            $priceOverride = $request->input('bol_price_override');
+            if (! is_null($priceOverride)) {
+                $priceOverride = (float) $priceOverride;
+            }
             app(ProductService::class)->processBolSync(
                 $product,
                 $request->has('bol_com_sync'),
                 $request->input('bol_com_credentials', []),
                 $request->input('bol_com_delivery_code'),
-                $request->input('bol_price_override'),
+                $priceOverride,
                 $previousSyncState
             );
 
