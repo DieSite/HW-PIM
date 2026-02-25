@@ -340,7 +340,12 @@ class Exporter extends AbstractExporter
             if (! empty($values['common']['afbeelding_zonder_logo'])) {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($values['common']['afbeelding_zonder_logo'])];
             } else {
-                $images = explode(',', $values['common']['afbeelding'] ?? '');
+                $images = $values['common']['afbeelding'] ?? '';
+
+                if ( is_string($images) ) {
+                    $images = explode(',', $images);
+                }
+
                 $image = isset($images[0]) ? $this->generateImageUrl($images[0]) : '';
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $image];
             }
