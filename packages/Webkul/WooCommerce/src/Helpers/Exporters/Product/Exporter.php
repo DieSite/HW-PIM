@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
+use App\Models\Product;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -334,6 +335,12 @@ class Exporter extends AbstractExporter
             $meta = $formatted['meta_data'] ?? [];
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
             $meta[] = ['key' => 'afhaalkorting_price', 'value' => $discounted];
+            $parent = Product::find($formatted['parent_id']);
+            if (! empty($parent->values['common']['afbeelding_zonder_logo'])) {
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($parent->values['common']['afbeelding_zonder_logo'])];
+            } else {
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $parent->values['common']['image'] ?? $parent->values['common']['images'][0] ?? ''];
+            }
             $formatted['meta_data'] = $meta;
         } else {
             $onderkleed = collect();
