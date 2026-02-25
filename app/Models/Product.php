@@ -2,15 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 
-class Product extends Model
+class Product extends \Webkul\Product\Models\Product
 {
     protected $table = 'products';
 
     protected $guarded = [];
-
-    protected $casts = [
-        'additional' => 'array',
-    ];
 }

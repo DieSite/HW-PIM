@@ -12,7 +12,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Sentry;
-use Webkul\Product\Repositories\ProductRepository;
+use Webkul\WooCommerce\DTO\ProductBatch;
 use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
 use Webkul\WooCommerce\Services\WooCommerceService;
@@ -36,22 +36,20 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
     public $timeout = 600;
 
-    protected $batch;
+    protected ProductBatch $batch;
 
-    protected $exporter;
+    protected Exporter $exporter;
 
-    protected $export = null;
+    protected WooCommerceService $connectorService;
 
-    protected $connectorService;
+    protected DataTransferMappingRepository $dataTransferMappingRepository;
 
-    protected $credential;
-
-    protected $dataTransferMappingRepository;
+    protected ?array $credential = null;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($batch)
+    public function __construct(ProductBatch $batch)
     {
         $this->batch = $batch;
     }
@@ -59,27 +57,32 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle()
+    public function handle(Exporter $exporter, WooCommerceService $connectorService, DataTransferMappingRepository $dataTransferMappingRepository): void
     {
-        // Initialize dependencies
-        $this->exporter = app(Exporter::class);
-        $this->connectorService = app(WooCommerceService::class);
-        $this->dataTransferMappingRepository = app(DataTransferMappingRepository::class);
+        $this->exporter = $exporter;
+        $this->connectorService = $connectorService;
+        $this->dataTransferMappingRepository = $dataTransferMappingRepository;
 
         // Retrieve credential
         $this->credential = $this->connectorService->getCredentialForQuickExport();
         if (! $this->credential) {
-            return Log::error('No default credentials set for quick export.');
+            Log::error('No default credentials set for quick export.');
+
+            return;
         }
 
         // Retrieve quick settings
         $quickSettings = $this->credential['extras']['quicksettings'] ?? [];
         if (empty($quickSettings['auto_sync'])) {
-            return Log::warning('Auto-sync setting is disabled. Product cannot be synced.');
+            Log::warning('Auto-sync setting is disabled. Product cannot be synced.');
+
+            return;
         }
 
         if (! isset($quickSettings['quick_channel'], $quickSettings['quick_locale'], $quickSettings['quick_currency'])) {
-            return Log::error('Quick export settings are incomplete in the default credentials.');
+            Log::error('Quick export settings are incomplete in the default credentials.');
+
+            return;
         }
 
         // Initialize exporter
@@ -90,12 +93,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->exporter->currency = $quickSettings['quick_currency'];
         $this->exporter->setMediaExport(true);
 
-        // Prepare product data
-        $this->batch['code'] = $this->batch['sku'];
-        $this->batch['type'] = ! empty($this->batch['variants']) ? 'variable' : 'simple';
-
         $productData = null;
-        $product = Product::whereSku($this->batch['sku'])->first();
+        $product = Product::whereSku($this->batch->sku)->first();
         $additional = $product->additional;
         unset($additional['product_sync_error']);
         $product->additional = $additional;
@@ -127,7 +126,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 $e->getMessage()
             );
         } catch (\Exception $e) {
-            $product = Product::whereSku($this->batch['sku'])->first();
+            $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
             $additional['product_sync_error'] = $e->getMessage();
             $product->additional = $additional;
@@ -137,9 +136,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
     }
 
-    protected function formatData($batchData)
+    protected function formatData(ProductBatch $batch): array
     {
-        return $this->exporter->formatData($batchData);
+        return $this->exporter->formatData($batch);
     }
 
     /**
@@ -149,8 +148,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     private function processToVariation(array $productData): void
     {
         Log::debug('Processing to variation');
-        $productRepository = app(ProductRepository::class);
-        $parent = $productRepository->find($productData['parent_id']);
+        $parent = Product::find($productData['parent_id']);
 
         $parentMapping = $this->getDataTransferMapping($parent->sku, 'product');
         $parentExternalId = $parentMapping[0]['externalId'] ?? null;
@@ -368,18 +366,18 @@ class ProcessProductsToWooCommerce implements ShouldQueue
      */
     private function handleWoocommerceResponse(array $result, array $productData): void
     {
-        if ($result['code'] == 200) {
+        if ($result['code'] === 200) {
             Log::debug("Product $productData[sku] updated successfully");
-        } elseif ($result['code'] == 201) {
+        } elseif ($result['code'] === 201) {
             Log::debug("Product $productData[sku] created successfully");
-        } elseif ($result['code'] == 400) {
+        } elseif ($result['code'] === 400) {
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
             } elseif (str_contains($result['message'], 'Ongeldige parameter(s):') && isset($result['data']['details']['default_attributes']['data']['param'])) {
                 $param = $result['data']['details']['default_attributes']['data']['param'];
                 if ($param === 'default_attributes[0][option]') {
                     throw new \Exception(
-                        'Er ging iets mis met het doorzetten naar Woocommerce. Heb je de variaties wel toegevoegd?',
+                        'Something went wrong pushing to WooCommerce. Have you added the variations?',
                         previous: throw new \Exception("Error occurred ($result[code]): ".json_encode($result))
                     );
                 }
@@ -387,7 +385,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
             }
         } else {
-            if ($result['code'] == 500) {
+            if ($result['code'] === 500) {
                 $errorMessage = $result['data']['error']['message'] ?? '';
 
                 if (str_starts_with($errorMessage, 'Uncaught Exception: Ongeldig product. ')) {

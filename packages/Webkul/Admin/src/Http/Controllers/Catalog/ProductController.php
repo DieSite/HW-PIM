@@ -2,7 +2,6 @@
 
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
-use App\Services\BolComProductService;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
@@ -36,7 +35,7 @@ class ProductController extends Controller
         protected AttributeFamilyRepository $attributeFamilyRepository,
         protected ProductRepository $productRepository,
         protected ProductValuesValidator $valuesValidator,
-        protected BolComProductService $bolComProductService
+        protected ProductService $productService,
     ) {}
 
     /**
@@ -213,7 +212,7 @@ class ProductController extends Controller
             if (! is_null($priceOverride)) {
                 $priceOverride = (float) $priceOverride;
             }
-            app(ProductService::class)->processBolSync(
+            $this->productService->processBolSync(
                 $product,
                 $request->has('bol_com_sync'),
                 $request->input('bol_com_credentials', []),
@@ -223,10 +222,10 @@ class ProductController extends Controller
             );
 
             if (is_null($product->parent)) {
-                app(ProductService::class)->triggerWCSyncForParent($product);
+                $this->productService->triggerWCSyncForParent($product);
             } else {
-                app(ProductService::class)->triggerWCSyncForChild($product);
-                app(ProductService::class)->copyStockValuesOnderkleed($product);
+                $this->productService->triggerWCSyncForChild($product);
+                $this->productService->copyStockValuesOnderkleed($product);
             }
 
             session()->flash('success', trans('admin::app.catalog.products.update-success'));

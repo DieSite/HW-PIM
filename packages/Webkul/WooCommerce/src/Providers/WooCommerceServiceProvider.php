@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Webkul\Theme\ViewRenderEventManager;
 use Webkul\WooCommerce\Console\Commands\WooCommerceInstaller;
+use Webkul\WooCommerce\Listeners\ProductSync;
 
 class WooCommerceServiceProvider extends ServiceProvider
 {
@@ -22,9 +23,9 @@ class WooCommerceServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__.'/../Resources/views', 'woocommerce');
         $this->loadTranslationsFrom(__DIR__.'/../Resources/lang', 'woocommerce');
         $this->app->register(ModuleServiceProvider::class);
-        Event::listen('catalog.product.update.after', 'Webkul\WooCommerce\Listeners\ProductSync@syncProductToWooCommerce');
-        Event::listen('catalog.product.create.after', 'Webkul\WooCommerce\Listeners\ProductSync@syncProductToWooCommerce');
-        Event::listen('catalog.product.delete.before', 'Webkul\WooCommerce\Listeners\ProductSync@deleteProductFromWooCommerce');
+        Event::listen('catalog.product.update.after', [ProductSync::class, 'syncProductToWooCommerce']);
+        Event::listen('catalog.product.create.after', [ProductSync::class, 'syncProductToWooCommerce']);
+        Event::listen('catalog.product.delete.before', [ProductSync::class, 'deleteProductFromWooCommerce']);
 
         if ($this->app->runningInConsole()) {
             $this->commands([

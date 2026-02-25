@@ -16,6 +16,7 @@ use Webkul\DataTransfer\Jobs\Export\File\FlatItemBuffer as FileExportFileBuffer;
 use Webkul\DataTransfer\Repositories\JobTrackBatchRepository;
 use Webkul\DataTransfer\Services\JobLogger;
 use Webkul\Product\Repositories\ProductRepository;
+use Webkul\WooCommerce\DTO\ProductBatch;
 use Webkul\WooCommerce\Repositories\AttributeMappingRepository;
 use Webkul\WooCommerce\Repositories\CredentialRepository;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
@@ -91,52 +92,49 @@ class Exporter extends AbstractExporter
 
     public const ACTION_FROM = 'wordpress';
 
-    public $credential;
+    public ?array $credential = null;
 
-    public $channel;
+    public string $channel = '';
 
-    public $currency;
+    public string $currency = '';
 
-    public $locale;
+    public string $locale = '';
 
     /*
      * For exporting file
      */
     protected bool $exportsFile = false;
 
-    protected $mappingFields = [];
+    protected array $mappingFields = [];
 
-    protected $customAttributes = [];
+    protected array $customAttributes = [];
 
-    protected $mediaExport = false;
+    protected bool $mediaExport = false;
 
-    protected $mainAttributes = [
+    protected array $mainAttributes = [
         'sku',
         'name',
     ];
 
-    protected $defaultValues = [];
+    protected array $defaultValues = [];
 
-    protected $mediaMappings = [];
+    protected array $mediaMappings = [];
 
-    protected $imageAttributeCodes = [];
+    protected array $imageAttributeCodes = [];
 
-    protected $selectAttributeCodes = [];
+    protected array $selectAttributeCodes = [];
 
-    protected $multiSelectVariation = [];
+    protected array $multiSelectVariation = [];
 
-    protected $booleanVariation = [];
+    protected array $booleanVariation = [];
 
-    protected $enableSelect = false;
+    protected bool $enableSelect = false;
 
-    protected $id;
+    protected mixed $id = null;
 
-    /**
-     * @var array
-     */
-    protected $attributes = [];
+    protected array $attributes = [];
 
-    protected $wrapper = [
+    protected array $wrapper = [
         'Length'                => 'dimensions',
         'width'                 => 'dimensions',
         'height'                => 'dimensions',
@@ -186,7 +184,7 @@ class Exporter extends AbstractExporter
         $this->id = $this->credential?->id;
     }
 
-    public function setMediaExport(bool $value)
+    public function setMediaExport(bool $value): void
     {
         $this->mediaExport = $value;
     }
@@ -208,7 +206,7 @@ class Exporter extends AbstractExporter
         return true;
     }
 
-    public function exportProduct(JobTrackBatchContract $batch)
+    public function exportProduct(JobTrackBatchContract $batch): void
     {
         $this->initMappingsAndAttribute();
         $allProducts = $this->getProductBatches($batch->data);
@@ -220,7 +218,7 @@ class Exporter extends AbstractExporter
         }
     }
 
-    public function initMappingsAndAttribute()
+    public function initMappingsAndAttribute(): void
     {
         /* InitializeMapping */
         $extras = $this->credential['extras'] ?? [];
@@ -237,8 +235,10 @@ class Exporter extends AbstractExporter
         $this->booleanVariation = $this->getAttributeCodesFromType('boolean');
     }
 
-    public function formatData($item)
+    public function formatData(ProductBatch $batch): array
     {
+        $item = $batch->toArray();
+
         $formatted = [
             'name'        => $item['code'],
             'slug'        => $item['code'],
@@ -485,7 +485,7 @@ class Exporter extends AbstractExporter
         return $formatted;
     }
 
-    public function formatVariation($item, $superAttributes = [])
+    public function formatVariation(array $item, array $superAttributes = []): array
     {
         $variantAttributes = ! empty($superAttributes) ? array_column($superAttributes, 'code') : [];
         $attributes = $this->formatAttributes($item['values']);
@@ -579,7 +579,7 @@ class Exporter extends AbstractExporter
         return $formatted;
     }
 
-    public function checkImagesExported($code, $imageUrl)
+    public function checkImagesExported(string $code, string $imageUrl): string|false
     {
         $imageName = $this->getImageName($imageUrl);
         $code = $code.'-'.$imageName;
@@ -593,7 +593,7 @@ class Exporter extends AbstractExporter
         return $imageMapping[0]['externalId'];
     }
 
-    public function getImageName($imageurl)
+    public function getImageName(string $imageurl): ?string
     {
         $getCode = explode('/', $imageurl);
         $getName = end($getCode);
@@ -635,7 +635,7 @@ class Exporter extends AbstractExporter
         return $query->get('sku')->getIterator();
     }
 
-    protected function getProductBatches($batchData)
+    protected function getProductBatches(array $batchData): array
     {
         $allProducts = [];
         $skus = array_column($batchData, 'sku');
@@ -649,12 +649,11 @@ class Exporter extends AbstractExporter
         return $allProducts;
     }
 
-    protected function exportModelsAndProducts($item)
+    protected function exportModelsAndProducts(array $item): void
     {
-        $item['code'] = $item['sku'];
-        $item['type'] = ! empty($item['variants']) ? 'variable' : 'simple';
-        $mapping = $this->getDataTransferMapping($item['code']) ?? null;
-        $formattedData = $this->formatData($item);
+        $batch = ProductBatch::fromProductArray($item);
+        $mapping = $this->getDataTransferMapping($batch->code) ?? null;
+        $formattedData = $this->formatData($batch);
 
         if (empty($mapping)) {
             $result = $this->connectorService->requestApiAction(
@@ -676,7 +675,7 @@ class Exporter extends AbstractExporter
         $this->exportVariants($item, $reResult);
     }
 
-    protected function exportVariants($item, $reResult)
+    protected function exportVariants(array $item, ?array $reResult): void
     {
         $varResult = null;
         if (! empty($reResult) && ! empty($item['variants']) && ! empty($reResult['id']) && ! empty($item['super_attributes'])) {
@@ -719,7 +718,7 @@ class Exporter extends AbstractExporter
         }
     }
 
-    protected function createVariantImageMapping($itemCode, $result)
+    protected function createVariantImageMapping(string $itemCode, ?array $result): void
     {
         $image = ! empty($result['image']) ? $result['image'] : null;
 
@@ -740,7 +739,7 @@ class Exporter extends AbstractExporter
         }
     }
 
-    protected function reMappingExistingProductVariations($productId, $credentialId)
+    protected function reMappingExistingProductVariations(mixed $productId, mixed $credentialId): void
     {
         $exisitingProductVariations = $this->connectorService->requestApiAction(
             'getVariation',
@@ -768,7 +767,7 @@ class Exporter extends AbstractExporter
         }
     }
 
-    protected function formatAdditionalData(&$formatted, $attributes, $imagesToExport, $item)
+    protected function formatAdditionalData(array &$formatted, array $attributes, array $imagesToExport, array $item): void
     {
         $customAttrs = [];
         $imageAttrs = [];
@@ -907,7 +906,7 @@ class Exporter extends AbstractExporter
         Log::debug('Formatted END', ['formatted' => $formatted]);
     }
 
-    protected function formatImageData($code, $value, $imagesToExport, $itemCode, $isVariant = false)
+    protected function formatImageData(string $code, string $value, array $imagesToExport, string $itemCode, bool $isVariant = false): array
     {
         $getKey = array_search($code, $imagesToExport);
 
@@ -935,7 +934,7 @@ class Exporter extends AbstractExporter
         return $images;
     }
 
-    protected function addDependentField(&$formatted, $key, $value)
+    protected function addDependentField(array &$formatted, string $key, mixed $value): void
     {
         switch ($key) {
             case 'stock_quantity':
@@ -954,7 +953,7 @@ class Exporter extends AbstractExporter
         }
     }
 
-    protected function formatAttributes($attributes)
+    protected function formatAttributes(array $attributes): array
     {
         $attributeData = [];
         $sections = ['common', 'locale_specific', 'channel_specific', 'channel_locale_specific'];
@@ -986,7 +985,7 @@ class Exporter extends AbstractExporter
         return $attributeData;
     }
 
-    protected function getAttributeCodesFromType($type)
+    protected function getAttributeCodesFromType(string $type): array
     {
         return collect($this->attributes)->where('type', $type)->pluck('code')->toArray();
     }
@@ -1006,14 +1005,12 @@ class Exporter extends AbstractExporter
     {
         $crossSellProducts = [];
 
-        $connector = app(WooCommerceService::class);
-
         foreach (Arr::get($item, 'values.associations.cross_sells', []) as $crossSellSku) {
             if ($crossSellSku === $item['sku']) {
                 continue;
             }
 
-            $crossSellItems = $connector->requestApiAction(
+            $crossSellItems = $this->connectorService->requestApiAction(
                 'getProductWithSku',
                 [],
                 ['sku' => $crossSellSku]

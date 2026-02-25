@@ -8,15 +8,18 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 use Webkul\Product\Models\Product;
-use Webkul\Product\Repositories\ProductRepository;
+use Webkul\WooCommerce\DTO\ProductBatch;
 
 class SerializedProcessProductsToWooCommerce implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $timeout = 600;
+
+    public $tries = 5;
 
     /**
      * Create a new job instance.
@@ -32,28 +35,26 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->product = app(ProductRepository::class)->find($this->product->id);
+        $this->product = Product::find($this->product->id);
 
         if (is_null($this->product->parent)) {
             $this->product->load('variants');
         } else {
             $this->product->load('parent');
         }
-        ProcessProductsToWooCommerce::dispatchSync($this->product->toArray());
+        ProcessProductsToWooCommerce::dispatchSync(ProductBatch::fromProductArray($this->product->toArray()));
     }
 
     public function failed(Throwable $exception): void
     {
         if ($exception instanceof ModelNotFoundException) {
-            // Log dat het product niet meer bestaat, maar markeer de job niet als mislukt
-            \Log::info('Product bestaat niet meer voor WooCommerce synchronisatie', [
+            Log::info('Product no longer exists for WooCommerce sync', [
                 'product_id' => $this->product->id,
             ]);
 
             return;
         }
 
-        // Gooi andere exceptions gewoon door
         throw $exception;
     }
 }
