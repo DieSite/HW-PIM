@@ -336,10 +336,11 @@ class Exporter extends AbstractExporter
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
             $meta[] = ['key' => 'afhaalkorting_price', 'value' => $discounted];
             $parent = Product::find($formatted['parent_id']);
-            if (! empty($parent->values['common']['afbeelding_zonder_logo'])) {
-                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($parent->values['common']['afbeelding_zonder_logo'])];
+            $values = json_decode($parent->values, true);
+            if (! empty($values['common']['afbeelding_zonder_logo'])) {
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($values['common']['afbeelding_zonder_logo'])];
             } else {
-                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $parent->values['common']['image'] ?? $parent->values['common']['images'][0] ?? ''];
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $values['common']['image'] ?? $values['common']['images'][0] ?? ''];
             }
             $formatted['meta_data'] = $meta;
         } else {
