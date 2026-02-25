@@ -97,7 +97,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $product = Product::whereSku($this->batch->sku)->first();
         $additional = $product->additional;
         unset($additional['product_sync_error']);
-        if ( sizeof($additional) === 0 ) {
+        if ( is_array($additional) && sizeof($additional) === 0 ) {
             $additional = null;
         }
         $product->additional = $additional;
