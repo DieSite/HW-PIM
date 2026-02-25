@@ -337,12 +337,14 @@ class Exporter extends AbstractExporter
             $meta[] = ['key' => 'afhaalkorting_price', 'value' => $discounted];
             $parent = Product::find($formatted['parent_id']);
             $values = json_decode($parent->values, true);
-            dd($values);
+            Log::error('Parent', ['values' => $values]);
             if (! empty($values['common']['afbeelding_zonder_logo'])) {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($values['common']['afbeelding_zonder_logo'])];
             } else {
                 $images = explode(',', $values['common']['afbeelding'] ?? '');
+                Log::error('Images', ['images' => $images]);
                 $image = isset($images[0]) ? $this->generateImageUrl($images[0]) : '';
+                Log::error('Image', ['image' => $image]);
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $image];
             }
             $formatted['meta_data'] = $meta;
