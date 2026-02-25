@@ -15,6 +15,8 @@ class ApiClient
 
     public const WORD_PRESS_END_POINT = ['getACFField', 'addMedia', 'getMedia'];
 
+    private static array $versionCache = [];
+
     protected $ch;
 
     /**
@@ -111,11 +113,17 @@ class ApiClient
     {
         $api = '/wp-json/wc/';
         $url = str_replace(['/wp-admin', 'shop/'], ['', ''], $url);
-        $updatedUrl = \rtrim($url, '/').$api.($this->options['version'] ?? 'v2').'/';
+        $baseUrl = \rtrim($url, '/');
+        $updatedUrl = $baseUrl.$api.($this->options['version'] ?? 'v2').'/';
 
         if (! empty($this->options['type'])) {
             $updatedUrl = str_replace('/wp-json/wc/', '/wp-json/'.$this->options['type'].'/', $updatedUrl);
         }
+
+        if (array_key_exists($baseUrl, self::$versionCache)) {
+            return self::$versionCache[$baseUrl];
+        }
+
         $this->url = $updatedUrl;
 
         $response = $this->request('settings', [], []);
@@ -123,6 +131,8 @@ class ApiClient
         if (! empty($response['data']['status']) && $response['data']['status'] == 404) {
             $updatedUrl = str_replace('v2', 'v1', $updatedUrl);
         }
+
+        self::$versionCache[$baseUrl] = $updatedUrl;
 
         return $updatedUrl;
     }
@@ -189,7 +199,7 @@ class ApiClient
     protected function setDefaultCurlSettings()
     {
         $verifySsl = $this->options['verifySsl'] ?? false;
-        $timeout = $this->options['timeout'] ?? 300;
+        $timeout = $this->options['timeout'] ?? 60;
         $followRedirects = $this->options['followRedirects'] ?? true;
 
         \Sentry::configureScope(function (Scope $scope) {
@@ -205,7 +215,7 @@ class ApiClient
         }
 
         \curl_setopt($this->ch, CURLOPT_MAXREDIRS, 10);
-        \curl_setopt($this->ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+        \curl_setopt($this->ch, CURLOPT_CONNECTTIMEOUT, 15);
         \curl_setopt($this->ch, CURLOPT_TIMEOUT, $timeout);
         \curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, true);
     }

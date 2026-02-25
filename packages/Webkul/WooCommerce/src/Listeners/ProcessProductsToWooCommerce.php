@@ -34,7 +34,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
     public $tries = 5;
 
-    public $timeout = 300000;
+    public $timeout = 600;
 
     protected $batch;
 
@@ -146,42 +146,63 @@ class ProcessProductsToWooCommerce implements ShouldQueue
      * @throws \Exception
      * @throws WoocommerceProductSkuExistsException
      */
-    private function processToVariation(array $productData)
+    private function processToVariation(array $productData): void
     {
         Log::debug('Processing to variation');
         $productRepository = app(ProductRepository::class);
         $parent = $productRepository->find($productData['parent_id']);
 
-        $parentProduct = $this->connectorService->requestApiAction(
-            'getProductWithSku',
-            [],
-            ['sku' => $parent->sku]
-        );
+        $parentMapping = $this->getDataTransferMapping($parent->sku, 'product');
+        $parentExternalId = $parentMapping[0]['externalId'] ?? null;
 
-        if (! isset($parentProduct[0])) {
-            Log::debug('Parent product not found.');
+        if (! $parentExternalId) {
+            // Parent not in local mapping — look it up in WooCommerce
+            $parentProduct = $this->connectorService->requestApiAction(
+                'getProductWithSku',
+                [],
+                ['sku' => $parent->sku]
+            );
 
-            return;
+            if (! isset($parentProduct[0])) {
+                Log::debug('Parent product not found.');
+
+                return;
+            }
+
+            $parentExternalId = $parentProduct[0]['id'];
         }
 
-        $existingProduct = $this->connectorService->requestApiAction(
-            'getVariation',
-            [],
-            ['sku' => $productData['sku'], 'product' => $parentProduct[0]['id']]
-        );
+        $variationMapping = $this->getDataTransferMapping($productData['sku'], 'product');
+        $variationExternalId = $variationMapping[0]['externalId'] ?? null;
 
-        if (! isset($existingProduct[0])) {
-            $result = $this->connectorService->requestApiAction(
-                self::ACTION_ADD_VARIATION,
-                $productData,
-                ['credential' => $this->credential['id'], 'product' => $parentProduct[0]['id']]
-            );
-        } else {
+        if ($variationExternalId) {
+            // Both IDs known — update directly without any lookup
             $result = $this->connectorService->requestApiAction(
                 self::ACTION_UPDATE_VARIATION,
                 $productData,
-                ['credential' => $this->credential['id'], 'product' => $parentProduct[0]['id'], 'id' => $existingProduct[0]['id']]
+                ['credential' => $this->credential['id'], 'product' => $parentExternalId, 'id' => $variationExternalId]
             );
+        } else {
+            // Variation not in local mapping — check WooCommerce
+            $existingVariation = $this->connectorService->requestApiAction(
+                'getVariation',
+                [],
+                ['sku' => $productData['sku'], 'product' => $parentExternalId]
+            );
+
+            if (! isset($existingVariation[0])) {
+                $result = $this->connectorService->requestApiAction(
+                    self::ACTION_ADD_VARIATION,
+                    $productData,
+                    ['credential' => $this->credential['id'], 'product' => $parentExternalId]
+                );
+            } else {
+                $result = $this->connectorService->requestApiAction(
+                    self::ACTION_UPDATE_VARIATION,
+                    $productData,
+                    ['credential' => $this->credential['id'], 'product' => $parentExternalId, 'id' => $existingVariation[0]['id']]
+                );
+            }
         }
 
         $this->handleWoocommerceResponse($result, $productData);
@@ -190,27 +211,39 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     /**
      * @throws WoocommerceProductSkuExistsException
      */
-    private function processToParentProduct(array $productData)
+    private function processToParentProduct(array $productData): void
     {
-        // Check if product exists via SKU
-        $existingProduct = $this->connectorService->requestApiAction(
-            'getProductWithSku',
-            [],
-            ['sku' => $productData['sku']]
-        );
+        $mapping = $this->getDataTransferMapping($productData['sku'], 'product');
+        $externalId = $mapping[0]['externalId'] ?? null;
 
-        if (! isset($existingProduct[0])) {
-            $result = $this->connectorService->requestApiAction(
-                self::ACTION_ADD,
-                $productData,
-                ['credential' => $this->credential['id']]
-            );
-        } else {
+        if ($externalId) {
+            // Already known — update directly without a lookup call
             $result = $this->connectorService->requestApiAction(
                 self::ACTION_UPDATE,
                 $productData,
-                ['credential' => $this->credential['id'], 'id' => $existingProduct[0]['id']]
+                ['credential' => $this->credential['id'], 'id' => $externalId]
             );
+        } else {
+            // Not in local mapping — check WooCommerce (may have been created outside PIM)
+            $existingProduct = $this->connectorService->requestApiAction(
+                'getProductWithSku',
+                [],
+                ['sku' => $productData['sku']]
+            );
+
+            if (! isset($existingProduct[0])) {
+                $result = $this->connectorService->requestApiAction(
+                    self::ACTION_ADD,
+                    $productData,
+                    ['credential' => $this->credential['id']]
+                );
+            } else {
+                $result = $this->connectorService->requestApiAction(
+                    self::ACTION_UPDATE,
+                    $productData,
+                    ['credential' => $this->credential['id'], 'id' => $existingProduct[0]['id']]
+                );
+            }
         }
 
         $this->handleWoocommerceResponse($result, $productData);
