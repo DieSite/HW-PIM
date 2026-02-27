@@ -19,8 +19,6 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
 
     public $timeout = 600;
 
-    public $tries = 5;
-
     /**
      * Create a new job instance.
      */
