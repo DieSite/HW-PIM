@@ -32,6 +32,10 @@
         <testsuite name="Installer Test">
             <directory suffix="Test.php">./packages/Webkul/Installer/tests/Feature</directory>
         </testsuite>
+
+        <testsuite name="WooCommerce Feature Test">
+            <directory suffix="Test.php">./packages/Webkul/WooCommerce/tests/Feature</directory>
+        </testsuite>
     </testsuites>
 
     <source>

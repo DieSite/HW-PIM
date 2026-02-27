@@ -386,7 +386,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 if ($param === 'default_attributes[0][option]') {
                     throw new \Exception(
                         'Something went wrong pushing to WooCommerce. Have you added the variations?',
-                        previous: throw new \Exception("Error occurred ($result[code]): ".json_encode($result))
+                        previous: new \Exception("Error occurred ($result[code]): ".json_encode($result))
                     );
                 }
             } else {
