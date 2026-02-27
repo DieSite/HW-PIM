@@ -58,4 +58,9 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
             $local->delete($this->path);
         }
     }
+
+    public function tags(): array
+    {
+        return [self::class];
+    }
 }
