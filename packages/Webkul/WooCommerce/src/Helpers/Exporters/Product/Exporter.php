@@ -336,13 +336,17 @@ class Exporter extends AbstractExporter
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
             $meta[] = ['key' => 'afhaalkorting_price', 'value' => $discounted];
             $parent = Product::find($formatted['parent_id']);
-            $values = json_decode($parent->values, true);
+            if (! is_array($parent->values)) {
+                $values = json_decode($parent->values ?? '', true);
+            } else {
+                $values = $parent->values;
+            }
             if (! empty($values['common']['afbeelding_zonder_logo'])) {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($values['common']['afbeelding_zonder_logo'])];
             } else {
                 $images = $values['common']['afbeelding'] ?? '';
 
-                if ( is_string($images) ) {
+                if (is_string($images)) {
                     $images = explode(',', $images);
                 }
 
@@ -460,7 +464,7 @@ class Exporter extends AbstractExporter
 
         Log::debug('Formatted', ['formatted' => $formatted]);
 
-        if (! $foundMerk && !isset($item['parent_id'])) {
+        if (! $foundMerk && ! isset($item['parent_id'])) {
             \Sentry::configureScope(function (Scope $scope) use ($formatted) {
                 $scope->setContext('formatted', $formatted);
             });
