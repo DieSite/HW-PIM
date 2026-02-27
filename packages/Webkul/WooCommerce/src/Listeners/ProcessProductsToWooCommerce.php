@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Sentry;
 use Webkul\WooCommerce\DTO\ProductBatch;
@@ -63,8 +64,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->connectorService = $connectorService;
         $this->dataTransferMappingRepository = $dataTransferMappingRepository;
 
-        // Retrieve credential
-        $this->credential = $this->connectorService->getCredentialForQuickExport();
+        // Retrieve credential — cached to avoid a DB hit on every job during bulk syncs.
+        // Invalidated by the Credential model observer when credentials are saved.
+        $this->credential = Cache::remember('wc_default_credential', 300, fn () => $this->connectorService->getCredentialForQuickExport());
         if (! $this->credential) {
             Log::error('No default credentials set for quick export.');
 

@@ -15,37 +15,30 @@ class RetryErroredWooCommerceProducts extends Command
 
     public function handle(ProductService $productService): void
     {
-        $query = ProductModel::whereNotNull('additional');
+        // App\Models\Product extends Webkul\Product\Models\Product on the same table,
+        // so we can resolve parent_id in one query instead of two.
+        $erroredProducts = ProductModel::whereNotNull('additional')
+            ->select(['id', 'parent_id'])
+            ->when($this->option('limit'), fn ($q) => $q->limit((int) $this->option('limit')))
+            ->get();
 
-        if ($limit = $this->option('limit')) {
-            $query->limit((int) $limit);
-        }
-
-        $erroredIds = $query->pluck('id');
-
-        if ($erroredIds->isEmpty()) {
+        if ($erroredProducts->isEmpty()) {
             $this->info('No errored products found.');
 
             return;
         }
 
-        // Resolve each errored product to its root parent, deduplicate
-        $parentIds = collect();
+        $parentIds = $erroredProducts
+            ->map(fn ($p) => $p->parent_id ?? $p->id)
+            ->unique()
+            ->values();
 
-        Product::whereIn('id', $erroredIds)
-            ->chunk(100, function ($products) use (&$parentIds) {
-                foreach ($products as $product) {
-                    $parentIds->push($product->parent_id ?? $product->id);
-                }
-            });
-
-        $parentIds = $parentIds->unique()->values();
-
-        $this->info("Retrying sync for {$parentIds->count()} parent product(s) (from {$erroredIds->count()} errored record(s)).");
+        $this->info("Retrying sync for {$parentIds->count()} parent product(s) (from {$erroredProducts->count()} errored record(s)).");
         $this->output->progressStart($parentIds->count());
 
+        // No need to eager-load variants — SerializedProcessProductsToWooCommerce
+        // calls withoutRelations() in its constructor and re-fetches from DB in handle().
         Product::whereIn('id', $parentIds)
-            ->with('variants')
             ->chunk(50, function ($parents) use ($productService) {
                 foreach ($parents as $parent) {
                     $productService->triggerWCSyncForParent($parent);

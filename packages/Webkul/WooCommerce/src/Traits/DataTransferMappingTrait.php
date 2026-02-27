@@ -3,6 +3,7 @@
 namespace Webkul\WooCommerce\Traits;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Webkul\DataTransfer\Helpers\Export as ExportHelper;
 use Webkul\WooCommerce\Exceptions\InvalidCredential;
 
@@ -37,19 +38,39 @@ trait DataTransferMappingTrait
 
     /**
      * Check if the mapping exists in the database for the given item.
+     *
+     * Attribute and category mappings are stable (only change when an attribute/category
+     * export job runs) so they are cached persistently and invalidated by the
+     * DataTransferMapping observer. Product and image mappings are NOT cached because
+     * jobs create new product mappings that subsequent chained jobs must read fresh.
      */
     protected function getDataTransferMapping(string $code, ?string $entityName = null): ?array
     {
-        if ($code) {
-            $mappingCheck = $this->dataTransferMappingRepository->where('code', $code)
-                ->where('entityType', $entityName ?? self::UNOPIM_ENTITY_NAME)
-                ->where('apiUrl', $this?->credential?->shopUrl ?? $this->credential['shopUrl'])
-                ->get();
-
-            return $mappingCheck?->toArray();
+        if (! $code) {
+            return null;
         }
 
-        return null;
+        $entity = $entityName ?? self::UNOPIM_ENTITY_NAME;
+        $shopUrl = $this?->credential?->shopUrl ?? $this->credential['shopUrl'];
+
+        if (in_array($entity, ['attribute', 'category'])) {
+            $cacheKey = "wc_mapping_{$entity}_{$code}_".md5($shopUrl);
+
+            return Cache::remember($cacheKey, 3600, fn () => $this->dataTransferMappingRepository
+                ->where('code', $code)
+                ->where('entityType', $entity)
+                ->where('apiUrl', $shopUrl)
+                ->get()
+                ->toArray()
+            );
+        }
+
+        return $this->dataTransferMappingRepository
+            ->where('code', $code)
+            ->where('entityType', $entity)
+            ->where('apiUrl', $shopUrl)
+            ->get()
+            ->toArray();
     }
 
     protected function getMappingByExternalId(string $externalId, ?string $entityName = null): ?array
