@@ -36,7 +36,11 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
         $bolCredentials = BolComCredential::all()->all();
 
         foreach ($products as $product) {
-            $values = json_decode($product->values, true);
+            if (is_array($product->values)) {
+                $values = $product->values;
+            } else {
+                $values = json_decode($product->values, true);
+            }
 
             if (isset($values['common'])) {
                 $values['common']['voorraad_eurogros'] = $row['vrd'];
