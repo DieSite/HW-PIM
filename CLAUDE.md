@@ -140,6 +140,11 @@ Laravel Horizon manages background jobs. The queue driver is `database`. The `un
 | OpenAI | `packages/Webkul/MagicAI/` | AI content generation |
 | Sentry | `.env` | Error tracking |
 
+
+### Terminology
+
+When we talk about `product_sync_error`, we talk about the array key `product_sync_error` in the `additional` column of the `products` table.
+
 ===
 
 <laravel-boost-guidelines>
