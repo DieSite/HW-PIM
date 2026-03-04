@@ -5,6 +5,7 @@ namespace Webkul\WooCommerce\Listeners;
 use App\Exceptions\ParentHasNoVariantsException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
+use App\Exceptions\WoocommerceBadGatewayException;
 use App\Exceptions\WoocommerceTimeoutException;
 use App\Models\Product;
 use Illuminate\Bus\Queueable;
@@ -132,7 +133,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 'product_sync_error',
                 $e->getMessage()
             );
-        } catch (WoocommerceTimeoutException $e) {
+        } catch (WoocommerceTimeoutException | WoocommerceBadGatewayException $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
             $additional['product_sync_error'] = $e->getMessage();
@@ -407,6 +408,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
             }
         } else {
+            if ($result['code'] === 502) {
+                throw new WoocommerceBadGatewayException($productData['sku']);
+            }
+
             if ($result['code'] === 500) {
                 $errorMessage = $result['data']['error']['message'] ?? '';
 
