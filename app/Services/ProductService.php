@@ -103,6 +103,15 @@ class ProductService
 
     public function triggerWCSyncForParent(Product $product): void
     {
+        if ($product->variants->isEmpty()) {
+            $additional = $product->additional ?? [];
+            $additional['product_sync_error'] = "Product '{$product->sku}' has no variants. Add at least one variant before syncing to WooCommerce.";
+            $product->additional = $additional;
+            $product->saveQuietly();
+
+            return;
+        }
+
         $parentJob = new SerializedProcessProductsToWooCommerce($product);
 
         $childJobs = [];

@@ -2,8 +2,10 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Exceptions\ParentHasNoVariantsException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
+use App\Exceptions\WoocommerceTimeoutException;
 use App\Models\Product;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -130,6 +132,19 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 'product_sync_error',
                 $e->getMessage()
             );
+        } catch (WoocommerceTimeoutException $e) {
+            $product = Product::whereSku($this->batch->sku)->first();
+            $additional = $product->additional;
+            $additional['product_sync_error'] = $e->getMessage();
+            $product->additional = $additional;
+            $product->save();
+            throw $e;
+        } catch (ParentHasNoVariantsException $e) {
+            $product = Product::whereSku($this->batch->sku)->first();
+            $additional = $product->additional;
+            $additional['product_sync_error'] = $e->getMessage();
+            $product->additional = $additional;
+            $product->save();
         } catch (\Exception $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
@@ -374,7 +389,9 @@ class ProcessProductsToWooCommerce implements ShouldQueue
      */
     private function handleWoocommerceResponse(array $result, array $productData): void
     {
-        if ($result['code'] === 200) {
+        if ($result['code'] === 0) {
+            throw new WoocommerceTimeoutException($productData['sku'], $result['error'] ?? 'unknown curl error');
+        } elseif ($result['code'] === 200) {
             Log::debug("Product $productData[sku] updated successfully");
         } elseif ($result['code'] === 201) {
             Log::debug("Product $productData[sku] created successfully");
@@ -384,10 +401,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             } elseif (str_contains($result['message'], 'Ongeldige parameter(s):') && isset($result['data']['details']['default_attributes']['data']['param'])) {
                 $param = $result['data']['details']['default_attributes']['data']['param'];
                 if ($param === 'default_attributes[0][option]') {
-                    throw new \Exception(
-                        'Something went wrong pushing to WooCommerce. Have you added the variations?',
-                        previous: new \Exception("Error occurred ($result[code]): ".json_encode($result))
-                    );
+                    throw new ParentHasNoVariantsException($productData['sku']);
                 }
             } else {
                 throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
