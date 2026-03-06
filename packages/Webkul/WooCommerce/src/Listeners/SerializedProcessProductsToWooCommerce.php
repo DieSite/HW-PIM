@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Sentry\Laravel\Facade as Sentry;
 use Throwable;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\DTO\ProductBatch;
@@ -53,6 +54,16 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
             return;
         }
 
-        throw $exception;
+        $product = Product::find($this->product->id);
+        $syncError = $product?->additional['product_sync_error'] ?? 'unknown';
+
+        Log::error('WooCommerce sync failed for product', [
+            'product_id' => $this->product->id,
+            'sku' => $this->product->sku,
+            'product_sync_error' => $syncError,
+            'exception' => $exception->getMessage(),
+        ]);
+
+        Sentry::captureException($exception);
     }
 }

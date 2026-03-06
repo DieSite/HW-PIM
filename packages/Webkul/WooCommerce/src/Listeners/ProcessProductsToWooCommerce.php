@@ -149,7 +149,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         } catch (\Exception $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
-            $additional['product_sync_error'] = $e->getMessage();
+            $errorMessage = str_contains($e->getMessage(), 'zoektabel')
+                ? "SKU {$this->batch->sku} bestaat al in de WooCommerce zoektabel. Het product staat waarschijnlijk in de prullenbak van WooCommerce. Verwijder het daar eerst definitief en probeer opnieuw."
+                : $e->getMessage();
+            $additional['product_sync_error'] = $errorMessage;
             $product->additional = $additional;
             $product->save();
             Sentry::captureException($e);
