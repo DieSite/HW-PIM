@@ -15,11 +15,11 @@ class Product extends \Webkul\Product\Models\Product
      *
      * Stock is tracked per variant via these JSON fields in values.common.
      */
-    public function scopeInStock(Builder $query): Builder
+    public function scopeInStock($query)
     {
         return $query->where(function (Builder $q) {
             foreach (['voorraad_eurogros', 'voorraad_5_korting_handmatig', 'voorraad_hw_5_korting', 'uitverkoop_15_korting'] as $field) {
-                $q->orWhereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(values, '$.common.{$field}')) AS UNSIGNED) > 0");
+                $q->orWhereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(`values`, '$.common.{$field}')) AS UNSIGNED) > 0");
             }
         });
     }
