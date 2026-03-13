@@ -6,6 +6,7 @@
     'fieldValues'        => [],
     'channelCurrencies'  => [],
     'variantFields'      => [],
+    'productId'          => null,
 ])
 
 @foreach($fields as $field)
@@ -46,7 +47,7 @@
     <x-admin::form.control-group>
         <div class="inline-flex justify-between w-full">
             <x-admin::form.control-group.label :for="$fieldName">
-                {{ $fieldLabel }} 
+                {{ $fieldLabel }}
 
                 @if ($field->is_required || $isConfigurableAttribute)
                     <span class="required"></span>
@@ -95,7 +96,7 @@
                             :for="$field->code . '_' . $option->id"
                             :checked="(bool) false !== array_search($option->code, $selectedValue)"
                         />
-    
+
                         <label
                             class="text-xs text-gray-600 dark:text-gray-300 font-medium cursor-pointer select-none"
                             for="{{ $field->code . '_' . $option->id }}"
@@ -270,11 +271,30 @@
                 />
         @endswitch
 
-        @php 
+        @php
             if ($isConfigurableAttribute) {
                 $field->is_required = $field->getOriginal('is_required');
             }
         @endphp
+
+        @if ($productId && $field->ai_transformation_from && in_array($fieldType, ['image', 'gallery', 'asset']))
+            @php
+                $transformUrl = route('admin.catalog.products.photoroom.transform', [
+                    'productId'     => $productId,
+                    'attributeCode' => $field->code,
+                ]);
+            @endphp
+            <div class="mt-2">
+                <button
+                    type="button"
+                    class="secondary-button flex items-center gap-1 text-xs"
+                    onclick="photoroomTransform(this, '{{ $transformUrl }}', '{{ $fieldLabel }}')"
+                >
+                    <span class="icon-magic-wand text-sm"></span>
+                    Logo verwijderen via AI
+                </button>
+            </div>
+        @endif
 
         @if ($field->is_unique)
             <x-admin::form.control-group.control

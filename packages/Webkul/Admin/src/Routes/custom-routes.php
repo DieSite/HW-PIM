@@ -2,11 +2,19 @@
 
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
+use App\Http\Controllers\PhotoroomController;
 use App\Http\Controllers\Tools\ErroredProductsController;
 use App\Http\Controllers\Tools\EurgrosController;
 use App\Http\Controllers\Tools\ProductHWStockEditorController;
 use App\Http\Controllers\Tools\ProductStockEditorController;
 use Illuminate\Support\Facades\Route;
+
+Route::group(['middleware' => ['web', 'admin']], function () {
+    Route::prefix('catalog/products/{productId}/photoroom')->group(function () {
+        Route::post('{attributeCode}/transform', [PhotoroomController::class, 'transform'])
+            ->name('admin.catalog.products.photoroom.transform');
+    });
+});
 
 Route::group(['middleware' => ['web', 'admin']], function () {
     Route::prefix('custom')->group(function () {

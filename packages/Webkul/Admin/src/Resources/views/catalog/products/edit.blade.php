@@ -205,6 +205,7 @@
                                     :currentChannelCode="$currentChannel->code"
                                     :channelCurrencies="$currentChannel->currencies"
                                     :variantFields="$product?->parent ? $product->parent->super_attributes->pluck('code')->toArray() : []"
+                                    :productId="$product->id"
                                     fieldsWrapper="values"
                                 >
                                 </x-admin::products.dynamic-attribute-fields>
@@ -574,4 +575,33 @@
             }
         }
     });
+
+    function photoroomTransform(button, url, fieldLabel) {
+        if (!confirm('Logo verwijderen uit "' + fieldLabel + '" via AI (Photoroom)?\n\nDit vervangt de huidige afbeelding in dit veld. De verwerking verloopt op de achtergrond.')) {
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'Bezig...';
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value,
+            },
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message ?? 'Transformatie gestart.');
+                button.disabled = false;
+                button.innerHTML = '<span class="icon-magic-wand text-sm"></span> Logo verwijderen via AI';
+            })
+            .catch(error => {
+                alert('Er is een fout opgetreden.');
+                console.error('Photoroom error:', error);
+                button.disabled = false;
+                button.innerHTML = '<span class="icon-magic-wand text-sm"></span> Logo verwijderen via AI';
+            });
+    }
 </script>

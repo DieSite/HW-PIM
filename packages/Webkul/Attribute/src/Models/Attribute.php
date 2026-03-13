@@ -69,6 +69,7 @@ class Attribute extends TranslatableModel implements AttributeContract, HistoryC
         'regex_pattern',
         'value_per_locale',
         'value_per_channel',
+        'ai_transformation_from',
     ];
 
     /**
