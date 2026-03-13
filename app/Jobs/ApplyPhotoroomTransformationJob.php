@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Services\PhotoroomService;
+use App\Services\ProductService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -96,6 +97,8 @@ class ApplyPhotoroomTransformationJob implements ShouldQueue
 
         $product->values = $productValues;
         $product->save();
+
+        app(ProductService::class)->triggerWCSyncForParent($product);
 
         Log::info("Photoroom transformation complete for product [{$this->productId}], target attribute [{$this->targetAttributeCode}], DAM asset [{$damAsset->id}], path [{$targetStoragePath}].");
     }
