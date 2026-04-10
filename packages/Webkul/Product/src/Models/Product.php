@@ -324,7 +324,7 @@ class Product extends Model implements HistoryAuditable, PresentableHistoryInter
             'id'              => $this->id,
             'sku'             => $this->sku,
             'parent'          => $this->parent,
-            'values'          => $this->values,
+            'values'          => is_string($this->values) ? json_decode($this->values, true) : $this->values,
             'additional_data' => $this->additional_data,
             'image'           => $image,
         ];
