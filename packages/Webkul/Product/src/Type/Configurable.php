@@ -243,6 +243,24 @@ class Configurable extends AbstractType
 
         $variantValues = $variant->values;
 
+        if (is_string($variantValues)) {
+            $decoded = json_decode($variantValues, true);
+            $variantValues = is_array($decoded) ? $decoded : [];
+        }
+
+        if (! is_array($variantValues)) {
+            $variantValues = [];
+        }
+
+        if (isset($variantValues[self::COMMON_VALUES_KEY]) && is_string($variantValues[self::COMMON_VALUES_KEY])) {
+            $decodedCommon = json_decode($variantValues[self::COMMON_VALUES_KEY], true);
+            $variantValues[self::COMMON_VALUES_KEY] = is_array($decodedCommon) ? $decodedCommon : [];
+        }
+
+        if (! isset($variantValues[self::COMMON_VALUES_KEY]) || ! is_array($variantValues[self::COMMON_VALUES_KEY])) {
+            $variantValues[self::COMMON_VALUES_KEY] = [];
+        }
+
         foreach ($data['super_attributes'] ?? [] as $attribute) {
             $attrCode = $attribute->code;
 
