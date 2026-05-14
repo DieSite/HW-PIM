@@ -38,8 +38,19 @@ class ImportProductCommand extends Command
                 $remoteId = (int) $remote['id'];
                 $remoteParentId = $remote['parent_id'] !== null ? (int) $remote['parent_id'] : null;
 
+                $familyCode = $remote['_attribute_family_code'] ?? null;
                 $row = $remote;
-                unset($row['id']);
+                unset($row['id'], $row['_attribute_family_code']);
+
+                if ($familyCode !== null) {
+                    $localFamilyId = DB::table('attribute_families')->where('code', $familyCode)->value('id');
+
+                    if (! $localFamilyId) {
+                        throw new \RuntimeException("Attribute family '{$familyCode}' not found locally.");
+                    }
+
+                    $row['attribute_family_id'] = $localFamilyId;
+                }
 
                 if ($remoteParentId !== null) {
                     if (! isset($remoteToLocal[$remoteParentId])) {
@@ -62,30 +73,9 @@ class ImportProductCommand extends Command
                 $remoteToLocal[$remoteId] = $localId;
             }
 
-            $this->replacePivot(
-                'product_super_attributes',
-                $payload['product_super_attributes'] ?? [],
-                $remoteToLocal,
-                ['product_id'],
-                ['product_id', 'attribute_id']
-            );
-
-            $this->replacePivot(
-                'product_relations',
-                $payload['product_relations'] ?? [],
-                $remoteToLocal,
-                ['parent_id', 'child_id'],
-                ['parent_id', 'child_id']
-            );
-
-            $this->replacePivot(
-                'product_bol_com_credentials',
-                $payload['product_bol_com_credentials'] ?? [],
-                $remoteToLocal,
-                ['product_id'],
-                ['product_id', 'bol_com_credential_id'],
-                dropColumns: ['id']
-            );
+            $this->replaceSuperAttributes($payload['product_super_attributes'] ?? [], $remoteToLocal);
+            $this->replaceRelations($payload['product_relations'] ?? [], $remoteToLocal);
+            $this->replaceBolCredentials($payload['product_bol_com_credentials'] ?? [], $remoteToLocal);
         });
 
         $this->info(sprintf(
@@ -116,56 +106,145 @@ class ImportProductCommand extends Command
     }
 
     /**
-     * Re-insert pivot rows after remapping product_id columns from remote to local IDs.
-     *
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array<int, int>  $remoteToLocal
-     * @param  array<int, string>  $productIdColumns
-     * @param  array<int, string>  $uniqueColumns
-     * @param  array<int, string>  $dropColumns
      */
-    protected function replacePivot(
-        string $table,
-        array $rows,
-        array $remoteToLocal,
-        array $productIdColumns,
-        array $uniqueColumns,
-        array $dropColumns = []
-    ): void {
+    protected function replaceSuperAttributes(array $rows, array $remoteToLocal): void
+    {
         if (empty($rows)) {
             return;
         }
 
-        $remapped = [];
+        $localProductIds = [];
+        $insert = [];
 
         foreach ($rows as $row) {
-            foreach ($dropColumns as $column) {
-                unset($row[$column]);
+            $remoteProductId = (int) $row['product_id'];
+
+            if (! isset($remoteToLocal[$remoteProductId])) {
+                continue;
             }
 
-            foreach ($productIdColumns as $column) {
-                $remoteId = (int) $row[$column];
+            $localProductId = $remoteToLocal[$remoteProductId];
+            $attributeCode = $row['_attribute_code'] ?? null;
 
-                if (! isset($remoteToLocal[$remoteId])) {
-                    continue 2;
-                }
-
-                $row[$column] = $remoteToLocal[$remoteId];
+            if (! $attributeCode) {
+                continue;
             }
 
-            $remapped[] = $row;
+            $localAttributeId = DB::table('attributes')->where('code', $attributeCode)->value('id');
+
+            if (! $localAttributeId) {
+                $this->warn("Skipping super_attribute: attribute '{$attributeCode}' not found locally.");
+
+                continue;
+            }
+
+            $localProductIds[] = $localProductId;
+            $insert[] = [
+                'product_id'   => $localProductId,
+                'attribute_id' => $localAttributeId,
+            ];
         }
 
-        if (empty($remapped)) {
+        if (empty($insert)) {
             return;
         }
 
-        DB::table($table)
-            ->whereIn($productIdColumns[0], array_unique(array_column($remapped, $productIdColumns[0])))
+        DB::table('product_super_attributes')
+            ->whereIn('product_id', array_unique($localProductIds))
             ->delete();
 
-        foreach (array_chunk($remapped, 500) as $chunk) {
-            DB::table($table)->insert($chunk);
+        DB::table('product_super_attributes')->insert($insert);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, int>  $remoteToLocal
+     */
+    protected function replaceRelations(array $rows, array $remoteToLocal): void
+    {
+        if (empty($rows)) {
+            return;
         }
+
+        $insert = [];
+        $touchedParents = [];
+
+        foreach ($rows as $row) {
+            $parent = $remoteToLocal[(int) $row['parent_id']] ?? null;
+            $child = $remoteToLocal[(int) $row['child_id']] ?? null;
+
+            if (! $parent || ! $child) {
+                continue;
+            }
+
+            $touchedParents[] = $parent;
+            $insert[] = [
+                'parent_id' => $parent,
+                'child_id'  => $child,
+            ];
+        }
+
+        if (empty($insert)) {
+            return;
+        }
+
+        DB::table('product_relations')
+            ->whereIn('parent_id', array_unique($touchedParents))
+            ->delete();
+
+        DB::table('product_relations')->insert($insert);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, int>  $remoteToLocal
+     */
+    protected function replaceBolCredentials(array $rows, array $remoteToLocal): void
+    {
+        if (empty($rows)) {
+            return;
+        }
+
+        $insert = [];
+        $touchedProducts = [];
+
+        foreach ($rows as $row) {
+            $localProductId = $remoteToLocal[(int) $row['product_id']] ?? null;
+            $clientId = $row['_bol_com_credential_client_id'] ?? null;
+
+            if (! $localProductId || ! $clientId) {
+                continue;
+            }
+
+            $localCredentialId = DB::table('bol_com_credentials')->where('client_id', $clientId)->value('id');
+
+            if (! $localCredentialId) {
+                $this->warn("Skipping bol credential pivot: client_id '{$clientId}' not found locally.");
+
+                continue;
+            }
+
+            $touchedProducts[] = $localProductId;
+            $insert[] = [
+                'product_id'            => $localProductId,
+                'bol_com_credential_id' => $localCredentialId,
+                'delivery_code'         => $row['delivery_code'] ?? null,
+                'reference'             => $row['reference'] ?? null,
+                'created_at'            => $row['created_at'] ?? now(),
+                'updated_at'            => $row['updated_at'] ?? now(),
+            ];
+        }
+
+        if (empty($insert)) {
+            return;
+        }
+
+        DB::table('product_bol_com_credentials')
+            ->whereIn('product_id', array_unique($touchedProducts))
+            ->delete();
+
+        DB::table('product_bol_com_credentials')->insert($insert);
     }
 }

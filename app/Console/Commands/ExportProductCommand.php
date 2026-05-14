@@ -26,31 +26,60 @@ class ExportProductCommand extends Command
 
         $ids = $this->collectProductIds($product);
 
+        $products = DB::table('products')
+            ->whereIn('id', $ids)
+            ->orderByRaw('parent_id IS NULL DESC, id ASC')
+            ->get()
+            ->map(function ($row) {
+                $row = (array) $row;
+                $row['_attribute_family_code'] = $row['attribute_family_id'] === null
+                    ? null
+                    : DB::table('attribute_families')->where('id', $row['attribute_family_id'])->value('code');
+
+                return $row;
+            })
+            ->all();
+
+        $superAttributes = DB::table('product_super_attributes')
+            ->whereIn('product_id', $ids)
+            ->get()
+            ->map(function ($row) {
+                $row = (array) $row;
+                $row['_attribute_code'] = DB::table('attributes')
+                    ->where('id', $row['attribute_id'])
+                    ->value('code');
+
+                return $row;
+            })
+            ->all();
+
+        $relations = DB::table('product_relations')
+            ->where(fn ($q) => $q->whereIn('parent_id', $ids)->orWhereIn('child_id', $ids))
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->all();
+
+        $bolCredentials = DB::table('product_bol_com_credentials')
+            ->whereIn('product_id', $ids)
+            ->get()
+            ->map(function ($row) {
+                $row = (array) $row;
+                $row['_bol_com_credential_client_id'] = DB::table('bol_com_credentials')
+                    ->where('id', $row['bol_com_credential_id'])
+                    ->value('client_id');
+
+                return $row;
+            })
+            ->all();
+
         $payload = [
-            'version'         => 1,
-            'exported_at'     => now()->toIso8601String(),
-            'root_product_id' => $id,
-            'products'        => DB::table('products')
-                ->whereIn('id', $ids)
-                ->orderByRaw('parent_id IS NULL DESC, id ASC')
-                ->get()
-                ->map(fn ($row) => (array) $row)
-                ->all(),
-            'product_super_attributes' => DB::table('product_super_attributes')
-                ->whereIn('product_id', $ids)
-                ->get()
-                ->map(fn ($row) => (array) $row)
-                ->all(),
-            'product_relations' => DB::table('product_relations')
-                ->where(fn ($q) => $q->whereIn('parent_id', $ids)->orWhereIn('child_id', $ids))
-                ->get()
-                ->map(fn ($row) => (array) $row)
-                ->all(),
-            'product_bol_com_credentials' => DB::table('product_bol_com_credentials')
-                ->whereIn('product_id', $ids)
-                ->get()
-                ->map(fn ($row) => (array) $row)
-                ->all(),
+            'version'                     => 2,
+            'exported_at'                 => now()->toIso8601String(),
+            'root_product_id'             => $id,
+            'products'                    => $products,
+            'product_super_attributes'    => $superAttributes,
+            'product_relations'           => $relations,
+            'product_bol_com_credentials' => $bolCredentials,
         ];
 
         $dir = dirname($file);
