@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Services\ProductService;
 use Illuminate\Http\Request;
 use Webkul\Product\Models\Product;
-use Webkul\Product\Repositories\ProductRepository;
 use Webkul\WooCommerce\Services\WooCommerceService;
 
 class ProductHelperController extends Controller
@@ -37,7 +36,7 @@ class ProductHelperController extends Controller
     {
         $sku = $request->input('sku');
 
-        $product = app(ProductRepository::class)->findByField('sku', $sku)->first();
+        $product = Product::where('sku', $sku)->first();
         $naam = $request->input('title', $product->values['common']['productnaam']);
         $merk = $request->input('merk', $product->values['common']['merk']);
 
@@ -51,7 +50,7 @@ class ProductHelperController extends Controller
     {
         $sku = $request->input('sku');
 
-        $product = app(ProductRepository::class)->findByField('sku', $sku)->first();
+        $product = Product::where('sku', $sku)->first();
 
         $price = $this->productService->calculateMetOnderkleedPrice($product);
         $original = $this->productService->getUnderrugAlternative($product)->values['common']['prijs']['EUR'];

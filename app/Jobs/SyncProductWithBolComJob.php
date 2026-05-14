@@ -14,7 +14,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
-use Webkul\Product\Repositories\ProductRepository;
 
 class SyncProductWithBolComJob implements ShouldQueue
 {
@@ -46,7 +45,7 @@ class SyncProductWithBolComJob implements ShouldQueue
      *
      * @throws Exception|GuzzleException
      */
-    public function handle(BolComProductService $bolComProductService, BolApiClient $apiClient, ProductRepository $productRepository)
+    public function handle(BolComProductService $bolComProductService, BolApiClient $apiClient)
     {
         try {
             if ($this->unchecked == true) {
@@ -54,7 +53,7 @@ class SyncProductWithBolComJob implements ShouldQueue
             }
 
             if ($this->processId !== null) {
-                $this->checkProcessStatus($apiClient, $productRepository, $bolComProductService);
+                $this->checkProcessStatus($apiClient, $bolComProductService);
 
                 return;
             }
@@ -78,7 +77,6 @@ class SyncProductWithBolComJob implements ShouldQueue
                 'error'      => $e->getMessage(),
             ]);
 
-
             throw new Exception('Failed to sync with Bol.com in job ', previous: $e);
         }
     }
@@ -89,7 +87,7 @@ class SyncProductWithBolComJob implements ShouldQueue
      *
      * @throws Exception|GuzzleException
      */
-    protected function checkProcessStatus(BolApiClient $apiClient, ProductRepository $productRepository, ?BolComProductService $bolComProductService = null): void
+    protected function checkProcessStatus(BolApiClient $apiClient, ?BolComProductService $bolComProductService = null): void
     {
         $apiClient->setCredential($this->bolComCredential);
 
@@ -107,7 +105,7 @@ class SyncProductWithBolComJob implements ShouldQueue
 
             case 'SUCCESS':
                 if (! empty($response['entityId'])) {
-                    $product = $productRepository->find($this->product->id);
+                    $product = Product::find($this->product->id);
                     $product->bolComCredentials()->updateExistingPivot(
                         $this->bolComCredential->id,
                         ['reference' => $response['entityId']]

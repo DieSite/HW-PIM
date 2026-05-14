@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\ApplyPhotoroomTransformationJob;
 use App\Models\Product;
 use Illuminate\Console\Command;
-use Webkul\Attribute\Repositories\AttributeRepository;
+use Webkul\Attribute\Models\Attribute;
 
 class BulkPhotoroomTransformCommand extends Command
 {
@@ -15,9 +15,9 @@ class BulkPhotoroomTransformCommand extends Command
 
     protected $description = 'Dispatch Photoroom AI logo removal jobs for all in-stock parent products. Respects the 60 images/minute rate limit by staggering job delays.';
 
-    public function handle(AttributeRepository $attributeRepository): void
+    public function handle(): void
     {
-        $targetAttributes = $attributeRepository->findWhere([['ai_transformation_from', '!=', null]]);
+        $targetAttributes = Attribute::whereNotNull('ai_transformation_from')->get();
 
         if ($targetAttributes->isEmpty()) {
             $this->warn('No attributes with ai_transformation_from configured. Nothing to do.');

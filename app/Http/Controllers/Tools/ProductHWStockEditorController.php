@@ -3,19 +3,19 @@
 namespace App\Http\Controllers\Tools;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Services\ProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Webkul\Product\Repositories\ProductRepository;
 
 class ProductHWStockEditorController extends Controller
 {
-    public function index(ProductRepository $productRepository)
+    public function index()
     {
         $data = [];
 
-        $builder = $productRepository->select([
+        $builder = Product::select([
             'id',
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.productnaam'), '') as productnaam"),
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.maat'), '') as maat"),
@@ -44,10 +44,10 @@ class ProductHWStockEditorController extends Controller
         return view('admin::tools.product-hw-stock-editor', $data);
     }
 
-    public function update(Request $request, ProductRepository $productRepository)
+    public function update(Request $request)
     {
         $productData = $request->input('product', []);
-        $products = $productRepository->findWhereIn('id', array_keys($productData));
+        $products = Product::whereIn('id', array_keys($productData))->get();
         $parents = [];
         foreach ($products as $product) {
             $data = $productData[$product->id];
@@ -71,7 +71,7 @@ class ProductHWStockEditorController extends Controller
             app(ProductService::class)->copyStockValuesOnderkleed($product);
         }
 
-        $parents = $productRepository->findWhereIn('id', $parents);
+        $parents = Product::whereIn('id', $parents)->get();
         foreach ($parents as $parent) {
             Event::dispatch('catalog.product.update.after', $parent);
         }

@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Product;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Event;
 use Storage;
-use Webkul\Product\Repositories\ProductRepository;
 
 class ImportEurogrosEan extends Command
 {
@@ -30,8 +30,6 @@ class ImportEurogrosEan extends Command
      */
     public function handle()
     {
-
-        $productRepository = app(ProductRepository::class);
         $content = Storage::disk('sftp')->get(self::FILE);
         $count = substr_count($content, "\n");
         // Convert string to a stream so fgetcsv can read it
@@ -67,9 +65,8 @@ class ImportEurogrosEan extends Command
                 continue;
             }
 
-            $rugs = $productRepository->select([
-                'id',
-            ])->whereNotNull('parent_id')
+            $rugs = Product::select(['id'])
+                ->whereNotNull('parent_id')
                 ->where('values->common->productnaam', '=', $kleur)
                 ->where('values->common->maat', '=', $onzeMaat)
                 ->get();
@@ -81,7 +78,7 @@ class ImportEurogrosEan extends Command
                 continue;
             }
 
-            $rugs = $productRepository->findWhereIn('id', [$rugs[0]->id, $rugs[1]->id]);
+            $rugs = Product::whereIn('id', [$rugs[0]->id, $rugs[1]->id])->get();
             foreach ($rugs as $rug) {
                 $values = $rug->values;
                 $values['common']['ean'] = $ean;
@@ -96,8 +93,7 @@ class ImportEurogrosEan extends Command
 
     private function findByEan(string $ean): string
     {
-        $productRepository = app(ProductRepository::class);
-        $product = $productRepository->findOneByField('values->common->ean', $ean);
+        $product = Product::where('values->common->ean', $ean)->first();
         if (is_null($product)) {
             return '';
         }

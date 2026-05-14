@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Product;
 use App\Services\PhotoroomService;
 use App\Services\ProductService;
 use Illuminate\Bus\Queueable;
@@ -13,9 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
-use Webkul\Attribute\Repositories\AttributeRepository;
+use Webkul\Attribute\Models\Attribute;
 use Webkul\DAM\Models\Asset;
-use Webkul\Product\Repositories\ProductRepository;
 
 class ApplyPhotoroomTransformationJob implements ShouldQueue
 {
@@ -30,18 +30,15 @@ class ApplyPhotoroomTransformationJob implements ShouldQueue
         public readonly string $targetAttributeCode,
     ) {}
 
-    public function handle(
-        PhotoroomService $photoroomService,
-        ProductRepository $productRepository,
-        AttributeRepository $attributeRepository,
-    ): void {
-        $product = $productRepository->find($this->productId);
+    public function handle(PhotoroomService $photoroomService): void
+    {
+        $product = Product::find($this->productId);
 
         if (! $product) {
             throw new RuntimeException("Product [{$this->productId}] not found.");
         }
 
-        $targetAttribute = $attributeRepository->findOneByField('code', $this->targetAttributeCode);
+        $targetAttribute = Attribute::where('code', $this->targetAttributeCode)->first();
 
         if (! $targetAttribute) {
             throw new RuntimeException("Attribute [{$this->targetAttributeCode}] not found.");
@@ -53,7 +50,7 @@ class ApplyPhotoroomTransformationJob implements ShouldQueue
             throw new RuntimeException("Attribute [{$this->targetAttributeCode}] has no ai_transformation_from configured.");
         }
 
-        $sourceAttribute = $attributeRepository->findOneByField('code', $sourceAttributeCode);
+        $sourceAttribute = Attribute::where('code', $sourceAttributeCode)->first();
 
         if (! $sourceAttribute) {
             throw new RuntimeException("Source attribute [{$sourceAttributeCode}] not found.");
@@ -103,6 +100,11 @@ class ApplyPhotoroomTransformationJob implements ShouldQueue
         Log::info("Photoroom transformation complete for product [{$this->productId}], target attribute [{$this->targetAttributeCode}], DAM asset [{$damAsset->id}], path [{$targetStoragePath}].");
     }
 
+    public function failed(\Throwable $exception): void
+    {
+        Log::error("Photoroom transformation failed for product [{$this->productId}], attribute [{$this->targetAttributeCode}]: {$exception->getMessage()}");
+    }
+
     /**
      * Resolve a raw attribute value (DAM asset ID or file path) to a storage path.
      *
@@ -136,10 +138,5 @@ class ApplyPhotoroomTransformationJob implements ShouldQueue
                 'extension' => 'png',
             ]
         );
-    }
-
-    public function failed(\Throwable $exception): void
-    {
-        Log::error("Photoroom transformation failed for product [{$this->productId}], attribute [{$this->targetAttributeCode}]: {$exception->getMessage()}");
     }
 }

@@ -12,12 +12,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Product\Models\Product;
-use Webkul\Product\Repositories\ProductRepository;
 
 class BolComProductService
 {
-    public function __construct(protected ProductRepository $productRepository) {}
-
     /**
      * @throws GuzzleException
      * @throws Exception
@@ -161,6 +158,28 @@ class BolComProductService
         Mail::to($recipients)->send(new BolComSyncSuccess($product, $offer, $bolComCredential));
     }
 
+    public function getProductPrice(Product $product, bool $excludeOverride = false): float
+    {
+        $values = $product->values['common'] ?? [];
+
+        if ($product->bol_price_override && ! $excludeOverride) {
+            $priceData = ['EUR' => $product->bol_price_override];
+        } else {
+            $priceData = $values['prijs'] ?? 0;
+            $parentValues = $product->parent->values['common'] ?? [];
+
+            if (isset($parentValues['merk'])) {
+                $snake = \Str::snake($parentValues['merk']);
+                $discount = config("bolcom.bol_discounts.$snake", 1);
+                $priceData['EUR'] = $priceData['EUR'] * $discount;
+            }
+        }
+
+        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
+
+        return (float) number_format($price, 2, '.', '');
+    }
+
     /**
      * @throws GuzzleException
      */
@@ -234,6 +253,7 @@ class BolComProductService
             Log::info('BOL.com stock', ['source' => $stockData[$source] ?? 'unknown', 'title' => $source]);
             $stock += (int) ($stockData[$source] ?? 0);
         }
+        $stock = max(0, min(999, $stock));
         Log::info('BOL.com stock', ['stock' => $stock]);
 
         $data = [
@@ -293,6 +313,7 @@ class BolComProductService
             Log::info('BOL.com stock', ['source' => $data[$source] ?? 'unknown', 'title' => $source]);
             $stock += (int) ($data[$source] ?? 0);
         }
+        $stock = max(0, min(999, $stock));
 
         Log::info('BOL.com stock', ['stock' => $stock]);
 
@@ -491,7 +512,7 @@ class BolComProductService
             ];
         }
 
-        if (!empty($merk)) {
+        if (! empty($merk)) {
             $attributes[] = [
                 'id'     => 'Brand',
                 'values' => [
@@ -554,27 +575,5 @@ class BolComProductService
         }
 
         return Storage::disk('private')->url($image);
-    }
-
-    public function getProductPrice(Product $product, bool $excludeOverride = false): float
-    {
-        $values = $product->values['common'] ?? [];
-
-        if ($product->bol_price_override && !$excludeOverride) {
-            $priceData = ['EUR' => $product->bol_price_override];
-        } else {
-            $priceData = $values['prijs'] ?? 0;
-            $parentValues = $product->parent->values['common'] ?? [];
-
-            if (isset($parentValues['merk'])) {
-                $snake = \Str::snake($parentValues['merk']);
-                $discount = config("bolcom.bol_discounts.$snake", 1);
-                $priceData['EUR'] = $priceData['EUR'] * $discount;
-            }
-        }
-
-        $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
-
-        return (float) number_format($price, 2, '.', '');
     }
 }

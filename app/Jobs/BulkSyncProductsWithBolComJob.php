@@ -2,12 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\Product;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Webkul\Product\Repositories\ProductRepository;
 
 class BulkSyncProductsWithBolComJob implements ShouldQueue
 {
@@ -35,9 +35,9 @@ class BulkSyncProductsWithBolComJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(ProductRepository $productRepository)
+    public function handle()
     {
-        $query = $productRepository->getModel()->newQuery()
+        $query = Product::query()
             ->whereJsonDoesntContain('values->common->ean', null)
             ->whereJsonDoesntContain('values->common->ean', '')
             ->where('bol_com_sync', true)
@@ -57,12 +57,8 @@ class BulkSyncProductsWithBolComJob implements ShouldQueue
             return;
         }
 
-        $products = $productRepository->getModel()->whereIn('id', $productIds)->get();
+        $products = Product::whereIn('id', $productIds)->get();
         foreach ($products as $product) {
-            $product->bol_com_credential_id = $this->credentialId;
-            $product->bol_com_sync = true;
-            $product->saveQuietly();
-
             $ean = $product->values['common']['ean'] ?? null;
 
             if (empty($ean)) {

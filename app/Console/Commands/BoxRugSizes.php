@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Product;
 use Illuminate\Console\Command;
-use Webkul\Product\Repositories\ProductRepository;
 
 class BoxRugSizes extends Command
 {
@@ -103,15 +103,12 @@ class BoxRugSizes extends Command
      */
     public function handle()
     {
-        $productRepository = app()->make(ProductRepository::class);
-
-        $products = \App\Models\Product::where('type', 'simple')->get();
+        $products = Product::where('type', 'simple')->get();
 
         $progressBar = $this->output->createProgressBar($products->count());
 
         foreach ($products as $product) {
-            $_product = $productRepository->find($product->id);
-            $values = $_product->values;
+            $values = $product->values;
             if (! isset($values['common']['maat'])) {
                 $this->info('No size found for product: '.$product->sku);
                 $progressBar->advance();
@@ -123,8 +120,8 @@ class BoxRugSizes extends Command
             $sizeGroup = self::SIZE_MAPPING[$actualSize] ?? 'Afwijkende afmetingen';
             $values['common']['maatgroep'] = $sizeGroup;
 
-            $_product->values = $values;
-            $_product->save();
+            $product->values = $values;
+            $product->save();
 
             $progressBar->advance();
         }

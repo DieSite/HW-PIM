@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Product;
 use App\Services\ProductService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Event;
-use Webkul\Product\Repositories\ProductRepository;
 
 class CalculateMetOnderkleedPrices extends Command
 {
@@ -28,10 +28,9 @@ class CalculateMetOnderkleedPrices extends Command
      */
     public function handle()
     {
-        $productRepository = app(ProductRepository::class);
         $productService = app(ProductService::class);
 
-        $builder = $productRepository->where('values->common->onderkleed', '=', 'Met onderkleed');
+        $builder = Product::where('values->common->onderkleed', '=', 'Met onderkleed');
         $count = $builder->count();
         $this->output->progressStart($count);
 

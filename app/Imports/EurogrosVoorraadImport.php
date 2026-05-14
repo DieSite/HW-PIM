@@ -12,7 +12,6 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithProgressBar;
 use Maatwebsite\Excel\Concerns\WithUpserts;
-use Webkul\Product\Repositories\ProductRepository;
 
 class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, WithHeadingRow, WithProgressBar, WithUpserts
 {
@@ -20,36 +19,29 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
 
     public function model(array $row)
     {
-        if (!isset($row['ean']) || !isset($row['vrd'])) {
+        if (! isset($row['ean']) || ! isset($row['vrd'])) {
             return null;
         }
 
-        $ean = (string)$row['ean'];
+        $ean = (string) $row['ean'];
 
         $products = Product::whereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [$ean])
-            ->orWhereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [(int)$ean])
+            ->orWhereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [(int) $ean])
             ->get();
 
         $productService = app(ProductService::class);
-        $productRepository = app(ProductRepository::class);
 
         $bolCredentials = BolComCredential::all()->all();
 
         foreach ($products as $product) {
-            if (is_array($product->values)) {
-                $values = $product->values;
-            } else {
-                $values = json_decode($product->values, true);
-            }
+            $values = $product->values;
 
             if (isset($values['common'])) {
                 $values['common']['voorraad_eurogros'] = $row['vrd'];
-                $product->values = json_encode($values);
+                $product->values = $values;
                 $product->save();
 
-                $webkulProduct = $productRepository->find($product->id);
-
-                $productService->triggerFullExternalSync($webkulProduct, $bolCredentials);
+                $productService->triggerFullExternalSync($product, $bolCredentials);
             }
         }
 
