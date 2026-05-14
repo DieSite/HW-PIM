@@ -11,6 +11,7 @@
 #   PROD_SSH         SSH target (default: pim_prod@178.22.59.74)
 #   PROD_PATH        Project root on production
 #                    (default: /home/pim_prod/domains/pim.huis-en-wonen.nl/current)
+#   PROD_PHP         PHP binary on production (default: /home/pim_prod/bin/php)
 #   LOCAL_DOCKER     Local web container name (default: unopim-web)
 #   EXPORT_COMMAND   Artisan signature used to export (default: "product:export")
 #   IMPORT_COMMAND   Artisan signature used to import (default: "import:products")
@@ -28,9 +29,10 @@ fi
 
 PROD_SSH="${PROD_SSH:-pim_prod@178.22.59.74}"
 PROD_PATH="${PROD_PATH:-/home/pim_prod/domains/pim.huis-en-wonen.nl/current}"
+PROD_PHP="${PROD_PHP:-/home/pim_prod/bin/php}"
 LOCAL_DOCKER="${LOCAL_DOCKER:-unopim-web}"
 EXPORT_COMMAND="${EXPORT_COMMAND:-product:export}"
-IMPORT_COMMAND="${IMPORT_COMMAND:-import:products}"
+IMPORT_COMMAND="${IMPORT_COMMAND:-product:import}"
 EXPORT_SUBDIR="${EXPORT_SUBDIR:-storage/app/product-exports}"
 LOCAL_IMPORT_DIR="${LOCAL_IMPORT_DIR:-/var/www/html/storage/app/product-exports}"
 
@@ -46,7 +48,7 @@ if ! [[ "${PRODUCT_ID}" =~ ^[0-9]+$ ]]; then
 fi
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-FILENAME="product-${PRODUCT_ID}-${STAMP}.xlsx"
+FILENAME="product-${PRODUCT_ID}-${STAMP}.json"
 REMOTE_FILE="${PROD_PATH}/${EXPORT_SUBDIR}/${FILENAME}"
 LOCAL_TMP="$(mktemp -d)"
 LOCAL_FILE="${LOCAL_TMP}/${FILENAME}"
@@ -60,7 +62,7 @@ trap cleanup EXIT
 echo "==> Exporting product ${PRODUCT_ID} on production"
 ssh "${PROD_SSH}" "mkdir -p ${PROD_PATH}/${EXPORT_SUBDIR} && \
     cd ${PROD_PATH} && \
-    php artisan ${EXPORT_COMMAND} ${PRODUCT_ID} ${REMOTE_FILE} --no-interaction"
+    ${PROD_PHP} artisan ${EXPORT_COMMAND} ${PRODUCT_ID} ${REMOTE_FILE} --no-interaction"
 
 echo "==> Downloading export to local machine"
 scp "${PROD_SSH}:${REMOTE_FILE}" "${LOCAL_FILE}"
