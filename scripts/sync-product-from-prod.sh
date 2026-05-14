@@ -8,13 +8,15 @@
 #
 # Required environment (override defaults below by exporting them, or put them
 # in scripts/.env-sync-product and the script will source it):
-#   PROD_SSH         SSH target, e.g. "deploy@prod.example.com"
-#   PROD_PATH        Absolute path to the project root on production
-#   PROD_DOCKER      Web container name on production (default: unopim-web)
-#   LOCAL_DOCKER     Local web container name        (default: unopim-web)
+#   PROD_SSH         SSH target (default: pim_prod@178.22.59.74)
+#   PROD_PATH        Project root on production
+#                    (default: /home/pim_prod/domains/pim.huis-en-wonen.nl/current)
+#   LOCAL_DOCKER     Local web container name (default: unopim-web)
 #   EXPORT_COMMAND   Artisan signature used to export (default: "product:export")
 #   IMPORT_COMMAND   Artisan signature used to import (default: "import:products")
-#   EXPORT_DIR       Directory inside the container where the file is written
+#   EXPORT_SUBDIR    Subdirectory under the project root for export files
+#                    (default: storage/app/product-exports)
+#   LOCAL_IMPORT_DIR Directory inside the local container to drop the file in
 #                    (default: /var/www/html/storage/app/product-exports)
 
 set -euo pipefail
@@ -24,13 +26,13 @@ if [[ -f "$(dirname "$0")/.env-sync-product" ]]; then
     source "$(dirname "$0")/.env-sync-product"
 fi
 
-PROD_SSH="${PROD_SSH:?PROD_SSH must be set (e.g. deploy@prod.example.com)}"
-PROD_PATH="${PROD_PATH:?PROD_PATH must be set (project root on production)}"
-PROD_DOCKER="${PROD_DOCKER:-unopim-web}"
+PROD_SSH="${PROD_SSH:-pim_prod@178.22.59.74}"
+PROD_PATH="${PROD_PATH:-/home/pim_prod/domains/pim.huis-en-wonen.nl/current}"
 LOCAL_DOCKER="${LOCAL_DOCKER:-unopim-web}"
 EXPORT_COMMAND="${EXPORT_COMMAND:-product:export}"
 IMPORT_COMMAND="${IMPORT_COMMAND:-import:products}"
-EXPORT_DIR="${EXPORT_DIR:-/var/www/html/storage/app/product-exports}"
+EXPORT_SUBDIR="${EXPORT_SUBDIR:-storage/app/product-exports}"
+LOCAL_IMPORT_DIR="${LOCAL_IMPORT_DIR:-/var/www/html/storage/app/product-exports}"
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <product_id>" >&2
@@ -45,9 +47,10 @@ fi
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 FILENAME="product-${PRODUCT_ID}-${STAMP}.xlsx"
-REMOTE_FILE="${EXPORT_DIR}/${FILENAME}"
+REMOTE_FILE="${PROD_PATH}/${EXPORT_SUBDIR}/${FILENAME}"
 LOCAL_TMP="$(mktemp -d)"
 LOCAL_FILE="${LOCAL_TMP}/${FILENAME}"
+LOCAL_CONTAINER_FILE="${LOCAL_IMPORT_DIR}/${FILENAME}"
 
 cleanup() {
     rm -rf "${LOCAL_TMP}" || true
@@ -55,25 +58,24 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Exporting product ${PRODUCT_ID} on production"
-ssh "${PROD_SSH}" "docker exec -i ${PROD_DOCKER} mkdir -p ${EXPORT_DIR} && \
-    docker exec -i ${PROD_DOCKER} php artisan ${EXPORT_COMMAND} ${PRODUCT_ID} ${REMOTE_FILE} --no-interaction"
-
-echo "==> Copying export file from container to production host"
-ssh "${PROD_SSH}" "docker cp ${PROD_DOCKER}:${REMOTE_FILE} ${PROD_PATH}/${FILENAME}"
+ssh "${PROD_SSH}" "mkdir -p ${PROD_PATH}/${EXPORT_SUBDIR} && \
+    cd ${PROD_PATH} && \
+    php artisan ${EXPORT_COMMAND} ${PRODUCT_ID} ${REMOTE_FILE} --no-interaction"
 
 echo "==> Downloading export to local machine"
-scp "${PROD_SSH}:${PROD_PATH}/${FILENAME}" "${LOCAL_FILE}"
+scp "${PROD_SSH}:${REMOTE_FILE}" "${LOCAL_FILE}"
 
 echo "==> Copying export into local container"
-docker cp "${LOCAL_FILE}" "${LOCAL_DOCKER}:${REMOTE_FILE}"
+docker exec -i "${LOCAL_DOCKER}" mkdir -p "${LOCAL_IMPORT_DIR}"
+docker cp "${LOCAL_FILE}" "${LOCAL_DOCKER}:${LOCAL_CONTAINER_FILE}"
 
 echo "==> Importing product locally"
-docker exec -i "${LOCAL_DOCKER}" php artisan "${IMPORT_COMMAND}" "${REMOTE_FILE}" --no-interaction
+docker exec -i "${LOCAL_DOCKER}" php artisan "${IMPORT_COMMAND}" "${LOCAL_CONTAINER_FILE}" --no-interaction
 
-echo "==> Cleaning up remote export (container + host)"
-ssh "${PROD_SSH}" "docker exec -i ${PROD_DOCKER} rm -f ${REMOTE_FILE} && rm -f ${PROD_PATH}/${FILENAME}"
+echo "==> Cleaning up remote export"
+ssh "${PROD_SSH}" "rm -f ${REMOTE_FILE}"
 
 echo "==> Cleaning up local export (container)"
-docker exec -i "${LOCAL_DOCKER}" rm -f "${REMOTE_FILE}"
+docker exec -i "${LOCAL_DOCKER}" rm -f "${LOCAL_CONTAINER_FILE}"
 
 echo "==> Done. Product ${PRODUCT_ID} synced from production to local."
