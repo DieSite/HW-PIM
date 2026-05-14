@@ -30,7 +30,11 @@
         $flatFieldName = $fieldsWrapper . $field->getFlatAttributeName($currentChannelCode, $currentLocaleCode);
 
         if ($fieldValues) {
-            $value = $field->getValueFromProductValues($fieldValues, $currentChannelCode, $currentLocaleCode);
+            $normalizedFieldValues = is_string($fieldValues) ? (json_decode($fieldValues, true) ?: []) : $fieldValues;
+
+            if (is_array($normalizedFieldValues)) {
+                $value = $field->getValueFromProductValues($normalizedFieldValues, $currentChannelCode, $currentLocaleCode);
+            }
         }
 
         $value = old($flatFieldName) ?? $value;

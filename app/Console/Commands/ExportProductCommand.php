@@ -32,6 +32,16 @@ class ExportProductCommand extends Command
             ->get()
             ->map(function ($row) {
                 $row = (array) $row;
+
+                foreach (['values', 'additional'] as $jsonField) {
+                    if (isset($row[$jsonField]) && is_string($row[$jsonField])) {
+                        $decoded = json_decode($row[$jsonField], true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $row[$jsonField] = $decoded;
+                        }
+                    }
+                }
+
                 $row['_attribute_family_code'] = $row['attribute_family_id'] === null
                     ? null
                     : DB::table('attribute_families')->where('id', $row['attribute_family_id'])->value('code');

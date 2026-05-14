@@ -22,6 +22,24 @@ class BolComProductService
     public function syncProduct(Product $product, BolComCredential $bolComCredential, $previousSyncState = false, $unchecked = false)
     {
         try {
+            $rawEan = $product->values['common']['ean'] ?? null;
+            $normalizedEan = $this->normalizeEan($rawEan);
+
+            if ($product->bol_com_sync && ! $unchecked && $normalizedEan === null) {
+                $this->recordSyncError(
+                    $product,
+                    sprintf('Ongeldige EAN voor Bol.com sync: %s', is_scalar($rawEan) ? (string) $rawEan : 'leeg')
+                );
+
+                return null;
+            }
+
+            if ($normalizedEan !== null && $normalizedEan !== $rawEan) {
+                $values = $product->values;
+                $values['common']['ean'] = $normalizedEan;
+                $product->values = $values;
+            }
+
             $apiClient = new BolApiClient();
             $apiClient->setCredential($bolComCredential);
 
@@ -178,6 +196,48 @@ class BolComProductService
         $price = isset($priceData['EUR']) ? (float) $priceData['EUR'] : 0;
 
         return (float) number_format($price, 2, '.', '');
+    }
+
+    /**
+     * Normalize an EAN to a 13-digit numeric string accepted by Bol.com.
+     * Returns null if the value cannot be coerced into a valid EAN-13.
+     */
+    protected function normalizeEan(mixed $ean): ?string
+    {
+        if (! is_scalar($ean)) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $ean);
+
+        if ($digits === '' || $digits === null) {
+            return null;
+        }
+
+        if (strlen($digits) > 13) {
+            $digits = ltrim($digits, '0');
+            $digits = str_pad($digits, 13, '0', STR_PAD_LEFT);
+        }
+
+        if (strlen($digits) !== 13) {
+            return null;
+        }
+
+        return $digits;
+    }
+
+    protected function recordSyncError(Product $product, string $message): void
+    {
+        Log::warning('Skipping Bol.com sync', [
+            'product_id' => $product->id,
+            'sku'        => $product->sku,
+            'reason'     => $message,
+        ]);
+
+        $additional = $product->additional ?? [];
+        $additional['product_sync_error'] = $message;
+        $product->additional = $additional;
+        $product->saveQuietly();
     }
 
     /**
@@ -523,10 +583,14 @@ class BolComProductService
 
         $assets = [];
 
-        if (! empty($product->parent->values['common']['afbeelding_zonder_logo'])) {
-            $images = explode(',', $product->parent->values['common']['afbeelding_zonder_logo'] ?? '');
-        } elseif (! empty($product->parent->values['common']['afbeelding'])) {
-            $images = explode(',', $product->parent->values['common']['afbeelding'] ?? '');
+        $rawImages = $product->parent->values['common']['afbeelding_zonder_logo']
+            ?? $product->parent->values['common']['afbeelding']
+            ?? null;
+
+        if (is_array($rawImages)) {
+            $images = $rawImages;
+        } elseif (is_string($rawImages) && $rawImages !== '') {
+            $images = explode(',', $rawImages);
         } else {
             $images = [];
         }

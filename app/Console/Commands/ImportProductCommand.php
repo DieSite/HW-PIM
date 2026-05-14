@@ -7,12 +7,18 @@ use Illuminate\Support\Facades\DB;
 
 class ImportProductCommand extends Command
 {
-    protected $signature = 'product:import {file : JSON file produced by product:export}';
+    protected $signature = 'product:import {file : JSON file produced by product:export} {--force : Allow running outside of local environment}';
 
     protected $description = 'Import a product JSON dump produced by product:export, upserting by SKU.';
 
     public function handle(): int
     {
+        if (app()->environment('production') && ! $this->option('force')) {
+            $this->error('Refusing to run product:import in production. Pass --force to override.');
+
+            return self::FAILURE;
+        }
+
         $file = $this->argument('file');
 
         if (! is_file($file)) {
@@ -42,11 +48,23 @@ class ImportProductCommand extends Command
                 $row = $remote;
                 unset($row['id'], $row['_attribute_family_code']);
 
+                foreach (['values', 'additional'] as $jsonField) {
+                    if (array_key_exists($jsonField, $row) && ! is_string($row[$jsonField])) {
+                        $row[$jsonField] = $row[$jsonField] === null
+                            ? null
+                            : json_encode($row[$jsonField], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    }
+                }
+
                 if ($familyCode !== null) {
                     $localFamilyId = DB::table('attribute_families')->where('code', $familyCode)->value('id');
 
                     if (! $localFamilyId) {
-                        throw new \RuntimeException("Attribute family '{$familyCode}' not found locally.");
+                        $localFamilyId = DB::table('attribute_families')->insertGetId([
+                            'code'   => $familyCode,
+                            'status' => 1,
+                        ]);
+                        $this->warn("Created placeholder attribute_family '{$familyCode}' (id={$localFamilyId}). Populate its groups/mappings to edit products fully.");
                     }
 
                     $row['attribute_family_id'] = $localFamilyId;
