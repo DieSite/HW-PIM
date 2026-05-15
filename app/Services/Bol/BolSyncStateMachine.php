@@ -280,6 +280,28 @@ class BolSyncStateMachine
             $payload = $this->builder->offer($product, $deliveryCode, $this->operatorResolver->resolve($product, $credential));
             $response = $this->apiClient->post('/retailer/offers', $payload);
         } catch (\Throwable $e) {
+            // Self-heal: Bol returns 409 `/problems/offer-exists` when we try
+            // to create an offer that already exists for this EAN+condition.
+            // Recover the existing OfferUid, save it as the pivot reference,
+            // and switch to the PATCH (update) flow.
+            if ($existingId = $this->recoverExistingOfferId($e)) {
+                $this->recorder->record(
+                    product: $product,
+                    credential: $credential,
+                    step: BolSyncStep::SubmitOffer,
+                    status: BolSyncEventStatus::Skipped,
+                    message: 'Existing offer detected; adopting OfferUid '.$existingId,
+                    customerMessage: 'Er bestond al een aanbod bij Bol.com voor deze EAN — gekoppeld aan dat bestaande aanbod en bijgewerkt.',
+                    payload: ['adopted_offer_id' => $existingId],
+                );
+
+                $product->bolComCredentials()->syncWithoutDetaching([
+                    $credential->id => ['reference' => $existingId],
+                ]);
+
+                return $this->updateExisting($product, $credential, $existingId);
+            }
+
             return $this->recordApiFailure($product, $credential, BolSyncStep::SubmitOffer, $e);
         }
 
@@ -415,6 +437,42 @@ class BolSyncStateMachine
         );
 
         return BolSyncAdvance::terminal();
+    }
+
+    /**
+     * Bol responds to "POST /retailer/offers on a duplicate" with:
+     *   { "type": "/problems/offer-exists", "status": 409,
+     *     "detail": "Offer with EAN ... already exists ... with OfferUid <uuid>." }
+     *
+     * Return that uuid so we can adopt the existing offer and switch to update mode.
+     */
+    private function recoverExistingOfferId(\Throwable $e): ?string
+    {
+        $request = $e instanceof RequestException
+            ? $e
+            : ($e->getPrevious() instanceof RequestException ? $e->getPrevious() : null);
+
+        if (! $request instanceof RequestException) {
+            return null;
+        }
+
+        if ($request->response->status() !== 409) {
+            return null;
+        }
+
+        $body = $request->response->json();
+        $type = $body['type'] ?? '';
+        $detail = $body['detail'] ?? '';
+
+        if (! str_contains($type, 'offer-exists') && ! str_contains($detail, 'already exists')) {
+            return null;
+        }
+
+        if (preg_match('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i', (string) $detail, $m)) {
+            return $m[0];
+        }
+
+        return null;
     }
 
     private function isNotFound(\Throwable $e): bool
