@@ -40,7 +40,7 @@ class BolPayloadBuilder
                 ],
             ],
             'stock'      => $this->stock($common),
-            'fulfilment' => ['method' => 'FBR', 'deliveryCode' => $deliveryCode],
+            'fulfilment' => $this->fulfilment($deliveryCode),
         ];
     }
 
@@ -65,7 +65,7 @@ class BolPayloadBuilder
                 ],
             ],
             'stock'      => $this->stock($common),
-            'fulfilment' => ['method' => 'FBR', 'deliveryCode' => $deliveryCode],
+            'fulfilment' => $this->fulfilment($deliveryCode),
         ];
     }
 
@@ -169,6 +169,56 @@ class BolPayloadBuilder
         }
 
         return ['id' => $id, 'values' => $entries];
+    }
+
+    /**
+     * Translate our internal delivery code (legacy v10 enum stored on the
+     * product_bol_com_credentials pivot) into the v11 Fulfilment shape.
+     *
+     * v11 dropped the deliveryCode enum entirely in favour of an explicit
+     * (minimum, maximum) range — possibly with an `ultimateOrderTime` cutoff
+     * for next-day delivery.
+     */
+    private function fulfilment(string $deliveryCode): array
+    {
+        $base = ['method' => 'FBR'];
+
+        // VVB = shipped via Bol — uses BOL_DELIVERY_PROMISE.
+        if ($deliveryCode === 'VVB') {
+            return $base + ['schedule' => 'SHIPPING_VIA_BOL'];
+        }
+
+        // 24uurs-XX = same-day cutoff at hour XX, delivered next day.
+        if (preg_match('/^24uurs-(\d{2})$/', $deliveryCode, $m)) {
+            return $base + [
+                'schedule'        => 'MY_DELIVERY_PROMISE',
+                'deliveryPromise' => [
+                    'minimumDaysToCustomer' => 0,
+                    'maximumDaysToCustomer' => 1,
+                    'ultimateOrderTime'     => sprintf('%02d:00', (int) $m[1]),
+                ],
+            ];
+        }
+
+        // 1-2d / 2-3d / 3-5d / 4-8d / 1-8d
+        if (preg_match('/^(\d+)-(\d+)d$/', $deliveryCode, $m)) {
+            return $base + [
+                'schedule'        => 'MY_DELIVERY_PROMISE',
+                'deliveryPromise' => [
+                    'minimumDaysToCustomer' => (int) $m[1],
+                    'maximumDaysToCustomer' => (int) $m[2],
+                ],
+            ];
+        }
+
+        // Unknown / 'MijnLeverbelofte' / null: fall back to a safe 1-8 day promise.
+        return $base + [
+            'schedule'        => 'MY_DELIVERY_PROMISE',
+            'deliveryPromise' => [
+                'minimumDaysToCustomer' => 1,
+                'maximumDaysToCustomer' => 8,
+            ],
+        ];
     }
 
     private function stock(array $common): array
