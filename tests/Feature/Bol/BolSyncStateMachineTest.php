@@ -232,6 +232,57 @@ it('content polling returns FAILURE: records customer-friendly error', function 
     expect($failed->customer_message)->toContain('Catalog category mismatch');
 });
 
+it('self-heals: PATCH update on a stale reference 404s, clears it, and falls back to create', function () {
+    DB::table('product_bol_com_credentials')
+        ->where('product_id', $this->product->id)
+        ->where('bol_com_credential_id', $this->credential->id)
+        ->update(['reference' => 'stale-uuid']);
+
+    Http::fake([
+        'login.bol.com/token'                            => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
+        'api.bol.com/retailer/offers/stale-uuid'         => Http::response([
+            'type' => 'https://api.bol.com/problems', 'title' => 'Not Found', 'status' => 404,
+        ], 404),
+        'api.bol.com/retailer/content/products'          => Http::response(['processStatusId' => 'new-proc'], 202),
+    ]);
+
+    $advance = $this->stateMachine->start($this->product, $this->credential, previouslyLinked: true);
+
+    expect($advance->pollProcessId)->toBe('new-proc');
+
+    $product = $this->product->fresh();
+    $pivot = $product->bolComCredentials->first()->pivot;
+    expect($pivot->reference)->toBeNull();
+
+    $skipped = $product->bolSyncEvents()->where('status', BolSyncEventStatus::Skipped->value)->first();
+    expect($skipped)->not->toBeNull()
+        ->and($skipped->customer_message)->toContain('opnieuw aan');
+});
+
+it('self-heals: DELETE on a 404 reference still marks the product retired locally', function () {
+    DB::table('product_bol_com_credentials')
+        ->where('product_id', $this->product->id)
+        ->where('bol_com_credential_id', $this->credential->id)
+        ->update(['reference' => 'already-gone']);
+
+    $this->product->bol_com_sync = false;
+    $this->product->save();
+
+    Http::fake([
+        'login.bol.com/token'                          => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
+        'api.bol.com/retailer/offers/already-gone'     => Http::response([
+            'type' => 'https://api.bol.com/problems', 'title' => 'Not Found', 'status' => 404,
+        ], 404),
+    ]);
+
+    $advance = $this->stateMachine->start($this->product, $this->credential, previouslyLinked: true);
+
+    expect($advance->isTerminal)->toBeTrue();
+    $product = $this->product->fresh();
+    expect($product->bol_sync_state)->toBe(BolSyncState::Retired)
+        ->and($product->bolComCredentials()->where('bol_com_credentials.id', $this->credential->id)->exists())->toBeFalse();
+});
+
 it('retire path: deletes offer and detaches credential', function () {
     DB::table('product_bol_com_credentials')
         ->where('product_id', $this->product->id)

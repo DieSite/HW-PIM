@@ -330,6 +330,25 @@ class BolSyncStateMachine
             $deliveryCode = $this->currentDeliveryCode($product, $credential);
             $this->offerUpdater->update($this->apiClient, $product, $reference, $deliveryCode);
         } catch (\Throwable $e) {
+            // Self-heal: a 404 means the offer reference we stored no longer
+            // exists at Bol (manually deleted, account migration, etc). Clear
+            // the stale pivot reference and fall back to the create flow.
+            if ($this->isNotFound($e)) {
+                $this->recorder->record(
+                    product: $product,
+                    credential: $credential,
+                    step: BolSyncStep::SubmitContent,
+                    status: BolSyncEventStatus::Skipped,
+                    message: 'Stale offer reference '.$reference.' returned 404; recreating.',
+                    customerMessage: 'Het bestaande aanbod was niet meer aanwezig bij Bol.com — we maken het opnieuw aan.',
+                    payload: ['stale_reference' => $reference],
+                );
+
+                $product->bolComCredentials()->updateExistingPivot($credential->id, ['reference' => null]);
+
+                return $this->submitContent($product, $credential);
+            }
+
             return $this->recordApiFailure($product, $credential, BolSyncStep::SubmitContent, $e);
         }
 
@@ -361,12 +380,19 @@ class BolSyncStateMachine
             customerMessage: 'Aanbod wordt verwijderd van Bol.com.',
         );
 
+        $alreadyGone = false;
         try {
             if ($reference) {
                 $this->apiClient->delete('/retailer/offers/'.$reference);
             }
         } catch (\Throwable $e) {
-            return $this->recordApiFailure($product, $credential, BolSyncStep::Retire, $e);
+            // Self-heal: a 404 on DELETE means it was already removed at Bol;
+            // we still want to detach locally and mark retired.
+            if ($this->isNotFound($e)) {
+                $alreadyGone = true;
+            } else {
+                return $this->recordApiFailure($product, $credential, BolSyncStep::Retire, $e);
+            }
         }
 
         $product->bolComCredentials()->detach($credential->id);
@@ -376,11 +402,26 @@ class BolSyncStateMachine
             credential: $credential,
             step: BolSyncStep::Retire,
             status: BolSyncEventStatus::Success,
-            customerMessage: 'Het aanbod is verwijderd van Bol.com.',
+            customerMessage: $alreadyGone
+                ? 'Het aanbod stond al niet meer bij Bol.com; lokaal bijgewerkt.'
+                : 'Het aanbod is verwijderd van Bol.com.',
             advanceTo: BolSyncState::Retired,
         );
 
         return BolSyncAdvance::terminal();
+    }
+
+    private function isNotFound(\Throwable $e): bool
+    {
+        $current = $e;
+        while ($current) {
+            if ($current instanceof RequestException) {
+                return $current->response->status() === 404;
+            }
+            $current = $current->getPrevious();
+        }
+
+        return false;
     }
 
     private function isTransient(\Throwable $e): bool
