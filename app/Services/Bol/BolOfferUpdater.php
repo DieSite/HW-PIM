@@ -3,6 +3,7 @@
 namespace App\Services\Bol;
 
 use App\Clients\BolApiClient;
+use App\Models\BolComCredential;
 use Webkul\Product\Models\Product;
 
 /**
@@ -15,10 +16,15 @@ use Webkul\Product\Models\Product;
  */
 class BolOfferUpdater
 {
-    public function __construct(private readonly BolPayloadBuilder $builder) {}
+    public function __construct(
+        private readonly BolPayloadBuilder $builder,
+        private readonly BolEconomicOperatorResolver $operatorResolver,
+    ) {}
 
-    public function update(BolApiClient $apiClient, Product $product, string $reference, string $deliveryCode): ?array
+    public function update(BolApiClient $apiClient, Product $product, BolComCredential $credential, string $reference, string $deliveryCode): ?array
     {
-        return $apiClient->patch('/retailer/offers/'.$reference, $this->builder->patchOffer($product, $deliveryCode));
+        $operatorId = $this->operatorResolver->resolve($product, $credential);
+
+        return $apiClient->patch('/retailer/offers/'.$reference, $this->builder->patchOffer($product, $deliveryCode, $operatorId));
     }
 }

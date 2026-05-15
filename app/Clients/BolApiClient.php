@@ -72,6 +72,10 @@ class BolApiClient
     {
         $path = parse_url($endpoint, PHP_URL_PATH) ?: $endpoint;
 
+        if (preg_match('#^/retailer/economic-operators?(/|$)#', $path)) {
+            return 'application/vnd.economic-operator.v1+json';
+        }
+
         if (preg_match('#^/retailer(-demo)?/offers(/|$)#', $path)) {
             return 'application/vnd.retailer.v11+json';
         }

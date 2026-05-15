@@ -24,11 +24,11 @@ class BolPayloadBuilder
 
     private const STOCK_MAX = 999;
 
-    public function offer(Product $product, string $deliveryCode): array
+    public function offer(Product $product, string $deliveryCode, ?string $economicOperatorId = null): array
     {
         $common = $product->values['common'] ?? [];
 
-        return [
+        $payload = [
             'ean'                 => (string) ($common['ean'] ?? ''),
             'condition'           => ['category' => 'NEW'],
             'reference'           => (string) $product->sku,
@@ -42,6 +42,12 @@ class BolPayloadBuilder
             'stock'      => $this->stock($common),
             'fulfilment' => $this->fulfilment($deliveryCode),
         ];
+
+        if ($economicOperatorId !== null && $economicOperatorId !== '') {
+            $payload['economicOperatorId'] = $economicOperatorId;
+        }
+
+        return $payload;
     }
 
     /**
@@ -51,11 +57,11 @@ class BolPayloadBuilder
      * Updates price + stock + delivery + title in a single call (v10 used
      * three separate PUTs against /price, /stock, and the offer itself).
      */
-    public function patchOffer(Product $product, string $deliveryCode): array
+    public function patchOffer(Product $product, string $deliveryCode, ?string $economicOperatorId = null): array
     {
         $common = $product->values['common'] ?? [];
 
-        return [
+        $payload = [
             'reference'           => (string) $product->sku,
             'onHoldByRetailer'    => false,
             'unknownProductTitle' => (string) ($common['productnaam'] ?? ''),
@@ -67,6 +73,12 @@ class BolPayloadBuilder
             'stock'      => $this->stock($common),
             'fulfilment' => $this->fulfilment($deliveryCode),
         ];
+
+        if ($economicOperatorId !== null && $economicOperatorId !== '') {
+            $payload['economicOperatorId'] = $economicOperatorId;
+        }
+
+        return $payload;
     }
 
     public function content(Product $product): array
@@ -175,23 +187,33 @@ class BolPayloadBuilder
      * Translate our internal delivery code (legacy v10 enum stored on the
      * product_bol_com_credentials pivot) into the v11 Fulfilment shape.
      *
-     * v11 dropped the deliveryCode enum entirely in favour of an explicit
-     * (minimum, maximum) range — possibly with an `ultimateOrderTime` cutoff
-     * for next-day delivery.
+     * Reference: https://api.bol.com/retailer/public/Retailer-API/v11/functional/offer-api/offer-api.html
+     *
+     * - Standard day-range presets (1-2d, 2-3d, 3-5d, 4-8d) and same-day with
+     *   cutoff (24uurs-XX) use `BOL_DELIVERY_PROMISE` — these are Bol's
+     *   pre-defined promises.
+     * - `MijnLeverbelofte` maps to `MY_DELIVERY_PROMISE` (retailer-defined
+     *   custom promise configured in the seller dashboard).
+     * - `VVB` maps to `SHIPPING_VIA_BOL`.
+     * - The legacy `1-8d` value isn't an explicit Bol preset, but is accepted
+     *   with the same min/max under `BOL_DELIVERY_PROMISE`.
      */
     private function fulfilment(string $deliveryCode): array
     {
         $base = ['method' => 'FBR'];
 
-        // VVB = shipped via Bol — uses BOL_DELIVERY_PROMISE.
         if ($deliveryCode === 'VVB') {
             return $base + ['schedule' => 'SHIPPING_VIA_BOL'];
         }
 
-        // 24uurs-XX = same-day cutoff at hour XX, delivered next day.
+        if ($deliveryCode === 'MijnLeverbelofte') {
+            return $base + ['schedule' => 'MY_DELIVERY_PROMISE'];
+        }
+
+        // 24uurs-XX — same-day with HH:00 cutoff (preset under BOL_DELIVERY_PROMISE).
         if (preg_match('/^24uurs-(\d{2})$/', $deliveryCode, $m)) {
             return $base + [
-                'schedule'        => 'MY_DELIVERY_PROMISE',
+                'schedule'        => 'BOL_DELIVERY_PROMISE',
                 'deliveryPromise' => [
                     'minimumDaysToCustomer' => 0,
                     'maximumDaysToCustomer' => 1,
@@ -200,10 +222,10 @@ class BolPayloadBuilder
             ];
         }
 
-        // 1-2d / 2-3d / 3-5d / 4-8d / 1-8d
+        // 1-2d / 2-3d / 3-5d / 4-8d / 1-8d — Bol-defined preset day ranges.
         if (preg_match('/^(\d+)-(\d+)d$/', $deliveryCode, $m)) {
             return $base + [
-                'schedule'        => 'MY_DELIVERY_PROMISE',
+                'schedule'        => 'BOL_DELIVERY_PROMISE',
                 'deliveryPromise' => [
                     'minimumDaysToCustomer' => (int) $m[1],
                     'maximumDaysToCustomer' => (int) $m[2],
@@ -211,11 +233,11 @@ class BolPayloadBuilder
             ];
         }
 
-        // Unknown / 'MijnLeverbelofte' / null: fall back to a safe 1-8 day promise.
+        // Unknown / null fallback — Bol's widest standard preset.
         return $base + [
-            'schedule'        => 'MY_DELIVERY_PROMISE',
+            'schedule'        => 'BOL_DELIVERY_PROMISE',
             'deliveryPromise' => [
-                'minimumDaysToCustomer' => 1,
+                'minimumDaysToCustomer' => 4,
                 'maximumDaysToCustomer' => 8,
             ],
         ];

@@ -24,6 +24,7 @@ class BolSyncStateMachine
         private readonly BolProductValidator $validator,
         private readonly BolSyncEventRecorder $recorder,
         private readonly BolViolationTranslator $translator,
+        private readonly BolEconomicOperatorResolver $operatorResolver,
     ) {}
 
     /**
@@ -276,7 +277,7 @@ class BolSyncStateMachine
         );
 
         try {
-            $payload = $this->builder->offer($product, $deliveryCode);
+            $payload = $this->builder->offer($product, $deliveryCode, $this->operatorResolver->resolve($product, $credential));
             $response = $this->apiClient->post('/retailer/offers', $payload);
         } catch (\Throwable $e) {
             return $this->recordApiFailure($product, $credential, BolSyncStep::SubmitOffer, $e);
@@ -333,7 +334,7 @@ class BolSyncStateMachine
 
         try {
             $deliveryCode = $this->currentDeliveryCode($product, $credential);
-            $this->offerUpdater->update($this->apiClient, $product, $reference, $deliveryCode);
+            $this->offerUpdater->update($this->apiClient, $product, $credential, $reference, $deliveryCode);
         } catch (\Throwable $e) {
             // Self-heal: a 404 means the offer reference we stored no longer
             // exists at Bol (manually deleted, account migration, etc). Clear

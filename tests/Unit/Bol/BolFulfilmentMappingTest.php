@@ -24,25 +24,24 @@ function fulfilmentFor(string $deliveryCode): array
     return (new BolPayloadBuilder())->offer($product, $deliveryCode)['fulfilment'];
 }
 
-it('maps a "4-8d" delivery code to v11 deliveryPromise 4-8', function () {
+it('maps a "4-8d" delivery code to BOL_DELIVERY_PROMISE preset 4-8', function () {
     expect(fulfilmentFor('4-8d'))->toBe([
         'method'          => 'FBR',
-        'schedule'        => 'MY_DELIVERY_PROMISE',
+        'schedule'        => 'BOL_DELIVERY_PROMISE',
         'deliveryPromise' => ['minimumDaysToCustomer' => 4, 'maximumDaysToCustomer' => 8],
     ]);
 });
 
-it('maps "1-2d" to deliveryPromise 1-2', function () {
-    expect(fulfilmentFor('1-2d')['deliveryPromise'])->toBe([
-        'minimumDaysToCustomer' => 1,
-        'maximumDaysToCustomer' => 2,
-    ]);
+it('maps "1-2d" / "2-3d" / "3-5d" to BOL_DELIVERY_PROMISE presets', function () {
+    expect(fulfilmentFor('1-2d'))->toMatchArray(['schedule' => 'BOL_DELIVERY_PROMISE', 'deliveryPromise' => ['minimumDaysToCustomer' => 1, 'maximumDaysToCustomer' => 2]])
+        ->and(fulfilmentFor('2-3d'))->toMatchArray(['schedule' => 'BOL_DELIVERY_PROMISE', 'deliveryPromise' => ['minimumDaysToCustomer' => 2, 'maximumDaysToCustomer' => 3]])
+        ->and(fulfilmentFor('3-5d'))->toMatchArray(['schedule' => 'BOL_DELIVERY_PROMISE', 'deliveryPromise' => ['minimumDaysToCustomer' => 3, 'maximumDaysToCustomer' => 5]]);
 });
 
-it('maps "24uurs-17" to next-day delivery with 17:00 order cutoff', function () {
+it('maps "24uurs-17" to BOL_DELIVERY_PROMISE next-day with 17:00 cutoff', function () {
     expect(fulfilmentFor('24uurs-17'))->toBe([
         'method'          => 'FBR',
-        'schedule'        => 'MY_DELIVERY_PROMISE',
+        'schedule'        => 'BOL_DELIVERY_PROMISE',
         'deliveryPromise' => [
             'minimumDaysToCustomer' => 0,
             'maximumDaysToCustomer' => 1,
@@ -58,9 +57,17 @@ it('maps "VVB" to SHIPPING_VIA_BOL with no deliveryPromise', function () {
     ]);
 });
 
-it('falls back to 1-8 day promise for unknown / legacy codes', function () {
-    expect(fulfilmentFor('MijnLeverbelofte')['deliveryPromise'])->toBe([
-        'minimumDaysToCustomer' => 1,
-        'maximumDaysToCustomer' => 8,
+it('maps "MijnLeverbelofte" to MY_DELIVERY_PROMISE (retailer-defined preset)', function () {
+    expect(fulfilmentFor('MijnLeverbelofte'))->toBe([
+        'method'   => 'FBR',
+        'schedule' => 'MY_DELIVERY_PROMISE',
+    ]);
+});
+
+it('falls back to BOL_DELIVERY_PROMISE 4-8 for unknown codes', function () {
+    expect(fulfilmentFor('garbage'))->toBe([
+        'method'          => 'FBR',
+        'schedule'        => 'BOL_DELIVERY_PROMISE',
+        'deliveryPromise' => ['minimumDaysToCustomer' => 4, 'maximumDaysToCustomer' => 8],
     ]);
 });

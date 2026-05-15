@@ -34,4 +34,9 @@ class BolComCredential extends Model
             ->withPivot('delivery_code', 'reference')
             ->withTimestamps();
     }
+
+    public function economicOperators(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BolEconomicOperator::class, 'bol_com_credential_id');
+    }
 }
