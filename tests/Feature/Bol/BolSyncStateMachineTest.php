@@ -259,6 +259,35 @@ it('self-heals: PATCH update on a stale reference 404s, clears it, and falls bac
         ->and($skipped->customer_message)->toContain('opnieuw aan');
 });
 
+it('self-heals: POST offer 409 "offer-exists" adopts the existing OfferUid and runs an update', function () {
+    Http::fake([
+        'login.bol.com/token'                              => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
+        'api.bol.com/retailer/content/products'            => Http::response(['processStatusId' => 'proc-1'], 202),
+        'api.bol.com/shared/process-status/proc-1'         => Http::response(['id' => 'proc-1', 'status' => 'SUCCESS'], 200),
+        'api.bol.com/retailer/offers'                      => Http::response([
+            'type'   => '/problems/offer-exists',
+            'title'  => 'Offer already exists',
+            'status' => 409,
+            'detail' => 'Offer with EAN 6154150433493 and condition NEW already exists for retailer 1736138 with OfferUid 1435cf0d-0fef-4125-8c25-3599f92a2338.',
+        ], 409),
+        'api.bol.com/retailer/offers/1435cf0d-0fef-4125-8c25-3599f92a2338' => Http::response([], 202),
+    ]);
+
+    $this->stateMachine->start($this->product, $this->credential);
+    $this->stateMachine->advance($this->product->fresh(), $this->credential, 'proc-1');
+
+    $product = $this->product->fresh();
+    $pivot = $product->bolComCredentials()->where('bol_com_credentials.id', $this->credential->id)->first()->pivot;
+
+    expect($pivot->reference)->toBe('1435cf0d-0fef-4125-8c25-3599f92a2338');
+
+    $skipped = $product->bolSyncEvents()->where('status', BolSyncEventStatus::Skipped->value)->first();
+    expect($skipped)->not->toBeNull()
+        ->and($skipped->customer_message)->toContain('bestond al');
+
+    expect($product->bol_sync_state)->toBe(BolSyncState::Live);
+});
+
 it('self-heals: DELETE on a 404 reference still marks the product retired locally', function () {
     DB::table('product_bol_com_credentials')
         ->where('product_id', $this->product->id)
