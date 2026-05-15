@@ -32,6 +32,11 @@ class BolComAuthenticationHelper
         }
     }
 
+    public function getCredentialId(): mixed
+    {
+        return $this->credentialsId;
+    }
+
     /**
      * @throws Exception
      */

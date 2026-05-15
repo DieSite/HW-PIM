@@ -76,6 +76,13 @@ return [
             'driver' => 'errorlog',
             'level'  => 'debug',
         ],
+
+        'bolcom' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/bolcom.log'),
+            'level'  => env('BOLCOM_LOG_LEVEL', 'info'),
+            'days'   => 30,
+        ],
     ],
 
 ];

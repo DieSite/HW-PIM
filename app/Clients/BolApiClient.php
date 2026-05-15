@@ -58,13 +58,18 @@ class BolApiClient
     protected function request(string $method, string $endpoint, array $options = []): ?array
     {
         $url = $this->baseUrl.$endpoint;
+        $credentialId = $this->authHelper?->getCredentialId();
 
-        \Sentry\configureScope(function (Scope $scope) use ($method, $url, $options) {
+        \Sentry\configureScope(function (Scope $scope) use ($method, $url, $options, $credentialId) {
             $scope->setContext('bolcom_request', [
                 'method'  => $method,
                 'url'     => $url,
                 'options' => $options,
             ]);
+            $scope->setTag('bolcom.endpoint', parse_url($url, PHP_URL_PATH) ?: $endpoint);
+            if ($credentialId !== null) {
+                $scope->setTag('bolcom.credential_id', (string) $credentialId);
+            }
         });
 
         try {

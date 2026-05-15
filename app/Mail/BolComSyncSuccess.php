@@ -28,15 +28,13 @@ class BolComSyncSuccess extends Mailable
      */
     public function envelope(): Envelope
     {
-        if (! empty($this->offer['notPublishableReasons'])) {
-            return new Envelope(
-                subject: 'Bol.com Sync actie vereist'
-            );
-        } else {
-            return new Envelope(
-                subject: 'Bol.com Sync succesvol'
-            );
+        $reasons = $this->offer['notPublishableReasons'] ?? [];
+
+        if (! empty($reasons)) {
+            return new Envelope(subject: 'Bol.com Sync actie vereist');
         }
+
+        return new Envelope(subject: 'Bol.com Sync succesvol');
     }
 
     /**

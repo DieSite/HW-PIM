@@ -18,6 +18,8 @@ uses(Webkul\User\Tests\UserTestCase::class)->in('../packages/Webkul/User/tests')
 uses(Webkul\DataGrid\Tests\DataGridTestCase::class)->in('../packages/Webkul/DataGrid/tests');
 uses(Webkul\Installer\Tests\UserCreateCommandTestCase::class)->in('../packages/Webkul/Installer/tests');
 uses(Tests\TestCase::class)->in('../packages/Webkul/WooCommerce/tests');
+uses(Tests\TestCase::class)->in('Feature');
+uses(Tests\TestCase::class)->in('Unit');
 
 /*
 |--------------------------------------------------------------------------

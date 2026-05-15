@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BolSyncController;
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
 use App\Http\Controllers\PhotoroomController;
@@ -45,5 +46,10 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::delete('bolCom/{id}', [CustomBolComController::class, 'destroy'])->name('admin.custom.bolCom.destroy');
         Route::get('bolCom/{id}/test', [CustomBolComController::class, 'test'])->name('admin.custom.bolCom.test');
         Route::post('/bolCom/bulk-sync', [CustomBolComController::class, 'bulkSync'])->name('admin.custom.bolCom.bulkSync');
+
+        Route::post('bolCom/products/{productId}/retry', [BolSyncController::class, 'retry'])
+            ->name('admin.custom.bolCom.product.retry');
+        Route::get('bolCom/products/{productId}/timeline', [BolSyncController::class, 'timeline'])
+            ->name('admin.custom.bolCom.product.timeline');
     });
 });

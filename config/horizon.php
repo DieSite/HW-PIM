@@ -193,6 +193,20 @@ return [
             'timeout'             => 600,
             'nice'                => 0,
         ],
+
+        'supervisor-bolcom' => [
+            'connection'          => 'redis',
+            'queue'               => ['bolcom'],
+            'balance'             => 'simple',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses'        => 2,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 512,
+            'tries'               => 1,
+            'timeout'             => 300,
+            'nice'                => 0,
+        ],
     ],
 
     'environments' => [
@@ -202,11 +216,17 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 1,
             ],
+            'supervisor-bolcom' => [
+                'maxProcesses' => 2,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
                 'maxProcesses' => 3,
+            ],
+            'supervisor-bolcom' => [
+                'maxProcesses' => 1,
             ],
         ],
     ],

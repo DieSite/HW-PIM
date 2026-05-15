@@ -14,6 +14,8 @@ use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\DriverInterface;
 use Laravel\Horizon\Events\JobFailed as HorizonJobFailed;
 use Sentry\Laravel\Integration;
+use Webkul\Product\Models\Product as WebkulProduct;
+use Webkul\Theme\ViewRenderEventManager;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -50,6 +52,25 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(QueueJobFailed::class, function (QueueJobFailed $event) {
             Integration::captureUnhandledException($event->exception);
+        });
+
+        Event::listen('unopim.admin.catalog.product.edit.form.after', function (ViewRenderEventManager $event) {
+            $product = $event->getParam('product');
+
+            if (! $product instanceof WebkulProduct) {
+                return;
+            }
+
+            $appProduct = \App\Models\Product::with('bolSyncEvents.credential')->find($product->id);
+
+            if ($appProduct === null) {
+                return;
+            }
+
+            $event->addTemplate(view('admin::custom.bolCom.timeline', [
+                'product' => $appProduct,
+                'events'  => $appProduct->bolSyncEvents,
+            ])->render());
         });
     }
 

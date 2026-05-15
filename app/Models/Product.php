@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\BolSyncState;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends \Webkul\Product\Models\Product
 {
@@ -22,5 +25,23 @@ class Product extends \Webkul\Product\Models\Product
                 $q->orWhereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(`values`, '$.common.{$field}')) AS UNSIGNED) > 0");
             }
         });
+    }
+
+    public function bolSyncEvents(): HasMany
+    {
+        return $this->hasMany(BolSyncEvent::class, 'product_id')->orderByDesc('id');
+    }
+
+    public function lastBolSyncEvent(): BelongsTo
+    {
+        return $this->belongsTo(BolSyncEvent::class, 'bol_last_event_id');
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'bol_sync_state'    => BolSyncState::class,
+            'bol_sync_state_at' => 'datetime',
+        ];
     }
 }

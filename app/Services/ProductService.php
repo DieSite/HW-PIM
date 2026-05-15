@@ -6,7 +6,6 @@ use App\Jobs\SyncProductWithBolComJob;
 use App\Models\BolComCredential;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
-use Str;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
@@ -153,21 +152,18 @@ class ProductService
         ?float $bolPriceOverride,
         $previousSyncState
     ): void {
-        $ean = $product->values['common']['ean'] ?? null;
         $product->bol_com_sync = $sync;
         $clearedAdditional = $product->additional ?? [];
 
         unset($clearedAdditional['product_sku_already_exists']);
         unset($clearedAdditional['product_sync_error']);
 
-        $maat = $product->values['common']['maat'] ?? null;
-
-        if (is_null($maat) && $product->bol_com_sync) {
-            $clearedAdditional['product_sync_error'] = 'Je moet een maat invullen om met Bol.com te kunnen synchroniseren.';
-            $product->bol_com_sync = false;
-        } elseif (Str::contains($maat, ['Maatwerk', 'Afwijkende afmetingen']) && $product->bol_com_sync) {
-            $clearedAdditional['product_sync_error'] = 'We kunnen op dit moment geen maatwerk kleden op Bol.com plaatsen';
-            $product->bol_com_sync = false;
+        if ($product->bol_com_sync) {
+            $validation = app(\App\Services\Bol\BolProductValidator::class)->validate($product);
+            if ($validation->failed()) {
+                $clearedAdditional['product_sync_error'] = $validation->customerSummary();
+                $product->bol_com_sync = false;
+            }
         }
 
         $selectedCredentialIds = $sync

@@ -36,6 +36,14 @@
         <testsuite name="WooCommerce Feature Test">
             <directory suffix="Test.php">./packages/Webkul/WooCommerce/tests/Feature</directory>
         </testsuite>
+
+        <testsuite name="App Feature Test">
+            <directory suffix="Test.php">./tests/Feature</directory>
+        </testsuite>
+
+        <testsuite name="App Unit Test">
+            <directory suffix="Test.php">./tests/Unit</directory>
+        </testsuite>
     </testsuites>
 
     <source>

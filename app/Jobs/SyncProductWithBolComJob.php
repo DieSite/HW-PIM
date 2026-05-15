@@ -2,11 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Clients\BolApiClient;
 use App\Models\BolComCredential;
-use App\Services\BolComProductService;
-use Exception;
-use GuzzleHttp\Exception\GuzzleException;
+use App\Services\Bol\BolSyncStateMachine;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,120 +16,65 @@ class SyncProductWithBolComJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * The number of times the job may be attempted.
-     */
     public $tries = 5;
 
-    /**
-     * The number of seconds to wait before retrying the job.
-     */
     public $backoff = 30;
 
-    /**
-     * Create a new job instance.
-     */
     public function __construct(
         protected Product $product,
         protected BolComCredential $bolComCredential,
         protected bool $previousSyncState = false,
         protected ?string $processId = null,
         protected bool $unchecked = false,
-    ) {}
+    ) {
+        $this->onQueue('bolcom');
+    }
 
-    /**
-     * Execute the job.
-     *
-     * @throws Exception|GuzzleException
-     */
-    public function handle(BolComProductService $bolComProductService, BolApiClient $apiClient)
+    public function handle(BolSyncStateMachine $stateMachine): void
     {
         try {
-            if ($this->unchecked == true) {
-                $bolComProductService->syncProduct($this->product, $this->bolComCredential, $this->previousSyncState, true);
+            $product = $this->product->fresh() ?? $this->product;
+
+            if ($this->unchecked) {
+                $product->bol_com_sync = false;
             }
 
-            if ($this->processId !== null) {
-                $this->checkProcessStatus($apiClient, $bolComProductService);
+            $advance = $this->processId !== null
+                ? $stateMachine->advance($product, $this->bolComCredential, $this->processId)
+                : $stateMachine->start($product, $this->bolComCredential, $this->previousSyncState);
 
-                return;
+            if (! $advance->isTerminal && $advance->pollProcessId !== null) {
+                self::dispatch(
+                    $product,
+                    $this->bolComCredential,
+                    $this->previousSyncState,
+                    $advance->pollProcessId,
+                )->delay(now()->addSeconds($advance->pollDelaySeconds));
             }
-
-            $apiClient->setCredential($this->bolComCredential);
-
-            $response = $bolComProductService->syncProduct($this->product, $this->bolComCredential, $this->previousSyncState);
-
-            if ($response === null) {
-                return;
-            }
-
-            if (! empty($response['processStatusId']) && $response['status'] !== 'SUCCESS') {
-                self::dispatch($this->product, $this->bolComCredential, $this->previousSyncState, $response['processStatusId'])
-                    ->delay(now()->addSeconds(30));
-            }
-        } catch (Exception $e) {
-            Log::error('Failed to sync product with Bol.com in job', [
+        } catch (\Throwable $e) {
+            Log::error('Bol.com sync job crashed unexpectedly', [
                 'product_id' => $this->product->id,
                 'sku'        => $this->product->sku,
+                'process_id' => $this->processId,
                 'error'      => $e->getMessage(),
             ]);
 
-            throw new Exception('Failed to sync with Bol.com in job ', previous: $e);
+            throw $e;
         }
     }
 
-    /**
-     * Check the process status with Bol.com API
-     *
-     *
-     * @throws Exception|GuzzleException
-     */
-    protected function checkProcessStatus(BolApiClient $apiClient, ?BolComProductService $bolComProductService = null): void
+    public function tags(): array
     {
-        $apiClient->setCredential($this->bolComCredential);
+        return [
+            'bolcom',
+            'product:'.$this->product->id,
+            'credential:'.$this->bolComCredential->id,
+            'process:'.($this->processId ?? 'start'),
+        ];
+    }
 
-        $response = $apiClient->get('/shared/process-status/'.$this->processId);
-
-        if (! isset($response['status'])) {
-            throw new Exception('Invalid response when checking process status');
-        }
-
-        switch ($response['status']) {
-            case 'PENDING':
-                self::dispatch($this->product, $this->bolComCredential, $this->previousSyncState, $this->processId)
-                    ->delay(now()->addSeconds(30));
-                break;
-
-            case 'SUCCESS':
-                if (! empty($response['entityId'])) {
-                    $product = Product::find($this->product->id);
-                    $product->bolComCredentials()->updateExistingPivot(
-                        $this->bolComCredential->id,
-                        ['reference' => $response['entityId']]
-                    );
-                    $product->save();
-
-                    $offer = $apiClient->get('/retailer/offers/'.$response['entityId']);
-
-                    $bolComProductService->sendSuccessMail($this->product, $offer, $this->bolComCredential);
-                }
-                break;
-
-            case 'FAILURE':
-                $errorMessage = $response['errorMessage'] ?? 'Unknown error during Bol.com sync process';
-                Log::error('Bol.com sync process failed', [
-                    'product_id' => $this->product->id,
-                    'process_id' => $this->processId,
-                    'error'      => $errorMessage,
-                ]);
-
-                throw new Exception('Bol.com sync process failed: '.$errorMessage);
-            default:
-                Log::warning('Unknown status from Bol.com process', [
-                    'product_id' => $this->product->id,
-                    'process_id' => $this->processId,
-                    'status'     => $response['status'],
-                ]);
-        }
+    public function backoff(): array
+    {
+        return [30, 60, 120, 300, 600];
     }
 }
