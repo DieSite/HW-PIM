@@ -48,7 +48,9 @@ class BolSmokeTest extends Command
         }
 
         $checks = [
-            ['name' => 'auth_probe', 'method' => 'GET', 'endpoint' => '/retailer-demo/offers/13722de8-8182-d161-5422-4a0a1caab5c8', 'path' => null],
+            // v11 offers list — confirms auth + correct media type routing for offer endpoints.
+            ['name' => 'offers_list_v11', 'method' => 'GET', 'endpoint' => '/retailer/offers?page=1', 'path' => null],
+            // v10 catalog read — confirms v10 routing for non-offer endpoints.
             ['name' => 'categories', 'method' => 'GET', 'endpoint' => '/retailer/products/categories', 'path' => '/retailer/products/categories'],
         ];
 

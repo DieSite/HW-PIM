@@ -30,7 +30,7 @@ class BolPayloadBuilder
 
         return [
             'ean'                 => (string) ($common['ean'] ?? ''),
-            'condition'           => ['name' => 'NEW'],
+            'condition'           => ['category' => 'NEW'],
             'reference'           => (string) $product->sku,
             'onHoldByRetailer'    => false,
             'unknownProductTitle' => (string) ($common['productnaam'] ?? ''),
@@ -44,7 +44,14 @@ class BolPayloadBuilder
         ];
     }
 
-    public function updateOffer(Product $product, string $deliveryCode): array
+    /**
+     * Full PATCH body for the Offers API v11 update endpoint:
+     * PATCH /retailer/offers/{id}.
+     *
+     * Updates price + stock + delivery + title in a single call (v10 used
+     * three separate PUTs against /price, /stock, and the offer itself).
+     */
+    public function patchOffer(Product $product, string $deliveryCode): array
     {
         $common = $product->values['common'] ?? [];
 
@@ -52,24 +59,14 @@ class BolPayloadBuilder
             'reference'           => (string) $product->sku,
             'onHoldByRetailer'    => false,
             'unknownProductTitle' => (string) ($common['productnaam'] ?? ''),
-            'fulfilment'          => ['method' => 'FBR', 'deliveryCode' => $deliveryCode],
-        ];
-    }
-
-    public function updatePrice(Product $product): array
-    {
-        return [
-            'pricing' => [
+            'pricing'             => [
                 'bundlePrices' => [
                     ['quantity' => 1, 'unitPrice' => $this->price($product)],
                 ],
             ],
+            'stock'      => $this->stock($common),
+            'fulfilment' => ['method' => 'FBR', 'deliveryCode' => $deliveryCode],
         ];
-    }
-
-    public function updateStock(Product $product): array
-    {
-        return $this->stock($product->values['common'] ?? []);
     }
 
     public function content(Product $product): array

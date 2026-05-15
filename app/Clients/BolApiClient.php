@@ -50,39 +50,65 @@ class BolApiClient
         return $this->request('PUT', $endpoint, ['json' => $data]);
     }
 
+    public function patch(string $endpoint, array $data = []): ?array
+    {
+        return $this->request('PATCH', $endpoint, ['json' => $data]);
+    }
+
     public function delete(string $endpoint): ?array
     {
         return $this->request('DELETE', $endpoint);
+    }
+
+    /**
+     * Pick the Bol.com media type per endpoint family.
+     *
+     * Offer endpoints moved to Offers API v11 (the v10 versions are marked
+     * deprecated). Catalog content + process-status + reports stay on v10.
+     *
+     * Exposed for the contract tests and smoke-test.
+     */
+    public static function mediaTypeForEndpoint(string $endpoint): string
+    {
+        $path = parse_url($endpoint, PHP_URL_PATH) ?: $endpoint;
+
+        if (preg_match('#^/retailer(-demo)?/offers(/|$)#', $path)) {
+            return 'application/vnd.retailer.v11+json';
+        }
+
+        return 'application/vnd.retailer.v10+json';
     }
 
     protected function request(string $method, string $endpoint, array $options = []): ?array
     {
         $url = $this->baseUrl.$endpoint;
         $credentialId = $this->authHelper?->getCredentialId();
+        $mediaType = self::mediaTypeForEndpoint($endpoint);
 
-        \Sentry\configureScope(function (Scope $scope) use ($method, $url, $options, $credentialId) {
+        \Sentry\configureScope(function (Scope $scope) use ($method, $url, $options, $credentialId, $mediaType) {
             $scope->setContext('bolcom_request', [
-                'method'  => $method,
-                'url'     => $url,
-                'options' => $options,
+                'method'     => $method,
+                'url'        => $url,
+                'options'    => $options,
+                'media_type' => $mediaType,
             ]);
             $scope->setTag('bolcom.endpoint', parse_url($url, PHP_URL_PATH) ?: $endpoint);
+            $scope->setTag('bolcom.media_type', $mediaType);
             if ($credentialId !== null) {
                 $scope->setTag('bolcom.credential_id', (string) $credentialId);
             }
         });
 
         try {
-            $headers = $this->authHelper->getAuthHeaders();
+            $headers = $this->authHelper->getAuthHeaders($mediaType);
 
             $http = Http::withHeaders($headers);
 
-            $contentType = 'application/vnd.retailer.v10+json';
-
             $response = match (strtoupper($method)) {
                 'GET'    => $http->get($url, $options['query'] ?? []),
-                'POST'   => $http->withBody(json_encode($options['json'] ?? []), $contentType)->post($url),
-                'PUT'    => $http->withBody(json_encode($options['json'] ?? []), $contentType)->put($url),
+                'POST'   => $http->withBody(json_encode($options['json'] ?? []), $mediaType)->post($url),
+                'PUT'    => $http->withBody(json_encode($options['json'] ?? []), $mediaType)->put($url),
+                'PATCH'  => $http->withBody(json_encode($options['json'] ?? []), $mediaType)->patch($url),
                 'DELETE' => $http->delete($url),
                 default  => throw new Exception("Unsupported HTTP method: {$method}"),
             };

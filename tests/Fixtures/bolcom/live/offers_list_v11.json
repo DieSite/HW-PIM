@@ -1,0 +1,537 @@
+{
+    "offers": [
+        {
+            "offerId": "4414ab7b-bee0-4415-bb10-e81a78ad006f",
+            "ean": "6091011538549",
+            "lastModifiedDateTime": "2026-05-13T09:35:44.198346+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip schuin - Grijs - Lengte: 160cm",
+            "stock": {
+                "amount": 998,
+                "correctedStock": 998,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000264331981"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 50
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "11f57697-300c-4c85-a0e7-315e9d24b715",
+            "ean": "6091005998977",
+            "lastModifiedDateTime": "2026-05-13T09:36:40.554246+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Montageclip - Plissehordeur - Zwart",
+            "stock": {
+                "amount": 906,
+                "correctedStock": 906,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000100642922"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 4
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "2732472a-8fa8-4f1b-8369-c94ecc1b95b2",
+            "ean": "6091006675631",
+            "lastModifiedDateTime": "2026-05-13T09:35:44.170788+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip recht - Grijs - Lengte: 130cm",
+            "stock": {
+                "amount": 995,
+                "correctedStock": 995,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000100647124"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 35
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "6a9ede17-4d7b-4b88-886c-a9f2fd315e8a",
+            "ean": "6091006663652",
+            "lastModifiedDateTime": "2026-05-13T09:36:43.113125+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip recht - Grijs - Lengte: 96cm",
+            "stock": {
+                "amount": 993,
+                "correctedStock": 993,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000100646847"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 22
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "a63e967b-62d7-4eb9-9467-ee80d30f0e33",
+            "ean": "6091009711701",
+            "lastModifiedDateTime": "2026-05-13T09:35:44.185656+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip schuin - Grijs - Lengte: 190cm",
+            "stock": {
+                "amount": 998,
+                "correctedStock": 998,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000264199513"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 45
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "cd12ed8a-a6c8-4d64-b567-6a88875caaf0",
+            "ean": "6091011816883",
+            "lastModifiedDateTime": "2026-05-13T09:35:50.765413+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip schuin - Grijs - Lengte: 190cm",
+            "stock": {
+                "amount": 999,
+                "correctedStock": 999,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000264561344"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 60
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "388085e7-e766-4dd3-b1ff-ec21df6498c6",
+            "ean": "6091013159124",
+            "lastModifiedDateTime": "2026-05-13T09:33:51.599555+02:00",
+            "reference": "96O zwart",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur zwart - zwart gaas - Plissehordeurenwebshop - Breedte 960mm - Hoogte 2361-2390mm",
+            "stock": {
+                "amount": 0,
+                "correctedStock": 0,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000120389722"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 249
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "536fcf76-1b5c-47a1-b1a9-b163363a2e32",
+            "ean": "6091005366363",
+            "lastModifiedDateTime": "2026-05-13T09:35:41.319715+02:00",
+            "reference": "96E",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur wit - zwart gaas - Plissehordeurenwebshop - Breedte 960mm  - Hoogte 2061-2090mm",
+            "stock": {
+                "amount": 0,
+                "correctedStock": 0,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000087598357"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 243
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "a1beb547-a581-403c-89b3-8dd5708b8130",
+            "ean": "6091007066094",
+            "lastModifiedDateTime": "2026-05-13T09:35:50.107386+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip recht - Grijs - Lengte: 160cm",
+            "stock": {
+                "amount": 998,
+                "correctedStock": 998,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000101447947"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 40
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "be2b4ea6-d562-47d8-934a-d7e7f50dc470",
+            "ean": "6091006292241",
+            "lastModifiedDateTime": "2026-05-13T09:36:40.652214+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Handgreep - Plisse hordeur - Zwart - Kunststof",
+            "stock": {
+                "amount": 941,
+                "correctedStock": 941,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000100644282"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 4.25
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "cb179d73-2535-4073-974b-b25b25953007",
+            "ean": "6091007536511",
+            "lastModifiedDateTime": "2026-05-13T09:35:44.062034+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip recht - Grijs - Lengte: 190cm",
+            "stock": {
+                "amount": 992,
+                "correctedStock": 992,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000101447979"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 50
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        },
+        {
+            "offerId": "56580797-9640-441d-93f2-c82deb06f230",
+            "ean": "6091008812829",
+            "lastModifiedDateTime": "2026-05-13T09:36:41.171950+02:00",
+            "onHoldByRetailer": false,
+            "unknownProductTitle": "Plisse hordeur geleider - Onderstrip schuin - Grijs - Lengte: 96cm",
+            "stock": {
+                "amount": 996,
+                "correctedStock": 996,
+                "managedByRetailer": false
+            },
+            "countryAvailabilities": [
+                {
+                    "countryCode": "NL",
+                    "forSale": false
+                },
+                {
+                    "countryCode": "BE",
+                    "forSale": false
+                }
+            ],
+            "condition": {
+                "category": "NEW"
+            },
+            "product": {
+                "bolProductId": "9300000100647412"
+            },
+            "pricing": {
+                "bundlePrices": [
+                    {
+                        "quantity": 1,
+                        "unitPrice": 28
+                    }
+                ]
+            },
+            "fulfilment": {
+                "method": "FBR",
+                "schedule": "BOL_DELIVERY_PROMISE",
+                "deliveryPromise": {
+                    "minimumDaysToCustomer": 2,
+                    "maximumDaysToCustomer": 3
+                }
+            }
+        }
+    ],
+    "page": {
+        "pageSize": 100
+    }
+}

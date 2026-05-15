@@ -20,14 +20,25 @@ The integration tests under `tests/Feature/Bol` and `tests/Unit/Bol` schema-vali
 
 ```bash
 curl -sS -L -o docs/bol-api-spec/retailer-v10.json "https://api.bol.com/retailer/public/apispec/Retailer%20API%20-%20v10"
-curl -sS -L -o docs/bol-api-spec/shared-v10.json  "https://api.bol.com/retailer/public/apispec/Shared%20API%20-%20v10"
-curl -sS -L -o docs/bol-api-spec/offers-v11.yaml  "https://api.bol.com/registry/api-definitions/offers/offers-v11.yaml"
+curl -sS -L -o docs/bol-api-spec/shared-v10.json   "https://api.bol.com/retailer/public/apispec/Shared%20API%20-%20v10"
+curl -sS -L -o docs/bol-api-spec/offers-v11.yaml   "https://api.bol.com/registry/api-definitions/offers/offers-v11.yaml"
+
+# Convert the yaml spec to json so BolContractValidator can load it.
+docker exec -i unopim-web php -r "require '/var/www/html/vendor/autoload.php'; \$y = Symfony\\Component\\Yaml\\Yaml::parseFile('/var/www/html/docs/bol-api-spec/offers-v11.yaml'); file_put_contents('/var/www/html/docs/bol-api-spec/offers-v11.json', json_encode(\$y, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));"
 ```
 
 Re-run the test suite after refreshing to catch any contract changes.
 
-## Open migration
+## Active versions in the client
 
-**POST / PUT / DELETE `/retailer/offers`** are marked `deprecated: true` in v10. The v11 spec (`offers-v11.yaml`) is the long-term home for these endpoints. Same field names, only the `Accept` / `Content-Type` media type changes from `application/vnd.retailer.v10+json` to `application/vnd.retailer.v11+json`.
+`BolApiClient::mediaTypeForEndpoint()` routes per endpoint family:
 
-Tracked in `BolApiClient::request()` — when we migrate, the client must route offer endpoints through the v11 media type while keeping content endpoints on v10.
+| Endpoint pattern | Media type | Source spec |
+| --- | --- | --- |
+| `/retailer/offers*` | `application/vnd.retailer.v11+json` | `offers-v11.json` |
+| `/retailer-demo/offers*` | `application/vnd.retailer.v11+json` | `offers-v11.json` |
+| `/retailer/content/*` | `application/vnd.retailer.v10+json` | `retailer-v10.json` |
+| `/retailer/products/*` | `application/vnd.retailer.v10+json` | `retailer-v10.json` |
+| `/shared/*` | `application/vnd.retailer.v10+json` | `shared-v10.json` |
+
+The v10 offer endpoints still exist but are marked `deprecated: true` in the v10 spec; do not regress to them.

@@ -6,22 +6,19 @@ use App\Clients\BolApiClient;
 use Webkul\Product\Models\Product;
 
 /**
- * Applies updates (price / stock / details) to an existing Bol.com offer.
+ * Applies updates to an existing Bol.com offer via the Offers API v11.
  *
- * The three PUTs each return their own processStatusId. We don't currently poll
- * those — best-effort updates. If we ever need stronger guarantees, return the
- * status ids and have the state machine poll them.
+ * v11 collapsed the three separate v10 PUTs (price / stock / details) into a
+ * single PATCH /retailer/offers/{id} that accepts a partial update body.
+ *
+ * Returns the parsed ProcessStatus response so callers can poll it.
  */
 class BolOfferUpdater
 {
     public function __construct(private readonly BolPayloadBuilder $builder) {}
 
-    public function update(BolApiClient $apiClient, Product $product, string $reference, string $deliveryCode): array
+    public function update(BolApiClient $apiClient, Product $product, string $reference, string $deliveryCode): ?array
     {
-        return [
-            'price'   => $apiClient->put('/retailer/offers/'.$reference.'/price', $this->builder->updatePrice($product)),
-            'stock'   => $apiClient->put('/retailer/offers/'.$reference.'/stock', $this->builder->updateStock($product)),
-            'details' => $apiClient->put('/retailer/offers/'.$reference, $this->builder->updateOffer($product, $deliveryCode)),
-        ];
+        return $apiClient->patch('/retailer/offers/'.$reference, $this->builder->patchOffer($product, $deliveryCode));
     }
 }

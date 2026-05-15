@@ -54,11 +54,11 @@ class BolComAuthenticationHelper
     /**
      * @throws Exception
      */
-    public function getAuthHeaders(): array
+    public function getAuthHeaders(?string $acceptMediaType = null): array
     {
         return [
             'Authorization' => 'Bearer '.$this->getAccessToken(),
-            'Accept'        => 'application/vnd.retailer.v10+json',
+            'Accept'        => $acceptMediaType ?? 'application/vnd.retailer.v10+json',
         ];
     }
 

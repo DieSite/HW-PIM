@@ -19873,11 +19873,11 @@
                                                     "categoryName": "Basgitaar effecten"
                                                 },
                                                 {
-                                                    "categoryId": "73908",
+                                                    "categoryId": "73907",
                                                     "categoryName": "Basgitaarversterkers"
                                                 },
                                                 {
-                                                    "categoryId": "73907",
+                                                    "categoryId": "73908",
                                                     "categoryName": "Basgitaarversterkers"
                                                 },
                                                 {
@@ -31173,11 +31173,11 @@
                                     "categoryName": "Sportschoenen"
                                 },
                                 {
-                                    "categoryId": "71024",
+                                    "categoryId": "71046",
                                     "categoryName": "Veterschoenen"
                                 },
                                 {
-                                    "categoryId": "71046",
+                                    "categoryId": "71024",
                                     "categoryName": "Veterschoenen"
                                 },
                                 {
@@ -43989,11 +43989,11 @@
                             ]
                         },
                         {
-                            "categoryId": "67203",
+                            "categoryId": "67202",
                             "categoryName": "Vetspuiten"
                         },
                         {
-                            "categoryId": "67202",
+                            "categoryId": "67203",
                             "categoryName": "Vetspuiten"
                         },
                         {
@@ -46445,11 +46445,11 @@
                                     "categoryName": "Wijnrekken"
                                 },
                                 {
-                                    "categoryId": "66464",
+                                    "categoryId": "66463",
                                     "categoryName": "Wijnthermometers"
                                 },
                                 {
-                                    "categoryId": "66463",
+                                    "categoryId": "66464",
                                     "categoryName": "Wijnthermometers"
                                 }
                             ]
@@ -47683,11 +47683,11 @@
                             "categoryName": "Keukenthermometers",
                             "subcategories": [
                                 {
-                                    "categoryId": "65301",
+                                    "categoryId": "65302",
                                     "categoryName": "Frituurthermometers"
                                 },
                                 {
-                                    "categoryId": "65302",
+                                    "categoryId": "65301",
                                     "categoryName": "Frituurthermometers"
                                 },
                                 {
@@ -54399,11 +54399,11 @@
                                             "categoryName": "Basic fitness leggings"
                                         },
                                         {
-                                            "categoryId": "76973",
+                                            "categoryId": "76961",
                                             "categoryName": "Basic fitness shirts"
                                         },
                                         {
-                                            "categoryId": "76961",
+                                            "categoryId": "76973",
                                             "categoryName": "Basic fitness shirts"
                                         },
                                         {
@@ -56457,11 +56457,11 @@
                                     ]
                                 },
                                 {
-                                    "categoryId": "39808",
+                                    "categoryId": "31979",
                                     "categoryName": "Ruiterblouses"
                                 },
                                 {
-                                    "categoryId": "31979",
+                                    "categoryId": "39808",
                                     "categoryName": "Ruiterblouses"
                                 },
                                 {
