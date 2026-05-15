@@ -8,6 +8,7 @@ use App\Enums\BolSyncState;
 use App\Enums\BolSyncStep;
 use App\Mail\BolComSyncSuccess;
 use App\Models\BolComCredential;
+use App\Models\BolSyncEvent;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Mail;
 use Webkul\Product\Models\Product;
@@ -83,7 +84,11 @@ class BolSyncStateMachine
     {
         $this->apiClient->setCredential($credential);
 
-        $latest = $product->bolSyncEvents()
+        // Resolve via the model directly so this works regardless of whether
+        // the caller passed our App\Models\Product subclass or the raw
+        // Webkul\Product\Models\Product base.
+        $latest = BolSyncEvent::query()
+            ->where('product_id', $product->id)
             ->where('bol_process_id', $processId)
             ->orderByDesc('id')
             ->first();

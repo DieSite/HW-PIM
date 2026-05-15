@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\BolComCredential;
+use App\Models\Product as AppProduct;
 use App\Services\Bol\BolSyncStateMachine;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,7 +34,9 @@ class SyncProductWithBolComJob implements ShouldQueue
     public function handle(BolSyncStateMachine $stateMachine): void
     {
         try {
-            $product = $this->product->fresh() ?? $this->product;
+            // Always rehydrate as App\Models\Product (not the Webkul base) so
+            // the bolSyncEvents() relation and bol_sync_state cast are visible.
+            $product = AppProduct::find($this->product->id) ?? $this->product;
 
             if ($this->unchecked) {
                 $product->bol_com_sync = false;
