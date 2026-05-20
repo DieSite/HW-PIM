@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Imports\EurogrosVoorraadImport;
+use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -101,7 +102,10 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
 
         if (file_exists($fullPath)) {
             Log::info('ImportVoorraadEurogrosJob: queuing import');
-            (new EurogrosVoorraadImport())->queue($fullPath);
+            $startedAt = CarbonImmutable::now();
+            (new EurogrosVoorraadImport())->queue($fullPath)->chain([
+                new NotifyMissingEurogrosEansJob($startedAt),
+            ]);
         }
     }
 

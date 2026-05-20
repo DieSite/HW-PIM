@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\BolComCredential;
+use App\Models\EurogrosMissingEanNumber;
 use App\Models\Product;
 use App\Services\ProductService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -28,6 +29,12 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
         $products = Product::whereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [$ean])
             ->orWhereRaw("JSON_EXTRACT(`values`, '$.common.ean') = ?", [(int) $ean])
             ->get();
+
+        if ($products->isEmpty()) {
+            EurogrosMissingEanNumber::firstOrCreate(['ean' => $ean]);
+
+            return null;
+        }
 
         $productService = app(ProductService::class);
 
