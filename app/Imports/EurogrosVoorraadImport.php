@@ -2,10 +2,12 @@
 
 namespace App\Imports;
 
+use App\Jobs\SyncWooCommerceStockJob;
 use App\Models\BolComCredential;
 use App\Models\EurogrosMissingEanNumber;
 use App\Models\Product;
 use App\Services\ProductService;
+use App\Services\WooCommerceStockSyncService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToModel;
@@ -40,6 +42,8 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
 
         $bolCredentials = BolComCredential::all()->all();
 
+        $stockUpdates = [];
+
         foreach ($products as $product) {
             $values = $product->values;
 
@@ -48,8 +52,14 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
                 $product->values = $values;
                 $product->save();
 
-                $productService->triggerFullExternalSync($product, $bolCredentials);
+                $stockUpdates[] = WooCommerceStockSyncService::buildStockUpdate($product);
+
+                $productService->triggerBolSync($product, $bolCredentials, [], true);
             }
+        }
+
+        if (! empty($stockUpdates)) {
+            SyncWooCommerceStockJob::dispatch($stockUpdates);
         }
 
         return null;
