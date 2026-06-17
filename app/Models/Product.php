@@ -27,6 +27,19 @@ class Product extends \Webkul\Product\Models\Product
         });
     }
 
+    /**
+     * Products eligible to be listed on Bol.com: they have an EAN, Eurogros
+     * stock, and are the variant without an underlay ("Zonder onderkleed").
+     */
+    public function scopeBolSyncEligible(Builder $query): Builder
+    {
+        return $query
+            ->whereRaw("`values`->>'$.common.ean' IS NOT NULL")
+            ->whereRaw("`values`->>'$.common.ean' != ''")
+            ->whereRaw("CAST(`values`->>'$.common.voorraad_eurogros' AS DECIMAL(10,2)) > 0")
+            ->whereRaw("`values`->>'$.common.onderkleed' = 'Zonder onderkleed'");
+    }
+
     public function bolSyncEvents(): HasMany
     {
         return $this->hasMany(BolSyncEvent::class, 'product_id')->orderByDesc('id');

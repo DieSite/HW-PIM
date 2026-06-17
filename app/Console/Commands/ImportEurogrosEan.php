@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Product;
+use App\Services\EurogrosOmschrParser;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Event;
 use Storage;
@@ -28,7 +29,7 @@ class ImportEurogrosEan extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): void
     {
         $content = Storage::disk('sftp')->get(self::FILE);
         $count = substr_count($content, "\n");
@@ -51,34 +52,33 @@ class ImportEurogrosEan extends Command
             $definition = array_combine($header, $data);
 
             $fullname = $definition['OMSCHR'];
-            $explodedName = explode(' ', $fullname);
-            $maat = array_pop($explodedName);
-
             $ean = $definition['EAN'];
-            $kleur = implode(' ', $explodedName);
-            $onzeMaat = $this->maatMap($maat);
 
-            if (is_null($onzeMaat)) {
+            $match = EurogrosOmschrParser::resolveMatch($fullname);
+
+            if ($match === null) {
                 $progressBar->advance();
-                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean): unknown maat $maat{$this->findByEan($ean)}");
+                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean): could not resolve productnaam/maat{$this->findByEan($ean)}\n");
 
                 continue;
             }
 
-            $rugs = Product::select(['id'])
-                ->whereNotNull('parent_id')
-                ->where('values->common->productnaam', '=', $kleur)
-                ->where('values->common->maat', '=', $onzeMaat)
+            $rugs = Product::whereNotNull('parent_id')
+                ->where('values->common->productnaam', '=', $match['productnaam'])
+                ->where('values->common->maat', '=', $match['maat'])
                 ->get();
 
-            if ($rugs->count() != 2) {
+            if ($rugs->isEmpty()) {
                 $progressBar->advance();
-                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean, $kleur, $onzeMaat): {$rugs->count()} rugs found{$this->findByEan($ean)}");
+                Storage::disk('local')->append('eurogros-ean.log', "Skipping $fullname ($ean, {$match['productnaam']}, {$match['maat']}): 0 rugs found{$this->findByEan($ean)}\n");
 
                 continue;
             }
 
-            $rugs = Product::whereIn('id', [$rugs[0]->id, $rugs[1]->id])->get();
+            if ($rugs->count() !== 2) {
+                Storage::disk('local')->append('eurogros-ean.log', "Note $fullname ($ean, {$match['productnaam']}, {$match['maat']}): {$rugs->count()} rug(s) found, expected 2 — writing EAN to all\n");
+            }
+
             foreach ($rugs as $rug) {
                 $values = $rug->values;
                 $values['common']['ean'] = $ean;
@@ -89,6 +89,9 @@ class ImportEurogrosEan extends Command
 
             $progressBar->advance();
         }
+
+        $progressBar->finish();
+        $this->newLine();
     }
 
     private function findByEan(string $ean): string
@@ -103,10 +106,5 @@ class ImportEurogrosEan extends Command
         $maat = $values['common']['maat'] ?? '';
 
         return " | Product {$values['common']['productnaam']} - ($maat) gevonden voor EAN";
-    }
-
-    private function maatMap(string $eurgrosMaat): ?string
-    {
-        return config('eurogros.maat_map')[$eurgrosMaat] ?? null;
     }
 }

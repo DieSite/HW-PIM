@@ -146,11 +146,13 @@ class ProductsImport implements ToModel, WithCalculatedFormulas, WithChunkReadin
             'type'                => $type,
             'parent_id'           => $parentId,
             'attribute_family_id' => 2,
-            'values'              => json_encode([
+            // Pass the array directly; the model's `array` cast encodes it once.
+            // Using json_encode() here would double-encode the `values` column.
+            'values'              => [
                 'common'       => $common,
                 'associations' => $associations,
                 'categories'   => $categories,
-            ]),
+            ],
         ]);
     }
 
