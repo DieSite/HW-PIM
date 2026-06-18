@@ -320,7 +320,7 @@ class Exporter extends AbstractExporter
 
         $formatted['manage_stock'] = true;
         $formatted['stock_quantity'] = $voorraadEurogros + $voorraadDeMunk + $voorraadHW;
-        $formatted['stock_status'] = $formatted['stock_quantity'] > 0 ? 'instock' : 'outofstock';
+        $formatted['stock_status'] = $formatted['stock_quantity'] > 0 ? 'instock' : 'onbackorder';
         $formatted['backorders'] = 'yes';
 
         if (isset($item['parent_id'])) {

@@ -52,7 +52,7 @@ class WooCommerceStockSyncService
         return [
             'sku'            => $sku,
             'stock_quantity' => $quantity,
-            'stock_status'   => $quantity > 0 ? 'instock' : 'outofstock',
+            'stock_status'   => $quantity > 0 ? 'instock' : 'onbackorder',
         ];
     }
 

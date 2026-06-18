@@ -18,20 +18,20 @@ it('sums the three stock sources and marks instock when positive', function () {
     ]);
 });
 
-it('marks outofstock when the total is zero', function () {
+it('marks onbackorder when the total is zero', function () {
     $update = WooCommerceStockSyncService::stockUpdateFromValues('ABC-124', [
         'common' => ['voorraad_eurogros' => 0],
     ]);
 
     expect($update['stock_quantity'])->toBe(0)
-        ->and($update['stock_status'])->toBe('outofstock');
+        ->and($update['stock_status'])->toBe('onbackorder');
 });
 
 it('treats missing stock keys as zero', function () {
     $update = WooCommerceStockSyncService::stockUpdateFromValues('ABC-125', ['common' => []]);
 
     expect($update['stock_quantity'])->toBe(0)
-        ->and($update['stock_status'])->toBe('outofstock');
+        ->and($update['stock_status'])->toBe('onbackorder');
 });
 
 it('coerces string stock values to integers', function () {
