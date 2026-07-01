@@ -401,5 +401,11 @@ return [
         'route'  => 'admin.configuration.edit',
         'params' => ['general', 'magic_ai'],
         'sort'   => 2,
+    ], [
+        'key'    => 'configuration.image-editor',
+        'name'   => 'Hoofdafbeelding',
+        'route'  => 'admin.configuration.edit',
+        'params' => ['image_editor', 'settings'],
+        'sort'   => 3,
     ],
 ];

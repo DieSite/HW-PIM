@@ -72,10 +72,36 @@ class AppServiceProvider extends ServiceProvider
                 'events'  => $appProduct->bolSyncEvents,
             ])->render());
         });
+
+        // Render the primary-image editor directly below the image gallery
+        // (the "afbeelding" asset field), not at the bottom of the form.
+        Event::listen('unopim.admin.products.dynamic-attribute-fields.control.asset.after', function (ViewRenderEventManager $event) {
+            $field = $event->getParam('field');
+
+            if (! config('product_image_editor.enabled')
+                || ! $field
+                || $field->code !== config('product_image_editor.primary_attribute')) {
+                return;
+            }
+
+            $productId = request()->route('id');
+            $product = $productId ? WebkulProduct::find($productId) : null;
+
+            if (! $product instanceof WebkulProduct) {
+                return;
+            }
+
+            $event->addTemplate(view('admin::custom.productImageEditor.editor', [
+                'product' => $product,
+            ])->render());
+        });
     }
 
     /**
      * Register any application services.
      */
-    public function register(): void {}
+    public function register(): void
+    {
+        $this->mergeConfigFrom(base_path('config/image_editor_settings.php'), 'core');
+    }
 }

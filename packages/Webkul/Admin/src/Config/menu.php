@@ -1,7 +1,5 @@
 <?php
 
-use App\Models\Product;
-
 return [
     /**
      * Dashboard.
@@ -163,6 +161,13 @@ return [
         'route'  => 'admin.configuration.edit',
         'params' => ['general', 'magic_ai'],
         'sort'   => 1,
+        'icon'   => '',
+    ], [
+        'key'    => 'configuration.image-editor',
+        'name'   => 'Hoofdafbeelding',
+        'route'  => 'admin.configuration.edit',
+        'params' => ['image_editor', 'settings'],
+        'sort'   => 2,
         'icon'   => '',
     ],
 

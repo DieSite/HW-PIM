@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
+use App\Services\ProductImageEditor\PrimaryImageEditorService;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
@@ -207,6 +208,11 @@ class ProductController extends Controller
             $previousSyncState = $product->bol_com_sync ?? false;
 
             $product = $this->productRepository->update($data, $id);
+
+            if (is_array($imageEdit = $request->input('__image_edit'))) {
+                app(PrimaryImageEditorService::class)->apply($product, $imageEdit);
+                $product->refresh();
+            }
 
             $priceOverride = $request->input('bol_price_override');
             if (! is_null($priceOverride)) {
