@@ -35,3 +35,4 @@ yarn-error.log
 /competitor-analysis/results*
 /competitor-analysis/catalog-volledig/data/*.db-shm
 /competitor-analysis/catalog-volledig/data/*.db-wal
+.DS_Store
