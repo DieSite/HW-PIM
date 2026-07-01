@@ -50,6 +50,11 @@ class Product extends \Webkul\Product\Models\Product
         return $this->belongsTo(BolSyncEvent::class, 'bol_last_event_id');
     }
 
+    public function wooCommerceSyncEvents(): HasMany
+    {
+        return $this->hasMany(WooCommerceSyncEvent::class, 'product_id')->orderByDesc('id');
+    }
+
     protected function casts(): array
     {
         return [

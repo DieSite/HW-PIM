@@ -8,6 +8,7 @@ use App\Http\Controllers\Tools\ErroredProductsController;
 use App\Http\Controllers\Tools\EurgrosController;
 use App\Http\Controllers\Tools\ProductHWStockEditorController;
 use App\Http\Controllers\Tools\ProductStockEditorController;
+use App\Http\Controllers\WooCommerceSyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['middleware' => ['web', 'admin']], function () {
@@ -51,5 +52,8 @@ Route::group(['middleware' => ['web', 'admin']], function () {
             ->name('admin.custom.bolCom.product.retry');
         Route::get('bolCom/products/{productId}/timeline', [BolSyncController::class, 'timeline'])
             ->name('admin.custom.bolCom.product.timeline');
+
+        Route::post('wooCommerce/products/{productId}/retry', [WooCommerceSyncController::class, 'retry'])
+            ->name('admin.custom.wooCommerce.product.retry');
     });
 });

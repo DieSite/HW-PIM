@@ -29,3 +29,9 @@ yarn.lock
 yarn-error.log
 *.xlsx*
 *-dump.sql
+
+# Competitor price scraper (Node/Playwright) build artifacts
+/competitor-analysis/node_modules
+/competitor-analysis/results*
+/competitor-analysis/catalog-volledig/data/*.db-shm
+/competitor-analysis/catalog-volledig/data/*.db-wal

@@ -6,6 +6,7 @@ use App\Clients\BolApiClient;
 use App\Enums\BolSyncEventStatus;
 use App\Enums\BolSyncState;
 use App\Enums\BolSyncStep;
+use App\Exceptions\BolTransientSyncException;
 use App\Mail\BolComSyncSuccess;
 use App\Models\BolComCredential;
 use App\Models\BolSyncEvent;
@@ -123,7 +124,8 @@ class BolSyncStateMachine
                 return BolSyncAdvance::poll($processId, 120);
             }
 
-            return $this->recordApiFailure($product, $credential, $pollStep, $e);
+            // Non-transient (4xx) polling failure is genuinely terminal.
+            return $this->recordTerminalFailure($product, $credential, $pollStep, $e);
         }
 
         $status = $response['status'] ?? null;
@@ -178,6 +180,16 @@ class BolSyncStateMachine
         );
 
         return BolSyncAdvance::poll($processId);
+    }
+
+    /**
+     * Record a terminal Bol.com sync failure: writes the failed event, flips the
+     * product to the Failed state, and (via the recorder) emails the customer.
+     * Public so the queue job can invoke it once transient retries are spent.
+     */
+    public function failTerminally(Product $product, BolComCredential $credential, BolSyncStep $step, \Throwable $e): void
+    {
+        $this->recordTerminalFailure($product, $credential, $step, $e);
     }
 
     private function onProcessSuccess(Product $product, BolComCredential $credential, BolSyncStep $pollStep, array $response): BolSyncAdvance
@@ -504,7 +516,21 @@ class BolSyncStateMachine
         return true;
     }
 
+    /**
+     * Called from the submit/update steps. Transient errors (5xx, 429, network)
+     * are thrown so the queue job can retry them; only genuinely terminal
+     * errors (4xx) are recorded and emailed here on the spot.
+     */
     private function recordApiFailure(Product $product, BolComCredential $credential, BolSyncStep $step, \Throwable $e): BolSyncAdvance
+    {
+        if ($this->isTransient($e)) {
+            throw new BolTransientSyncException($step, $e);
+        }
+
+        return $this->recordTerminalFailure($product, $credential, $step, $e);
+    }
+
+    private function recordTerminalFailure(Product $product, BolComCredential $credential, BolSyncStep $step, \Throwable $e): BolSyncAdvance
     {
         $customerMessage = $this->translator->translate($e);
         $payload = ['exception' => $e->getMessage()];

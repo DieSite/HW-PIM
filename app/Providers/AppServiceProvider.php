@@ -61,7 +61,7 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            $appProduct = \App\Models\Product::with('bolSyncEvents.credential')->find($product->id);
+            $appProduct = \App\Models\Product::with(['bolSyncEvents.credential', 'wooCommerceSyncEvents'])->find($product->id);
 
             if ($appProduct === null) {
                 return;
@@ -70,6 +70,11 @@ class AppServiceProvider extends ServiceProvider
             $event->addTemplate(view('admin::custom.bolCom.timeline', [
                 'product' => $appProduct,
                 'events'  => $appProduct->bolSyncEvents,
+            ])->render());
+
+            $event->addTemplate(view('admin::custom.wooCommerce.timeline', [
+                'product' => $appProduct,
+                'events'  => $appProduct->wooCommerceSyncEvents,
             ])->render());
         });
 
@@ -103,5 +108,6 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(base_path('config/image_editor_settings.php'), 'core');
+        $this->mergeConfigFrom(base_path('config/competitor_pricing_settings.php'), 'core');
     }
 }

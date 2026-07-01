@@ -70,13 +70,15 @@ it('saves a helpful error message when WooCommerce rejects the product due to mi
     $mappingRepo->shouldReceive('where')->andReturnSelf();
     $mappingRepo->shouldReceive('get')->andReturn(collect());
 
-    // Act — the job re-throws after saving the error
-    expect(fn () => ProcessProductsToWooCommerce::dispatchSync(
+    // Act — a parent with no variants is a terminal data issue, so the job
+    // records it on the product and returns without throwing (no pointless
+    // retries), unlike the transient timeout/bad-gateway paths.
+    ProcessProductsToWooCommerce::dispatchSync(
         ProductBatch::fromProductArray(['sku' => $product->sku, 'parent_id' => null, 'variants' => []])
-    ))->toThrow(\Exception::class);
+    );
 
     // Assert
     $product->refresh();
     expect($product->additional['product_sync_error'])
-        ->toContain('variations');
+        ->toContain('no variants');
 });

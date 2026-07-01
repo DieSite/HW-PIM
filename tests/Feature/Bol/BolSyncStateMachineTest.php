@@ -3,11 +3,14 @@
 use App\Enums\BolSyncEventStatus;
 use App\Enums\BolSyncState;
 use App\Enums\BolSyncStep;
+use App\Exceptions\BolTransientSyncException;
+use App\Jobs\SyncProductWithBolComJob;
 use App\Mail\BolComSyncFailed;
 use App\Mail\BolComSyncSuccess;
 use App\Models\BolComCredential;
 use App\Models\Product;
 use App\Services\Bol\BolSyncStateMachine;
+use Illuminate\Contracts\Queue\Job as QueueJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -194,6 +197,68 @@ it('content submission failure: records failure with translated message', functi
         ->and($failedEvent->payload['response_status'] ?? null)->toBe(400);
 
     Mail::assertQueued(BolComSyncFailed::class);
+});
+
+it('transient 5xx on content submission is not terminal: throws for retry, records no failure, sends no mail', function () {
+    Http::fake([
+        'login.bol.com/token'                   => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
+        'api.bol.com/retailer/content/products' => Http::response([
+            'type'   => 'https://api.bol.com/problems',
+            'title'  => 'Gateway Timeout',
+            'status' => 504,
+            'detail' => 'The upstream service is currently unable to process this request.',
+        ], 504),
+    ]);
+
+    expect(fn () => $this->stateMachine->start($this->product, $this->credential))
+        ->toThrow(BolTransientSyncException::class);
+
+    $product = $this->product->fresh();
+    expect($product->bol_sync_state)->not->toBe(BolSyncState::Failed)
+        ->and($product->additional['product_sync_error'] ?? null)->toBeNull()
+        ->and($product->bolSyncEvents()->where('status', BolSyncEventStatus::Failed->value)->exists())->toBeFalse();
+
+    Mail::assertNotQueued(BolComSyncFailed::class);
+});
+
+it('job: transient failure on a non-final attempt rethrows for retry and stays silent', function () {
+    Http::fake([
+        'login.bol.com/token'                   => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
+        'api.bol.com/retailer/content/products' => Http::response(['title' => 'Gateway Timeout', 'status' => 504], 504),
+    ]);
+
+    $job = new SyncProductWithBolComJob($this->product, $this->credential);
+    $queueJob = Mockery::mock(QueueJob::class);
+    $queueJob->shouldReceive('attempts')->andReturn(1);
+    $job->setJob($queueJob);
+
+    expect(fn () => $job->handle($this->stateMachine))->toThrow(Exception::class);
+
+    Mail::assertNotQueued(BolComSyncFailed::class);
+    expect($this->product->fresh()->bolSyncEvents()->where('status', BolSyncEventStatus::Failed->value)->exists())->toBeFalse();
+});
+
+it('job: transient failure on the final attempt records the failure and emails once', function () {
+    Http::fake([
+        'login.bol.com/token'                   => Http::response(['access_token' => 't', 'expires_in' => 3600], 200),
+        'api.bol.com/retailer/content/products' => Http::response(['title' => 'Gateway Timeout', 'status' => 504], 504),
+    ]);
+
+    $job = new SyncProductWithBolComJob($this->product, $this->credential);
+    $queueJob = Mockery::mock(QueueJob::class);
+    $queueJob->shouldReceive('attempts')->andReturn($job->tries);
+    $job->setJob($queueJob);
+
+    $job->handle($this->stateMachine);
+
+    $product = $this->product->fresh();
+    expect($product->bol_sync_state)->toBe(BolSyncState::Failed);
+
+    $failed = $product->bolSyncEvents()->where('status', BolSyncEventStatus::Failed->value)->first();
+    expect($failed)->not->toBeNull()
+        ->and($failed->customer_message)->toContain('tijdelijk niet bereikbaar');
+
+    Mail::assertQueued(BolComSyncFailed::class, 1);
 });
 
 it('content polling returns PENDING: schedules another poll', function () {

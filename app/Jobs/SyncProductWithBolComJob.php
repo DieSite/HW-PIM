@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\BolTransientSyncException;
 use App\Models\BolComCredential;
 use App\Models\Product as AppProduct;
 use App\Services\Bol\BolSyncStateMachine;
@@ -54,6 +55,19 @@ class SyncProductWithBolComJob implements ShouldQueue
                     $advance->pollProcessId,
                 )->delay(now()->addSeconds($advance->pollDelaySeconds));
             }
+        } catch (BolTransientSyncException $e) {
+            $original = $e->getPrevious() ?? $e;
+
+            if ($this->attempts() < $this->tries) {
+                // Bol.com hiccup (5xx/429/network). Let the queue retry with
+                // back-off and stay silent — no failure event, no email — until
+                // we've exhausted every attempt.
+                throw $original;
+            }
+
+            // Retries are spent: now record the terminal failure and notify.
+            $product = AppProduct::find($this->product->id) ?? $this->product;
+            $stateMachine->failTerminally($product, $this->bolComCredential, $e->step, $original);
         } catch (\Throwable $e) {
             Log::error('Bol.com sync job crashed unexpectedly', [
                 'product_id' => $this->product->id,

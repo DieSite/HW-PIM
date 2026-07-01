@@ -2,12 +2,14 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Enums\WooCommerceSyncEventStatus;
 use App\Exceptions\ParentHasNoVariantsException;
+use App\Exceptions\WoocommerceBadGatewayException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
-use App\Exceptions\WoocommerceBadGatewayException;
 use App\Exceptions\WoocommerceTimeoutException;
 use App\Models\Product;
+use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -48,6 +50,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
     protected DataTransferMappingRepository $dataTransferMappingRepository;
 
+    protected WooCommerceSyncEventRecorder $eventRecorder;
+
     protected ?array $credential = null;
 
     /**
@@ -61,11 +65,12 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(Exporter $exporter, WooCommerceService $connectorService, DataTransferMappingRepository $dataTransferMappingRepository): void
+    public function handle(Exporter $exporter, WooCommerceService $connectorService, DataTransferMappingRepository $dataTransferMappingRepository, WooCommerceSyncEventRecorder $eventRecorder): void
     {
         $this->exporter = $exporter;
         $this->connectorService = $connectorService;
         $this->dataTransferMappingRepository = $dataTransferMappingRepository;
+        $this->eventRecorder = $eventRecorder;
 
         // Retrieve credential — cached to avoid a DB hit on every job during bulk syncs.
         // Invalidated by the Credential model observer when credentials are saved.
@@ -102,11 +107,20 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $product = Product::whereSku($this->batch->sku)->first();
         $additional = $product->additional;
         unset($additional['product_sync_error']);
-        if ( is_array($additional) && sizeof($additional) === 0 ) {
+        if (is_array($additional) && count($additional) === 0) {
             $additional = null;
         }
         $product->additional = $additional;
         $product->save();
+
+        $this->eventRecorder->record(
+            $product,
+            WooCommerceSyncEventStatus::Started,
+            'sync',
+            'Synchronisatie met WooCommerce gestart.',
+            'Synchronisatie met WooCommerce gestart.'
+        );
+
         try {
             $productData = $this->formatData($this->batch);
 
@@ -133,12 +147,13 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 'product_sync_error',
                 $e->getMessage()
             );
-        } catch (WoocommerceTimeoutException | WoocommerceBadGatewayException $e) {
+        } catch (WoocommerceTimeoutException|WoocommerceBadGatewayException $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
             $additional['product_sync_error'] = $e->getMessage();
             $product->additional = $additional;
             $product->save();
+            $this->recordFailure($product, $e->getMessage());
             throw $e;
         } catch (ParentHasNoVariantsException $e) {
             $product = Product::whereSku($this->batch->sku)->first();
@@ -146,6 +161,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             $additional['product_sync_error'] = $e->getMessage();
             $product->additional = $additional;
             $product->save();
+            $this->recordFailure($product, $e->getMessage());
         } catch (\Exception $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
@@ -155,6 +171,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             $additional['product_sync_error'] = $errorMessage;
             $product->additional = $additional;
             $product->save();
+            $this->recordFailure($product, $errorMessage, $e->getMessage());
             Sentry::captureException($e);
             throw $e;
         }
@@ -163,6 +180,45 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     protected function formatData(ProductBatch $batch): array
     {
         return $this->exporter->formatData($batch);
+    }
+
+    /**
+     * Records a failed WooCommerce sync event for the product currently being synced.
+     */
+    private function recordFailure(?Product $product, string $customerMessage, ?string $message = null): void
+    {
+        if (! $product) {
+            return;
+        }
+
+        $this->eventRecorder->record(
+            $product,
+            WooCommerceSyncEventStatus::Failed,
+            'sync',
+            $message ?? $customerMessage,
+            $customerMessage
+        );
+    }
+
+    /**
+     * Records a successful WooCommerce sync event, storing the remote product ID.
+     */
+    private function recordSuccess(string $sku, string $customerMessage, mixed $externalId = null): void
+    {
+        $product = Product::whereSku($sku)->first();
+
+        if (! $product) {
+            return;
+        }
+
+        $this->eventRecorder->record(
+            $product,
+            WooCommerceSyncEventStatus::Success,
+            'sync',
+            $customerMessage,
+            $customerMessage,
+            $externalId !== null ? (string) $externalId : null
+        );
     }
 
     /**
@@ -286,7 +342,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             if ($product) {
                 $additional = $product->additional ?? [];
                 unset($additional[$errorKey]);
-                if ( sizeof($additional) === 0 ) {
+                if (count($additional) === 0) {
                     $additional = null;
                 }
                 $product->additional = $additional;
@@ -304,6 +360,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 $additional[$errorKey] = $errorValue;
                 $product->additional = $additional;
                 $product->save();
+                $this->recordFailure($product, (string) $errorValue, $retryException->getMessage());
             }
         }
     }
@@ -397,8 +454,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             throw new WoocommerceTimeoutException($productData['sku'], $result['error'] ?? 'unknown curl error');
         } elseif ($result['code'] === 200) {
             Log::debug("Product $productData[sku] updated successfully");
+            $this->recordSuccess($productData['sku'], 'Bijgewerkt in WooCommerce.', $result['id'] ?? null);
         } elseif ($result['code'] === 201) {
             Log::debug("Product $productData[sku] created successfully");
+            $this->recordSuccess($productData['sku'], 'Aangemaakt in WooCommerce.', $result['id'] ?? null);
         } elseif ($result['code'] === 400) {
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
