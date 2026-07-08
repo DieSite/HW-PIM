@@ -2,6 +2,7 @@
 
 namespace App\Services\ProductImageEditor;
 
+use App\Services\ProductImageEditor\Concerns\HandlesDamValues;
 use Illuminate\Support\Facades\Storage;
 use Webkul\DAM\Models\Asset;
 use Webkul\DAM\Repositories\AssetResourceMappingRepository;
@@ -19,9 +20,12 @@ use Webkul\Product\Models\Product;
  */
 class PrimaryImageEditorService
 {
+    use HandlesDamValues;
+
     public function __construct(
         private ImageCompositor $compositor,
         private EditedAssetWriter $writer,
+        private HwIconResolver $iconResolver,
         private AssetResourceMappingRepository $assetResourceMappingRepository,
     ) {}
 
@@ -56,7 +60,7 @@ class PrimaryImageEditorService
         }
 
         $sourceContents = Storage::disk($config['asset_disk'])->get($source->path);
-        $iconContents = $this->iconContents();
+        $iconContents = $this->iconResolver->contents();
         $transform = $this->normalizeTransform($input);
         $transform['rect'] = $this->resolveShapeRect($transform['shape']);
         $quality = (int) ($config['quality'] ?? 90);
@@ -119,39 +123,6 @@ class PrimaryImageEditorService
     }
 
     /**
-     * Parse a DAM value (comma-separated string or array) into a clean list of
-     * integer asset ids, dropping empties.
-     *
-     * @return array<int, int>
-     */
-    private function assetIdList(mixed $value): array
-    {
-        if (is_array($value)) {
-            $value = implode(',', $value);
-        }
-
-        return array_values(array_filter(array_map(
-            static fn ($id): int => (int) trim((string) $id),
-            explode(',', (string) $value),
-        )));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function normalizeValues(mixed $values): array
-    {
-        if (is_string($values)) {
-            $values = json_decode($values, true);
-        }
-
-        $values = is_array($values) ? $values : [];
-        $values['common'] = $values['common'] ?? [];
-
-        return $values;
-    }
-
-    /**
      * @param  array<string, mixed>  $input
      * @param  array<string, mixed>  $values
      */
@@ -210,18 +181,5 @@ class PrimaryImageEditorService
     {
         return config("product_image_editor.shapes.$shape.rect")
             ?? config('product_image_editor.rug_rect');
-    }
-
-    private function iconContents(): ?string
-    {
-        $path = core()->getConfigData('image_editor.settings.general.hw_icon');
-
-        if (! $path) {
-            return null;
-        }
-
-        $disk = config('filesystems.default');
-
-        return Storage::disk($disk)->exists($path) ? Storage::disk($disk)->get($path) : null;
     }
 }

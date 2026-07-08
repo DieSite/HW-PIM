@@ -98,6 +98,45 @@ return [
     ],
 
     /**
+     * Visual detection of logos already present in an image (e.g. stamped
+     * manually in the past, before the bookkeeping in asset_logo_variants
+     * existed). The bottom-left corner is template-matched against the HW icon
+     * at several plausible sizes; a match below "threshold" (RMSE distortion,
+     * 0 = identical) marks the asset as already stamped.
+     */
+    'logo_detection' => [
+        'enabled' => true,
+
+        /**
+         * Maximum RMSE distortion for a match. Lower is stricter. Calibrated
+         * against the catalog: genuine stamps peak at 0.09-0.16 (manual stamps
+         * sit ~0.875-0.9x the automatic size), while logo-less corners and
+         * even other brands' logos score 0.32+.
+         */
+        'threshold' => 0.2,
+
+        /**
+         * Widths tried for the stamped logo, as factors of the expected icon
+         * width (icon.width scaled to the image, see stampIcon()). The RMSE
+         * peak is narrow (~2.5% scale error adds ~0.05), so the grid must be
+         * dense to not miss stamps between grid points.
+         */
+        'scale_range' => ['min' => 0.65, 'max' => 1.3, 'step' => 0.025],
+
+        /**
+         * Bottom-left search window as a fraction of the image dimensions.
+         */
+        'window' => ['width' => 0.45, 'height' => 0.4],
+
+        /**
+         * Template width in pixels the matching runs at; window and icon are
+         * downscaled proportionally to keep the brute-force search fast
+         * (~0.9s/image at 24px with full recall on the calibration set).
+         */
+        'match_width' => 24,
+    ],
+
+    /**
      * Silhouette masks: for every shape except "rechthoek" a PNG silhouette
      * (white shape on black) lives in public/{masks_path}/{shape}.png. The rug
      * is clipped to it so e.g. "rond" becomes a real circle. "rechthoek" has no

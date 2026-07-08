@@ -56,6 +56,28 @@ class ImageCompositor
     }
 
     /**
+     * Overlay the HW icon onto an arbitrary image without any other processing,
+     * preserving the original dimensions. The icon size and margin are scaled
+     * proportionally to the image width so the logo appears the same size as on
+     * the composited 917px-wide primary image.
+     */
+    public function stampIcon(string $sourceContents, string $iconContents): ImageInterface
+    {
+        $config = config('product_image_editor');
+
+        $canvas = $this->imageManager->read($sourceContents);
+
+        $ratio = $canvas->width() / max(1, (int) $config['output']['width']);
+
+        $this->overlayIcon($canvas, $iconContents, [
+            'width'  => max(1, (int) round((int) $config['icon']['width'] * $ratio)),
+            'margin' => max(0, (int) round((int) $config['icon']['margin'] * $ratio)),
+        ]);
+
+        return $canvas;
+    }
+
+    /**
      * Absolute path to a shape's silhouette mask, or null when the shape has no
      * mask (e.g. "rechthoek"), the file is missing, or Imagick is unavailable.
      */

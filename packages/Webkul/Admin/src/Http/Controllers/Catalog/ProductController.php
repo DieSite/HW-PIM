@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Http\Controllers\Catalog;
 
+use App\Services\ProductImageEditor\GalleryLogoService;
 use App\Services\ProductImageEditor\PrimaryImageEditorService;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
@@ -212,6 +213,13 @@ class ProductController extends Controller
             if (is_array($imageEdit = $request->input('__image_edit'))) {
                 app(PrimaryImageEditorService::class)->apply($product, $imageEdit);
                 $product->refresh();
+            }
+
+            try {
+                app(GalleryLogoService::class)->apply($product);
+                $product->refresh();
+            } catch (\Throwable $e) {
+                Log::error($e);
             }
 
             $priceOverride = $request->input('bol_price_override');

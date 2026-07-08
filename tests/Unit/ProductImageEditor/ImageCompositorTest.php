@@ -119,6 +119,20 @@ it('masks the rug into the shape silhouette', function () {
         ->and(compositorHexAt($out, 60, 150))->toBe('ffffff');
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
+it('stamps the icon proportionally onto an arbitrary image, preserving its size', function () {
+    // Twice the 917px reference width -> the icon and margin must scale 2x.
+    $source = compositorPng(1834, 1200, 'ff0000');
+
+    $out = $this->compositor->stampIcon($source, $this->icon);
+
+    expect($out->width())->toBe(1834)
+        ->and($out->height())->toBe(1200)
+        // Inside the scaled icon box (margin 80, icon 258x258 -> x 80..338, y 862..1120).
+        ->and(compositorHexAt($out, 100, 1000))->toBe('0000ff')
+        // Away from the icon the image is untouched.
+        ->and(compositorHexAt($out, 900, 100))->toBe('ff0000');
+});
+
 it('places the rug into a supplied shape rectangle', function () {
     $rect = ['x' => 600, 'y' => 50, 'width' => 250, 'height' => 250];
 
