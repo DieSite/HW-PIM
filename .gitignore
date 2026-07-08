@@ -33,6 +33,7 @@ yarn-error.log
 # Competitor price scraper (Node/Playwright) build artifacts
 /competitor-analysis/node_modules
 /competitor-analysis/results*
+/competitor-analysis/.pw-browsers
 /competitor-analysis/catalog-volledig/data/*.db-shm
 /competitor-analysis/catalog-volledig/data/*.db-wal
 .DS_Store

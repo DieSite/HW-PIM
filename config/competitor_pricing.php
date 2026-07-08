@@ -34,6 +34,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Hordeuren (plissé screen doors) on-demand analysis
+    |--------------------------------------------------------------------------
+    |
+    | The Playwright suite in `competitor-analysis/tests/` compares our plissé
+    | hordeur prices against the competitors for 6 standard door sizes and
+    | rebuilds the Excel report below. It runs on demand from the admin
+    | (Tools → Hordeuren concurrentie-analyse) via
+    | App\Jobs\RunHordeurenAnalysisJob, which mails the report when done.
+    | Chromium is installed on first run into `browsers_path` (inside the
+    | mounted repo, so it survives container rebuilds).
+    |
+    */
+    'hordeuren' => [
+        'timeout'       => (int) env('HORDEUREN_ANALYSIS_TIMEOUT', 3600),
+        'max_passes'    => (int) env('HORDEUREN_ANALYSIS_MAX_PASSES', 3),
+        'output'        => base_path('competitor-analysis/prijsvergelijking-plisse-hordeuren.xlsx'),
+        'results'       => base_path('competitor-analysis/results.json'),
+        'browsers_path' => env('PLAYWRIGHT_BROWSERS_PATH', base_path('competitor-analysis/.pw-browsers')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Default maximum discount percentage
     |--------------------------------------------------------------------------
     |

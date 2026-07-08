@@ -200,6 +200,12 @@ return [
         'route'      => 'admin.tools.errored-products.index',
         'sort'       => 14,
         'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.hordeuren-analyse',
+        'name'       => 'Hordeuren concurrentie-analyse',
+        'route'      => 'admin.tools.hordeuren-analyse.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
     ],
 
     /**
