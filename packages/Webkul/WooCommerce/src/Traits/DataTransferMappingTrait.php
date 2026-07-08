@@ -288,14 +288,30 @@ trait DataTransferMappingTrait
         }
     }
 
+    /**
+     * On a failed option creation the mapping is still stored (with a null
+     * externalId) so the API is not retried on every subsequent sync — the
+     * product export itself sends option values by name, so WooCommerce can
+     * usually still attach them. The failure is reported so it never goes
+     * unnoticed again.
+     */
     protected function handleAttributeOption($code, $result, $attributeId, $mapping = null)
     {
         $resourceId = $result['id'] ?? $result['data']['resource_id'] ?? null;
+
         if ($mapping) {
             $this->updateDataTransferMappingByCode($code, $mapping[0]);
-        } else {
-            $this->createDataTransferMapping($code, $resourceId, $attributeId['attribute'], self::ATTRIBUTE_OPTION_ENTITY_NAME);
+
+            return;
         }
+
+        if (! $resourceId) {
+            $message = "WooCommerce optie '{$code}' kon niet worden aangemaakt voor attribuut {$attributeId['attribute']}. Response: ".json_encode($result);
+            \Illuminate\Support\Facades\Log::warning($message);
+            \Sentry::captureMessage($message, \Sentry\Severity::warning());
+        }
+
+        $this->createDataTransferMapping($code, $resourceId, $attributeId['attribute'], self::ATTRIBUTE_OPTION_ENTITY_NAME);
     }
 
     /**

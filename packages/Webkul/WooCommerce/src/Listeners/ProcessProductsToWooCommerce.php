@@ -18,6 +18,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Sentry;
+use Sentry\Severity;
 use Webkul\WooCommerce\DTO\ProductBatch;
 use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
@@ -455,9 +456,11 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         } elseif ($result['code'] === 200) {
             Log::debug("Product $productData[sku] updated successfully");
             $this->recordSuccess($productData['sku'], 'Bijgewerkt in WooCommerce.', $result['id'] ?? null);
+            $this->reportDroppedAttributes($result, $productData);
         } elseif ($result['code'] === 201) {
             Log::debug("Product $productData[sku] created successfully");
             $this->recordSuccess($productData['sku'], 'Aangemaakt in WooCommerce.', $result['id'] ?? null);
+            $this->reportDroppedAttributes($result, $productData);
         } elseif ($result['code'] === 400) {
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
                 throw new WoocommerceProductSkuExistsException($result['data']['resource_id'], $productData['sku']);
@@ -485,5 +488,59 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             // Acts as an "else" case for both if-statements.
             throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
         }
+    }
+
+    /**
+     * WooCommerce returns 200/201 even when it silently drops attributes whose id
+     * does not exist in the shop (e.g. a mapping pointing to a deleted attribute).
+     * Compare what was sent against what WooCommerce stored and surface the gap.
+     *
+     * Variations only persist their variation-defining attributes ({id, option}
+     * pairs); parent-level attributes carry {id, options}. Each is filtered to the
+     * entries WooCommerce is expected to keep, to avoid false positives.
+     */
+    private function reportDroppedAttributes(array $result, array $productData): void
+    {
+        $isVariation = isset($productData['parent_id']);
+
+        $sentIds = collect($productData['attributes'] ?? [])
+            ->filter(fn ($attribute) => $isVariation ? ! empty($attribute['option']) : ! empty($attribute['options']))
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id);
+
+        $savedIds = collect($result['attributes'] ?? [])
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id);
+
+        $droppedIds = $sentIds->diff($savedIds)->unique()->values();
+
+        if ($droppedIds->isEmpty()) {
+            return;
+        }
+
+        $codes = $this->dataTransferMappingRepository
+            ->where('entityType', 'attribute')
+            ->whereIn('externalId', $droppedIds->all())
+            ->pluck('code', 'externalId');
+
+        $labels = $droppedIds
+            ->map(fn ($id) => ($codes[$id] ?? 'onbekend')." (WooCommerce id {$id})")
+            ->implode(', ');
+
+        $message = "WooCommerce heeft attributen genegeerd bij het opslaan van {$productData['sku']}: {$labels}. Controleer of de attribuut-mapping naar een bestaand WooCommerce-attribuut verwijst.";
+
+        Log::warning($message, ['sku' => $productData['sku'], 'droppedAttributeIds' => $droppedIds->all()]);
+
+        $product = Product::whereSku($productData['sku'])->first();
+
+        if ($product) {
+            $additional = $product->additional ?? [];
+            $additional['product_sync_error'] = $message;
+            $product->additional = $additional;
+            $product->save();
+            $this->recordFailure($product, $message);
+        }
+
+        Sentry::captureMessage($message, Severity::warning());
     }
 }
