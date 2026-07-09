@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A price competitive-analysis tool for **plissé hordeuren** (pleated screen doors). Playwright drives the public online configurators of 10 competitor webshops, enters 6 standard door sizes at each, scrapes the resulting price, and compiles everything into a styled Excel comparison sheet (`prijsvergelijking-plisse-hordeuren.xlsx`). All domain text is in Dutch.
+A price competitive-analysis tool for **plissé hordeuren** (pleated screen doors). Playwright drives the public online configurators of the competitor webshops, enters 34 door configurations at each (6 generic sizes + the own assortment 96E–190N as single and double door, in black and grey mesh — see `tests/sizes.js`), scrapes the resulting price, and compiles everything into a styled Excel comparison sheet (`prijsvergelijking-plisse-hordeuren.xlsx`). All domain text is in Dutch.
 
 ## Commands
 
@@ -29,7 +29,7 @@ The full suite takes ~5–10 min: de meeste specs draaien nu een echte live pagi
 Data flows through per-test JSON parts that are merged at the end:
 
 1. `globalSetup.js` — clears stale `results.json` and the `results-parts/` dir.
-2. Each `tests/NN-*.spec.js` — one file per competitor, generating 6 tests (one per size from `tests/sizes.js`). It calls `recordPrice(competitor, sizeName, price)` from `tests/priceRecorder.js`, which writes **one file per (competitor, size)** into `results-parts/`.
+2. Each `tests/NN-*.spec.js` — one file per competitor, generating one test per configuration in `tests/sizes.js` (34 currently). It calls `recordPrice(competitor, sizeName, price)` from `tests/priceRecorder.js`, which writes **one file per (competitor, size)** into `results-parts/`.
 3. `globalTeardown.js` — calls `collectResults()` to merge all parts into `results.json`, then writes the formatted Excel (`prijsvergelijking-plisse-hordeuren.xlsx`).
 
 **Why per-test files instead of one shared `results.json`:** Playwright runs spec files in parallel worker processes. The original code did read-modify-write on a single `results.json`, which raced and silently dropped cells. Each test now owns its own file — no contention. If you reintroduce shared mutable state, you'll get missing cells again.
@@ -38,10 +38,10 @@ Data flows through per-test JSON parts that are merged at the end:
 
 ### Conventions shared across all specs
 
-- Sizes come from `tests/sizes.js` (`SIZES` map): 3 single + 3 double door sizes, each `{ breedte, hoogte, type: 'enkel' | 'dubbel' }`, dimensions in **mm, measured inside the frame** ("in de dag").
+- Sizes come from `tests/sizes.js` (`SIZES` map): 6 generic sizes (black mesh) + the own assortment (7 type codes 96E–190N, each as single door and as double door at 2× the width, in black and grey mesh), each `{ breedte, hoogte, type: 'enkel' | 'dubbel', gaas: 'zwart' | 'grijs' }`, dimensions in **mm, measured inside the frame** ("in de dag"). `globalTeardown.js` derives its Excel rows from this map — no longer redundant.
 - `tests/helpers.js` holds the shared robustness utilities: `acceptCookies`, `clickLabelById` (for custom-styled radios via their `<label for>`), `selectOptionByText` (regex option match — Playwright's `selectOption` does **not** accept a RegExp), and `normalizePrice`.
 - `tests/_vanaf.js` holds two spec factories that keep the many thin competitor specs uniform: `registerVanaf(test, expect, {comp, url, selectors, min})` loads a product page once and records the lowest plausible `€` price (≥ `min`, guards against €0/shipping noise) as `Vanaf € x`; `registerLabel(test, {comp, label})` records a fixed honest label with no browser. Specs 12–23 are mostly one call to one of these.
-- Standard options are intentionally uniform across competitors so prices are comparable: **RAL 9010 white frame, black mesh, no handle, no powertape**. Preserve that when editing.
+- Standard options are intentionally uniform across competitors so prices are comparable: **RAL 9010 white frame, no handle, no powertape**; the mesh color comes from the size row's `gaas` field. A spec that cannot select grey mesh at a competitor must record `n.v.t.` for the grey rows (never silently record the black-mesh price). Oversized rows (the double doors go up to 3800 mm) must also end in `n.v.t.` — use `inputAllowsValue` from `tests/helpers.js` before JS-injecting values past a field's min/max validation.
 - **Every spec must finish fast and record something** — a real price or an honest label — never hang or throw on a missing selector. Use short timeouts and swallow failures; assert on "a value was recorded", not on a specific price (live third-party DOM is not a reliable CI gate).
 
 ### Techniques that unlocked the live configurators

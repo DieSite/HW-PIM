@@ -28,7 +28,7 @@ const PRODUCTS = {
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
-async function haalPrijs(request, { url, code, basis }, breedte, hoogte) {
+async function haalPrijs(request, { url, code, basis }, breedte, hoogte, gaas) {
   // 1. sessie + CSRF-token bootstrappen (cookies blijven in deze request-context)
   const pageResp = await request.get(url, { headers: { 'User-Agent': UA }, timeout: 20000 });
   const html = await pageResp.text();
@@ -43,7 +43,7 @@ async function haalPrijs(request, { url, code, basis }, breedte, hoogte) {
       maten_simpel_deur: { width_opening: breedte / 10, height_opening: hoogte / 10 }, // cm!
       SE_fixation: { fixation: '2' },                                           // schroeven (geen tape)
       color: { color: 'RAL 9010', color_type: 1 },
-      gaas: { wire_id: '1' },                                                   // zwart
+      gaas: { wire_id: gaas === 'grijs' ? '6' : '1' },                          // 1 = zwart, 6 = grijs (max 260 cm hoog)
       handgreep: { handgreepjes: '0' },                                         // geen
       onderstrip: { onderstrip: '3' },                                          // standaard grijs
       kenmerk: { room: '' },
@@ -67,11 +67,11 @@ async function haalPrijs(request, { url, code, basis }, breedte, hoogte) {
   return typeof p === 'number' && p > 50 ? `€ ${p.toFixed(2).replace('.', ',')}` : null;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ request }) => {
     let prijs = null;
     try {
-      prijs = await haalPrijs(request, PRODUCTS[type], breedte, hoogte);
+      prijs = await haalPrijs(request, PRODUCTS[type], breedte, hoogte, gaas);
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }

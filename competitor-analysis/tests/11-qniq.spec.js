@@ -12,7 +12,7 @@
 const { test, expect } = require('@playwright/test');
 const { SIZES } = require('./sizes');
 const { recordPrice } = require('./priceRecorder');
-const { acceptCookies, selectOptionByText, normalizePrice } = require('./helpers');
+const { acceptCookies, selectOptionByText, normalizePrice, inputAllowsValue } = require('./helpers');
 
 const COMP = 'qniq.nl';
 const URLS = {
@@ -20,13 +20,19 @@ const URLS = {
   dubbel: 'https://qniq.nl/dubbele-plisse-hordeur/',
 };
 
-async function haalPrijs(page, breedte, hoogte) {
+async function haalPrijs(page, breedte, hoogte, gaas) {
   await page.locator('#breedte').waitFor({ state: 'visible', timeout: 8000 });
+  // maat buiten het min/max-bereik van de velden = niet leverbaar -> n.v.t.
+  if (!(await inputAllowsValue(page.locator('#breedte'), breedte))
+    || !(await inputAllowsValue(page.locator('#hoogte'), hoogte))) {
+    return null;
+  }
   await selectOptionByText(page.locator('#montage'), /tussen het kozijn/i);
   await page.locator('#breedte').fill(String(breedte));
   await page.locator('#hoogte').fill(String(hoogte));
   await selectOptionByText(page.locator('#profielkleur'), /9010/);
-  await selectOptionByText(page.locator('#gaas'), /zwart/i);
+  const gaasOk = await selectOptionByText(page.locator('#gaas'), new RegExp(gaas, 'i'));
+  if (!gaasOk && gaas !== 'zwart') return null;          // gaaskleur niet kiesbaar -> n.v.t.
   await page.locator('#hoogte').press('Tab');
   // poll tot #prijstxt een prijs bevat (max 12s) i.p.v. vaste sleep
   const raw = await page.waitForFunction(() => {
@@ -36,14 +42,14 @@ async function haalPrijs(page, breedte, hoogte) {
   return normalizePrice(raw);
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });
       await acceptCookies(page);
       await page.waitForTimeout(400);
-      prijs = await haalPrijs(page, breedte, hoogte);
+      prijs = await haalPrijs(page, breedte, hoogte, gaas);
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }

@@ -53,8 +53,14 @@ async function haalAssortiment(request) {
   return assortiment;
 }
 
-for (const [naam, { breedte, hoogte }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm, standaardmaat)`, async ({ request }) => {
+    // Standaardmaat-producten hebben geen gaaskleur-keuze; alleen de
+    // zwart-gaas rijen zijn vergelijkbaar, grijs bestaat hier niet.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let prijs = null;
     try {
       const items = await haalAssortiment(request);

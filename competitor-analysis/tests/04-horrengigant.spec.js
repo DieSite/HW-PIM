@@ -53,9 +53,15 @@ async function haalPrijs(page, breedte, hoogte, dubbel) {
   return (prijs && !/0,00/.test(prijs)) ? prijs : null;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
     test.setTimeout(90_000); // 3 WebForms-postbacks à ±3-8s + retryslack: 60s is te krap onder load
+    // De gaaskleur zit (als die er al is) pas in latere WebForms-stappen en is
+    // niet betrouwbaar te kiezen; grijs is hier dus niet te configureren.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let prijs = null;
     try {
       await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });

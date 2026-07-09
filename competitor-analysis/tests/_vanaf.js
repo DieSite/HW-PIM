@@ -2,9 +2,9 @@
  * _vanaf.js / _label.js helpers – keep the many competitor specs tiny and uniform.
  *
  * registerVanaf : load a product page ONCE, read a live "vanaf"-prijs via the
- *                 first matching selector, record "Vanaf € x" for all 6 sizes
+ *                 first matching selector, record "Vanaf € x" for all sizes
  *                 (or n.v.t. if nothing reliable is found). Pass-safe.
- * registerLabel : record a fixed honest label for all 6 sizes (no browser).
+ * registerLabel : record a fixed honest label for all sizes (no browser).
  */
 
 const { SIZES } = require('./sizes');

@@ -33,7 +33,7 @@ class HordeurenAnalysisController extends Controller
 
         session()->flash(
             'success',
-            "De concurrentie-analyse voor hordeuren is gestart. Het rapport wordt gemaild naar {$validated['email']} (dit duurt ± 10–20 minuten)."
+            "De concurrentie-analyse voor hordeuren is gestart. Het rapport wordt gemaild naar {$validated['email']} (dit duurt ± 30–60 minuten)."
         );
 
         return redirect()->route('admin.tools.hordeuren-analyse.index');

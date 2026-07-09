@@ -100,7 +100,7 @@ it('runs the playwright suite and mails the report', function () {
 
     Mail::assertSent(HordeurenAnalysisReport::class, function (HordeurenAnalysisReport $mail) {
         return $mail->hasTo('rapport@voorbeeld.nl')
-            && $mail->summary === ['shops' => 2, 'cells' => 3, 'priced' => 1, 'missing' => 9]
+            && $mail->summary === ['shops' => 2, 'cells' => 3, 'priced' => 1, 'missing' => 65]
             && ! $mail->hadFailures;
     });
 

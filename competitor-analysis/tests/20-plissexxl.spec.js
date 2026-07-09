@@ -17,7 +17,7 @@
 const { test, expect } = require('@playwright/test');
 const { SIZES } = require('./sizes');
 const { recordPrice } = require('./priceRecorder');
-const { acceptCookies } = require('./helpers');
+const { acceptCookies, inputAllowsValue } = require('./helpers');
 
 const COMP = 'plissexxl.nl';
 const URLS = {
@@ -32,6 +32,12 @@ async function haalPrijs(page, breedte, hoogte) {
   // JS-injectiepatroon als luxehorren).
   await page.locator('input.pewc-number-field[aria-label="Breedte in mm"]').first()
     .waitFor({ state: 'attached', timeout: 10000 });
+  // De PEWC-formule rekent vrolijk door buiten het leverbare bereik; de
+  // JS-injectie omzeilt de veld-validatie, dus wij bewaken min/max zelf.
+  if (!(await inputAllowsValue(page.locator('input.pewc-number-field[aria-label="Breedte in mm"]'), breedte))
+    || !(await inputAllowsValue(page.locator('input.pewc-number-field[aria-label="Hoogte in mm"]'), hoogte))) {
+    return null;
+  }
   await page.evaluate(({ b, h }) => {
     const set = (label, val) => {
       const el = document.querySelector(`input.pewc-number-field[aria-label="${label}"]`);
@@ -61,8 +67,14 @@ async function haalPrijs(page, breedte, hoogte) {
   return best > 0 ? `€ ${best.toFixed(2).replace('.', ',')}` : null;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
+    // Alleen een gaas-TYPE-optie (standaard/anti-pollen), geen gaaskleur ->
+    // grijs is hier niet te configureren.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });

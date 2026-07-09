@@ -20,17 +20,22 @@ use Throwable;
  * `competitor-analysis/tests/`) and mail the resulting Excel report to the
  * address entered in the admin (Tools → Hordeuren concurrentie-analyse).
  *
- * The suite drives live competitor configurators, so a full run takes
- * 10–20 minutes. Chromium and its system libraries are installed on first
- * run (the containers run as root and already ship Node 20).
+ * The suite drives live competitor configurators for 34 door configurations,
+ * so a full run takes 30–60 minutes (more when gap-filling passes are
+ * needed). Chromium and its system libraries are installed on first run
+ * (the containers run as root and already ship Node 20).
  */
 class RunHordeurenAnalysisJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The six standard door sizes every competitor is checked against.
+     * The door configurations every competitor is checked against: six
+     * generic sizes plus the own assortment (7 type codes, each as single
+     * and double door, in black and grey mesh).
      * Mirrors `competitor-analysis/tests/sizes.js`.
+     *
+     * @var list<string>
      */
     private const SIZES = [
         'Enkele klein',
@@ -39,6 +44,34 @@ class RunHordeurenAnalysisJob implements ShouldQueue
         'Dubbele klein',
         'Dubbele middel',
         'Dubbele groot',
+        '96E zwart gaas',
+        '96E grijs gaas',
+        '96O zwart gaas',
+        '96O grijs gaas',
+        '110O zwart gaas',
+        '110O grijs gaas',
+        '130E zwart gaas',
+        '130E grijs gaas',
+        '130N zwart gaas',
+        '130N grijs gaas',
+        '160N zwart gaas',
+        '160N grijs gaas',
+        '190N zwart gaas',
+        '190N grijs gaas',
+        'Dubbel 96E zwart gaas',
+        'Dubbel 96E grijs gaas',
+        'Dubbel 96O zwart gaas',
+        'Dubbel 96O grijs gaas',
+        'Dubbel 110O zwart gaas',
+        'Dubbel 110O grijs gaas',
+        'Dubbel 130E zwart gaas',
+        'Dubbel 130E grijs gaas',
+        'Dubbel 130N zwart gaas',
+        'Dubbel 130N grijs gaas',
+        'Dubbel 160N zwart gaas',
+        'Dubbel 160N grijs gaas',
+        'Dubbel 190N zwart gaas',
+        'Dubbel 190N grijs gaas',
     ];
 
     /**
@@ -50,9 +83,12 @@ class RunHordeurenAnalysisJob implements ShouldQueue
     public $tries = 1;
 
     /**
+     * Room for max_passes gap-filling passes of the grown suite (34
+     * configurations, up to 90 min per pass).
+     *
      * @var int
      */
-    public $timeout = 7200;
+    public $timeout = 18000;
 
     public function __construct(public string $email) {}
 

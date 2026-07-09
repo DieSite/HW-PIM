@@ -12,7 +12,7 @@
 const { test, expect } = require('@playwright/test');
 const { SIZES } = require('./sizes');
 const { recordPrice } = require('./priceRecorder');
-const { acceptCookies, normalizePrice } = require('./helpers');
+const { acceptCookies, normalizePrice, inputAllowsValue } = require('./helpers');
 
 const COMP = 'horrenconcurrent.nl';
 const URLS = {
@@ -24,6 +24,8 @@ async function haalPrijs(page, breedte, hoogte) {
   const w = page.locator('input.pewc-number-field').nth(0);
   const h = page.locator('input.pewc-number-field').nth(1);
   await w.waitFor({ state: 'visible', timeout: 8000 });
+  // maat buiten het min/max-bereik van de velden = niet leverbaar -> n.v.t.
+  if (!(await inputAllowsValue(w, breedte)) || !(await inputAllowsValue(h, hoogte))) return null;
   // PEWC herberekent op keyup -> echte toetsaanslagen nodig (fill() volstaat niet)
   await w.click(); await w.fill(''); await w.pressSequentially(String(breedte), { delay: 40 });
   await h.click(); await h.fill(''); await h.pressSequentially(String(hoogte), { delay: 40 });
@@ -45,8 +47,14 @@ async function haalPrijs(page, breedte, hoogte) {
   return best > 0 ? `€ ${best.toFixed(2).replace('.', ',')}` : null;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
+    // Geen gaaskleur-optie: het gaas is hier altijd zwart ("voorzien van
+    // zwart, geplisseerd gaas") -> grijs is eerlijk n.v.t.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });

@@ -84,6 +84,29 @@ it('blocks missing images on both product and parent', function () {
         ->and(collect($result->failures)->pluck('code')->all())->toContain('images_missing');
 });
 
+it('blocks a "Met onderkleed" variant with a Dutch customer message', function () {
+    $validator = new BolProductValidator();
+    $result = $validator->validate(bolProduct(['common' => ['onderkleed' => 'Met onderkleed']]));
+
+    expect($result->failed())->toBeTrue()
+        ->and(collect($result->failures)->pluck('code')->all())->toContain('onderkleed_variant_blocked')
+        ->and($result->customerSummary())->toContain('Zonder onderkleed');
+});
+
+it('passes a "Zonder onderkleed" variant', function () {
+    $validator = new BolProductValidator();
+    $result = $validator->validate(bolProduct(['common' => ['onderkleed' => 'Zonder onderkleed']]));
+
+    expect($result->passed())->toBeTrue();
+});
+
+it('passes a product without an onderkleed attribute', function () {
+    $validator = new BolProductValidator();
+    $result = $validator->validate(bolProduct(['common' => ['onderkleed' => null]]));
+
+    expect($result->passed())->toBeTrue();
+});
+
 it('accepts images stored as an array', function () {
     $validator = new BolProductValidator();
     $result = $validator->validate(bolProduct(['common' => ['afbeelding' => ['11986', '12013']]]));

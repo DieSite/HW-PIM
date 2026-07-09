@@ -11,6 +11,8 @@ class BolProductValidator
 
     private const FORBIDDEN_MAAT_TOKENS = ['Maatwerk', 'Afwijkende afmetingen'];
 
+    private const ALLOWED_ONDERKLEED = 'Zonder onderkleed';
+
     public function validate(Product $product): ValidationResult
     {
         $failures = [];
@@ -23,6 +25,15 @@ class BolProductValidator
                 code: 'ean_invalid',
                 field: 'ean',
                 customerMessage: 'De EAN-code ontbreekt of is ongeldig. Vul een geldige 13-cijferige EAN in om met Bol.com te kunnen synchroniseren.',
+            );
+        }
+
+        $onderkleed = $common['onderkleed'] ?? null;
+        if (is_string($onderkleed) && trim($onderkleed) !== '' && $onderkleed !== self::ALLOWED_ONDERKLEED) {
+            $failures[] = new ValidationFailure(
+                code: 'onderkleed_variant_blocked',
+                field: 'onderkleed',
+                customerMessage: 'Alleen de variant "Zonder onderkleed" wordt naar Bol.com gestuurd. Deze variant deelt de EAN met de "Zonder onderkleed"-variant en zou hetzelfde Bol.com-aanbod overschrijven.',
             );
         }
 

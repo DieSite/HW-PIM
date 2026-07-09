@@ -39,8 +39,13 @@ async function prijs(page, type) {
   return p;
 }
 
-for (const [naam, { type }] of Object.entries(SIZES)) {
+for (const [naam, { type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (vaste prijs ${type})`, async ({ page }) => {
+    // Geen gaaskleur-optie (spectabel: "Gaaskleur: Zwart") -> grijs n.v.t.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let p = null;
     try { p = await prijs(page, type); }
     catch (e) { console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`); }

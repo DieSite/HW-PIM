@@ -5,7 +5,13 @@
  * eigen prijs:  "Plissé hordeur tot 96 cm breed" €335, "tot 110 cm" €385,
  * "tot 130 cm" €395, "tot 160 cm" €455, "tot 190 cm" €495.
  * We lezen die banden live van de categoriepagina en kiezen per maat de
- * kleinste band die de breedte (mm/10 = cm) dekt. Echte per-maat prijs.
+ * goedkoopste dekking: de kleinste band die de breedte (mm/10 = cm) dekt, of
+ * voor dubbele deuren 2× de band die een halve breedte dekt (productoptie
+ * "Plaatsing als dubbele deur? Ja" = 2 banden bestellen). Echte per-maat prijs.
+ *
+ * Gaaskleur: de productpagina's hebben een gratis Gaastype-keuze
+ * "Plisségaas zwart / Plisségaas grijs" (geverifieerd 2026-07), dus de
+ * bandprijs geldt voor beide gaaskleuren. Maximale hoogte 3000 mm.
  */
 
 const { test, expect } = require('@playwright/test');
@@ -42,14 +48,22 @@ async function getBanden(page) {
   return banden;
 }
 
-for (const [naam, { breedte }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, type }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}mm breed)`, async ({ page }) => {
     let prijs = null;
     try {
       const b = await getBanden(page);
-      const cm = breedte / 10;
-      const band = b.find(x => cm <= x.maxCm) || b[b.length - 1];
-      if (band) prijs = `€ ${band.price.toFixed(2).replace('.', ',')}`;
+      const dekkend = (mm) => b.find(x => mm / 10 <= x.maxCm);
+      // GEEN fallback naar de breedste band: wat geen enkele (combinatie van)
+      // band(en) dekt, bestaat hier simpelweg niet -> n.v.t.
+      const opties = [];
+      const enkelband = dekkend(breedte);
+      if (enkelband) opties.push(enkelband.price);
+      if (type === 'dubbel') {
+        const halfband = dekkend(breedte / 2);
+        if (halfband) opties.push(halfband.price * 2);
+      }
+      if (opties.length) prijs = `€ ${Math.min(...opties).toFixed(2).replace('.', ',')}`;
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }

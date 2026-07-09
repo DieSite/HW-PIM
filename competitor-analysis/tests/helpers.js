@@ -66,6 +66,22 @@ async function clickLabelById(page, id, timeout = 5000) {
 }
 
 /**
+ * True als een maat-input de waarde toestaat volgens zijn eigen min/max-
+ * attributen. Zonder attributen (of bij een fout) geven we true terug: dan
+ * moet de configurator zelf valideren. Belangrijk voor de grote dubbele
+ * maten (tot 3800 mm) — een JS-gezette waarde buiten het bereik zou anders
+ * een niet-bestaande prijs opleveren.
+ */
+async function inputAllowsValue(locator, value) {
+  try {
+    const { min, max } = await locator.first().evaluate(el => ({ min: el.min, max: el.max }));
+    if (min !== '' && Number(value) < Number(min)) return false;
+    if (max !== '' && Number(value) > Number(max)) return false;
+    return true;
+  } catch { return true; }
+}
+
+/**
  * Select an <option> whose visible text matches a RegExp.
  * (Playwright's selectOption does NOT accept a RegExp for label.)
  */
@@ -81,4 +97,4 @@ async function selectOptionByText(selectLocator, re, timeout = 5000) {
   } catch { return false; }
 }
 
-module.exports = { normalizePrice, acceptCookies, clickLabelById, selectOptionByText, PRICE_RE };
+module.exports = { normalizePrice, acceptCookies, clickLabelById, selectOptionByText, inputAllowsValue, PRICE_RE };

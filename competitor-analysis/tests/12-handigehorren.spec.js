@@ -62,8 +62,14 @@ async function haalPrijs(page, type, breedte, hoogte) {
   return `€ ${totaal.toFixed(2).replace('.', ',')}`;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
+    // Er is geen gaaskleur-optie (zie header) -> grijs gaas is hier niet te
+    // configureren en dus eerlijk n.v.t.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });

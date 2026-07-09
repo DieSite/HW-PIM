@@ -35,14 +35,14 @@ const COMPETITORS = [
   { key: 'hamstrahorren.nl',            label: 'Hamstra Horren' },
 ];
 
-const SIZES = [
-  { naam: 'Enkele klein',   afmeting: '730×1970 mm',  type: 'enkel'  },
-  { naam: 'Enkele middel',  afmeting: '870×2120 mm',  type: 'enkel'  },
-  { naam: 'Enkele groot',   afmeting: '1030×2270 mm', type: 'enkel'  },
-  { naam: 'Dubbele klein',  afmeting: '1430×1970 mm', type: 'dubbel' },
-  { naam: 'Dubbele middel', afmeting: '1630×2120 mm', type: 'dubbel' },
-  { naam: 'Dubbele groot',  afmeting: '1830×2270 mm', type: 'dubbel' },
-];
+// Rijen komen rechtstreeks uit tests/sizes.js — één bron voor specs én Excel.
+const { SIZES: SIZE_MAP } = require('./tests/sizes');
+const SIZES = Object.entries(SIZE_MAP).map(([naam, { breedte, hoogte, type, gaas }]) => ({
+  naam,
+  afmeting: `${breedte}×${hoogte} mm`,
+  type,
+  gaas,
+}));
 
 // Bron-pagina per concurrent (gebruikt voor de "Bronnen"-tab). Eén string =
 // zelfde pagina voor enkel en dubbel; anders { enkel, dubbel }. Houd dit in
@@ -150,7 +150,7 @@ module.exports = async function globalTeardown() {
 
   // Header
   const headerRow = ws.addRow([
-    'Product', 'Afmeting',
+    'Product', 'Afmeting', 'Gaas',
     ...COMPETITORS.map(c => c.label),
   ]);
   headerRow.height = 36;
@@ -162,9 +162,9 @@ module.exports = async function globalTeardown() {
   });
 
   // Data rows
-  SIZES.forEach(({ naam, afmeting }, i) => {
+  SIZES.forEach(({ naam, afmeting, gaas }, i) => {
     const row = ws.addRow([
-      naam, afmeting,
+      naam, afmeting, gaas,
       ...COMPETITORS.map(c => results[c.key]?.[naam] ?? '–'),
     ]);
     row.height = 26;
@@ -173,13 +173,13 @@ module.exports = async function globalTeardown() {
     row.eachCell((cell, colNum) => {
       cell.font      = { name: 'Arial', size: 10 };
       cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-      cell.alignment = { horizontal: colNum <= 2 ? 'left' : 'center', vertical: 'middle' };
+      cell.alignment = { horizontal: colNum <= 3 ? 'left' : 'center', vertical: 'middle' };
 
-      // Signaalkleur t.o.v. eigen winkel (kolom 3 = eigen winkel zelf: neutraal blauw accent)
-      if (colNum === 3) {
+      // Signaalkleur t.o.v. eigen winkel (kolom 4 = eigen winkel zelf: neutraal blauw accent)
+      if (colNum === 4) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };
         cell.font = { name: 'Arial', size: 10, bold: true };
-      } else if (colNum > 3 && eigenPrijs != null) {
+      } else if (colNum > 4 && eigenPrijs != null) {
         const p = euroNum(cell.value);
         if (p != null) {
           const [fill, txt] = p < eigenPrijs ? [RED_BG, RED_TXT]
@@ -194,13 +194,14 @@ module.exports = async function globalTeardown() {
   });
 
   // Column widths
-  ws.getColumn(1).width = 16;
+  ws.getColumn(1).width = 22;
   ws.getColumn(2).width = 14;
-  COMPETITORS.forEach((_, i) => { ws.getColumn(i + 3).width = 15; });
+  ws.getColumn(3).width = 8;
+  COMPETITORS.forEach((_, i) => { ws.getColumn(i + 4).width = 15; });
 
   // ── Bronnen sheet (zelfde matrix, cellen = gebruikte pagina per prijs) ───
   const bron = wb.addWorksheet('Bronnen');
-  const bronHeader = bron.addRow(['Product', 'Afmeting', ...COMPETITORS.map(c => c.label)]);
+  const bronHeader = bron.addRow(['Product', 'Afmeting', 'Gaas', ...COMPETITORS.map(c => c.label)]);
   bronHeader.height = 36;
   bronHeader.eachCell(cell => {
     cell.font      = { bold: true, color: { argb: WHITE }, name: 'Arial', size: 10 };
@@ -208,9 +209,9 @@ module.exports = async function globalTeardown() {
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     bordered(cell);
   });
-  SIZES.forEach(({ naam, afmeting, type }, i) => {
+  SIZES.forEach(({ naam, afmeting, type, gaas }, i) => {
     const row = bron.addRow([
-      naam, afmeting,
+      naam, afmeting, gaas,
       ...COMPETITORS.map(c => sourceFor(c.key, type) ?? '–'),
     ]);
     row.height = 26;
@@ -219,7 +220,7 @@ module.exports = async function globalTeardown() {
       cell.font      = { name: 'Arial', size: 8 };
       cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.alignment = { horizontal: 'left', vertical: 'middle' };
-      if (colNum > 2 && /^https?:\/\//.test(String(cell.value))) {
+      if (colNum > 3 && /^https?:\/\//.test(String(cell.value))) {
         const url = String(cell.value);
         cell.value = { text: url.replace(/^https?:\/\/(www\.)?/, ''), hyperlink: url };
         cell.font  = { name: 'Arial', size: 8, color: { argb: 'FF0563C1' }, underline: true };
@@ -227,16 +228,20 @@ module.exports = async function globalTeardown() {
       bordered(cell);
     });
   });
-  bron.getColumn(1).width = 16;
+  bron.getColumn(1).width = 22;
   bron.getColumn(2).width = 14;
-  COMPETITORS.forEach((_, i) => { bron.getColumn(i + 3).width = 38; });
+  bron.getColumn(3).width = 8;
+  COMPETITORS.forEach((_, i) => { bron.getColumn(i + 4).width = 38; });
 
   // ── Info sheet ───────────────────────────────────────────────────────────
   const info = wb.addWorksheet('Info');
   [
     ['Gegenereerd op',    new Date().toLocaleString('nl-NL')],
     ['Maten zijn',        'Tussen het kozijn (mm)'],
-    ['Standaard opties',  'RAL 9010 wit frame, zwart gaas, geen handgreep, geen powertape'],
+    ['Standaard opties',  'RAL 9010 wit frame, geen handgreep, geen powertape; gaaskleur per regel (kolom Gaas)'],
+    ['Gaas grijs',        'n.v.t. bij concurrenten die geen grijze gaaskleur aanbieden (eerlijke lege cel)'],
+    ['Grijs leverbaar bij', 'Eigen winkel, Horren.com, Qniq, Luxehorren, Horrenbouw, Koopje-Horren en Horrentotaal (+€39); de rest levert alleen zwart gaas'],
+    ['Typecodes',         '96E t/m 190N = eigen assortiment (enkele deur); "Dubbel <type>" = dubbele deur op 2× de breedte'],
     ['', ''],
     ['KLEURLEGENDA',      'T.o.v. de eigen winkel per maat'],
     ['Rood',              'Concurrent is GOEDKOPER dan de eigen winkel (prijsdruk)'],
@@ -252,7 +257,7 @@ module.exports = async function globalTeardown() {
     ['Plissé Discount',   'ECHTE vaste prijs (enkel); MeasureWidth/Height wijzigen de prijs niet. Dubbel: geen losse productpagina'],
     ['Horrentotaal',      'ECHTE per-maat prijs: configurator-API (configurator.horrentotaal.nl/calculate) opgevangen'],
     ['Creon Kozijnen',    'ECHTE per-maat prijs: /product/price AJAX (keyup-invoer); enkel vast, dubbel in maatbanden'],
-    ['Horrenstunter',     'ECHTE per-maat prijs: Gravity Forms .formattedTotalPrice (basis + maat-meerprijs), maatbanden'],
+    ['Horrenstunter',     'ECHTE per-maat prijs: Gravity Forms .formattedTotalPrice (basis + maat-meerprijs), maatbanden. Dubbel: dekking door één enkele deur (max 1900 mm); breder -> n.v.t. (dubbel-formulier niet automatiseerbaar)'],
     ['Koopje-Horren',     'ECHTE vaste prijs per type (s900 op maat); geen breedte/hoogte-veld, prijs is maat-onafhankelijk'],
     ['Luxehorren',        'ECHTE per-maat prijs: TM Extra Product Options (Samenstellen) via JS gevuld, "Totaal prijs €…"'],
     ['Horrenbouw',        'ECHTE per-maat prijs: vaste breedte-banden (tot 96/110/130/160/190 cm), live ingelezen'],

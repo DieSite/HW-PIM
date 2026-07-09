@@ -1,11 +1,20 @@
 /**
  * horrenstunter.nl – Originele plissé hordeur op maat  ✅ per-maat
  *
- * WooCommerce + Gravity Forms maatwerk-formulier. De maat-velden zijn
- * conditioneel (verborgen tot de montage-radio gekozen is) en gedeeltelijk
- * readonly, dus we zetten breedte/hoogte via JS op basis van hun min/max-range
- * en triggeren de GF-berekening. De prijs = productbasis (€216) + de
- * maat-meerprijs (.ginput_total). Banded per maat.
+ * WooCommerce + Gravity Forms maatwerk-formulier (form 134, identiek op beide
+ * pagina's). De maat-velden zijn conditioneel en deels readonly, dus we zetten
+ * de waarden via JS en triggeren de GF-berekening. De prijs = productbasis
+ * (€216) + de maat-meerprijs (.ginput_total). Banded per maat.
+ *
+ * BELANGRIJK (uitgezocht 2026-07-09): radio input_93 is de keuze
+ * "Enkele deur / Dubbele deur" (géén montagekeuze), en de maat-meerprijs
+ * hangt aan het enkel-breedteveld input_97 (max 1900). Na de keuze
+ * "Dubbele deur" toont het formulier GEEN invulbare maatvelden meer (alleen
+ * readonly totalen) — de dubbele variant is dus niet te automatiseren.
+ * Daarom passen we voor dubbele deuren het dekkingsprincipe toe (zelfde idee
+ * als praxis/gamma/horrenbouw): een opening tot 1900 mm breed wordt gedekt
+ * door één enkele deur van die breedte -> die echte enkel-prijs noteren we;
+ * bredere dubbele openingen -> eerlijk n.v.t.
  *
  * URL enkel  : /product/originele-plissehordeur/
  * URL dubbel : /product/originele-plissehordeur-dubbel/
@@ -23,22 +32,27 @@ const URLS = {
 };
 
 async function haalPrijs(page, breedte, hoogte) {
-  // kies montage (eerste radio = tussen het kozijn) + zet maat via JS + bereken
+  // "Enkele deur" kiezen (dekkingsprincipe, zie header) + maat via JS in het
+  // enkel-breedteveld input_97 (300–1900) en hoogteveld input_70 (1791–2750).
+  // Buiten het min/max-bereik van een veld = niet leverbaar -> -1 (n.v.t.);
+  // de JS-injectie zou anders een niet-bestaande bandprijs berekenen.
   const ok = await page.evaluate(({ b, h }) => {
     const fire = el => ['input', 'change', 'keyup', 'blur'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
-    const radio = document.querySelector('input[name="input_93"]'); if (radio) { radio.checked = true; fire(radio); }
+    const radio = document.querySelector('input[name="input_93"][value="Enkele deur"], input[name="input_93"]');
+    if (radio) { radio.checked = true; fire(radio); }
     let set = 0;
-    for (const el of document.querySelectorAll('input[type=text]')) {
-      if (el.readOnly || !el.min || !el.max) continue;
-      const mn = +el.min, mx = +el.max;
-      if (mn >= 1700 && mx >= 2000) { el.value = String(h); fire(el); set++; }       // hoogte
-      else if (mn <= 400 && mx >= 1800) { el.value = String(b); fire(el); set++; }    // breedte
+    for (const [naam, val] of [['input_97', b], ['input_70', h]]) {
+      const el = document.querySelector(`input[name="${naam}"]`);
+      if (!el || !el.min || !el.max) continue;
+      if (val < +el.min || val > +el.max) return -1;
+      el.value = String(val); fire(el); set++;
     }
     const form = document.querySelector('form[id^="gform_"]');
     const fid = form ? +(form.id.match(/\d+/) || [0])[0] : 0;
     try { if (window.gformCalculateTotalPrice && fid) window.gformCalculateTotalPrice(fid); } catch (e) {}
     return set;
   }, { b: breedte, h: hoogte });
+  if (ok === -1) return null;
 
   // GF toont het echte totaal in .formattedTotalPrice (= basis + maat-meerprijs).
   // Poll i.p.v. vaste sleep: de GF-herberekening is onder load trager dan 2,5s.
@@ -50,8 +64,15 @@ async function haalPrijs(page, breedte, hoogte) {
   return m ? `€ ${m[0]}` : null;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
+    // "Het geplisseerde gaas is alleen leverbaar in zwart" -> grijs n.v.t.
+    // Dubbele openingen breder dan de grootste enkele deur (1900 mm) zijn
+    // niet te prijzen: het dubbel-formulier toont geen maatvelden (zie header).
+    if (gaas === 'grijs' || (type === 'dubbel' && breedte > 1900)) {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });

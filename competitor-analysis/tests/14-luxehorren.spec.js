@@ -23,8 +23,8 @@ const URLS = {
   dubbel: 'https://www.luxehorren.nl/horren-bestellen/dubbele-plisse-hordeur/',
 };
 
-async function haalPrijs(page, breedte, hoogte) {
-  await page.evaluate(({ b, h }) => {
+async function haalPrijs(page, breedte, hoogte, gaas) {
+  const gaasOk = await page.evaluate(({ b, h, gaas }) => {
     const fire = el => ['input', 'change', 'keyup', 'blur'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
     const bf = document.querySelector('input[name=tmcp_textfield_0]');
     const hf = document.querySelector('input[name=tmcp_textfield_1]');
@@ -32,8 +32,14 @@ async function haalPrijs(page, breedte, hoogte) {
     if (hf) { hf.value = String(h); fire(hf); }
     const ral = [...document.querySelectorAll('input[name=tmcp_radio_2]')].find(x => /9010/.test(x.closest('li,div')?.textContent || ''));
     if (ral) { ral.checked = true; fire(ral); }
+    // Soort gaas = tmcp_radio_4: "Standaard (zwart)" / "Grijs" (grijs tot max 260 cm hoog)
+    const wil = gaas === 'grijs' ? /grijs/i : /zwart/i;
+    const gr = [...document.querySelectorAll('input[name=tmcp_radio_4]')].find(x => wil.test(x.closest('li,div')?.textContent || ''));
+    if (gr) { gr.checked = true; fire(gr); }
     try { if (window.jQuery) { jQuery('body').trigger('tm-epo-update'); jQuery(document).trigger('tc_update_totals'); } } catch (e) {}
-  }, { b: breedte, h: hoogte });
+    return !!gr;
+  }, { b: breedte, h: hoogte, gaas });
+  if (!gaasOk && gaas !== 'zwart') return null;          // gaaskleur niet kiesbaar -> n.v.t.
 
   // Poll tot TM EPO een totaal toont (max 12s) i.p.v. vaste sleep.
   await page.waitForFunction(() => {
@@ -63,14 +69,14 @@ async function haalPrijs(page, breedte, hoogte) {
   return val > 0 ? `€ ${val.toFixed(2).replace('.', ',')}` : null;
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });
       await acceptCookies(page);
       await page.waitForTimeout(1500);
-      prijs = await haalPrijs(page, breedte, hoogte);
+      prijs = await haalPrijs(page, breedte, hoogte, gaas);
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }

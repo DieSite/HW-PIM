@@ -14,12 +14,14 @@
             <x-admin::flash-group />
 
             <p class="text-gray-600 dark:text-gray-300 mb-2">
-                Vergelijkt onze plissé-hordeurprijzen live met de concurrenten voor 6 standaard deurmaten
-                (enkel en dubbel; klein, middel, groot) en bouwt daar een Excel-rapport van.
+                Vergelijkt onze plissé-hordeurprijzen live met de concurrenten voor 34 deurconfiguraties:
+                6 standaard deurmaten (enkel en dubbel; klein, middel, groot) plus het eigen assortiment
+                (96E t/m 190N, als enkele én dubbele deur, met zwart én grijs gaas) en bouwt daar een
+                Excel-rapport van.
             </p>
 
             <p class="text-gray-600 dark:text-gray-300 mb-2">
-                De analyse draait op de achtergrond en duurt <strong>± 10–20 minuten</strong>.
+                De analyse draait op de achtergrond en duurt <strong>± 30–60 minuten</strong>.
                 Zodra hij klaar is wordt het rapport gemaild naar het onderstaande e-mailadres.
             </p>
 

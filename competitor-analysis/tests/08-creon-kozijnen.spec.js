@@ -20,17 +20,22 @@ const { acceptCookies, normalizePrice } = require('./helpers');
 const COMP = 'creon-kozijnen.nl';
 const URL = 'https://www.creon-kozijnen.nl/horren/plisse-hordeur';
 
-async function haalPrijs(page, breedte, hoogte, dubbel, state) {
-  await page.evaluate((dubbel) => {
+async function haalPrijs(page, breedte, hoogte, dubbel, gaas, state) {
+  // De pagina-jQuery RESET waarden buiten 650–3200 mm breed / 1791–2900 mm
+  // hoog (naar het minimum) en zou dan stilletjes een verkeerde prijs geven.
+  if (breedte < 650 || breedte > 3200 || hoogte < 1791 || hoogte > 2900) return null;
+  const gaasOk = await page.evaluate(({ dubbel, gaas }) => {
     const setSel = (sel, reSrc) => {
-      const s = document.querySelector(sel); if (!s) return;
+      const s = document.querySelector(sel); if (!s) return false;
       const re = new RegExp(reSrc, 'i');
-      for (const o of s.options) if (re.test(o.text)) { s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); break; }
+      for (const o of s.options) if (re.test(o.text)) { s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+      return false;
     };
     setSel('select.plisse_verdeling', dubbel ? 'dubbel' : 'enkel');
     setSel('select.plisse_20_color', '9010');
-    setSel('select.plisse_20_color_net', 'zwart');
-  }, dubbel);
+    return setSel('select.plisse_20_color_net', gaas);
+  }, { dubbel, gaas });
+  if (!gaasOk && gaas !== 'zwart') return null;          // gaaskleur niet kiesbaar -> n.v.t.
   await page.waitForTimeout(500);
 
   const w = page.locator('input.plisse_20_width').first();
@@ -45,7 +50,7 @@ async function haalPrijs(page, breedte, hoogte, dubbel, state) {
   return normalizePrice(await page.locator('#price').first().textContent().catch(() => null));
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
     let prijs = null;
     // vang de laatste /product/price respons (priceGross = consumentenprijs)
@@ -58,7 +63,7 @@ for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
       await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await acceptCookies(page);
       await page.waitForTimeout(500);
-      prijs = await haalPrijs(page, breedte, hoogte, type === 'dubbel', state);
+      prijs = await haalPrijs(page, breedte, hoogte, type === 'dubbel', gaas, state);
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }

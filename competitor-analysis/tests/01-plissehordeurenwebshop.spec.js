@@ -12,7 +12,7 @@
  *  4. Maat         : #breedte / #hoogte (number, mm)
  *  5. Drempel      : label[for=schuin-1]      ("Rechtaflopend")
  *  6. Kleurkeuze   : label[for=standaard_of_eigen_kleur-standaard] + label[for=framekleur-ral-9010]
- *  7. Gaas         : label[for=gaaskleur-zwart]
+ *  7. Gaas         : label[for=gaaskleur-zwart] / label[for=gaaskleur-grijs]
  *  8. Handgreep    : label[for=handgreep-1]   ("Nee, zonder handgreep")
  *  9. Powertape    : label[for=powertape-1]   ("Nee, ik ga schroeven")
  *
@@ -33,7 +33,7 @@ const URLS = {
   dubbel: 'https://www.plissehordeurenwebshop.nl/hordeuren/maatwerk-dubbele-plissehordeur/',
 };
 
-async function configure(page, breedte, hoogte) {
+async function configure(page, breedte, hoogte, gaas) {
   await page.locator('a.js-config-button').first().click({ timeout: 8000 });
   await page.waitForTimeout(900);
 
@@ -50,7 +50,8 @@ async function configure(page, breedte, hoogte) {
   await clickLabelById(page, 'standaard_of_eigen_kleur-standaard');
   await page.waitForTimeout(300);
   await clickLabelById(page, 'framekleur-ral-9010');      // RAL 9010 wit
-  await clickLabelById(page, 'gaaskleur-zwart');          // Zwart gaas
+  const gaasOk = await clickLabelById(page, `gaaskleur-${gaas}`);
+  if (!gaasOk && gaas !== 'zwart') return null;           // gaaskleur niet kiesbaar -> n.v.t.
   await clickLabelById(page, 'handgreep-1');              // Geen handgreep
   await clickLabelById(page, 'powertape-1');              // Geen tape (schroeven)
 
@@ -68,14 +69,14 @@ async function configure(page, breedte, hoogte) {
   return normalizePrice(prijs);
 }
 
-for (const [naam, { breedte, hoogte, type }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
     let prijs = null;
     try {
       await page.goto(URLS[type], { waitUntil: 'domcontentloaded', timeout: 30000 });
       await acceptCookies(page);
       await page.waitForTimeout(400);
-      prijs = await configure(page, breedte, hoogte);
+      prijs = await configure(page, breedte, hoogte, gaas);
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }

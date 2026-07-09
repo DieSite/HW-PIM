@@ -131,9 +131,15 @@ async function viaBrowser(page, wcm, hcm, naam) {
   }
 }
 
-for (const [naam, { breedte, hoogte }] of Object.entries(SIZES)) {
+for (const [naam, { breedte, hoogte, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ request, page }) => {
     test.setTimeout(120_000);
+    // De DPO-opties blijven op hun standaard (= zwart gaas); er is geen
+    // bekend option-id voor grijs gaas, dus die rijen zijn eerlijk n.v.t.
+    if (gaas === 'grijs') {
+      recordPrice(COMP, naam, 'n.v.t.');
+      return;
+    }
     await new Promise(r => setTimeout(r, PAUZE_MS));
 
     const wcm = Math.round(breedte / 10);

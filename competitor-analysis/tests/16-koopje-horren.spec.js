@@ -5,6 +5,10 @@
  * geen breedte/hoogte-veld; alleen een montagekeuze In/Op de dag). Dus de
  * getoonde prijs IS de echte prijs: enkel €179, dubbel €349.
  *
+ * Gaaskleur: gratis keuze "Zwart / Grijs (maximaal 2600mm hoog)" op de
+ * productpagina (geverifieerd 2026-07) -> de vaste prijs geldt voor zwart én
+ * grijs gaas; al onze maten blijven onder 2600 mm hoog.
+ *
  * URL enkel  : /bruynzeel-plisse-hordeur-s900-op-maat
  * URL dubbel : /bruynzeel-dubbele-plisse-hordeur-s900-op-maat
  */
