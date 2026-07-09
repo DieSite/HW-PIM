@@ -29,6 +29,18 @@ function fakeScraperDir(): string
     return $dir;
 }
 
+/**
+ * The job invokes node/npx/npm through an absolute, pinned toolchain path, so
+ * compare commands by the binary's basename to stay independent of node_bin.
+ */
+function fakedCommand($process): string
+{
+    $parts = (array) $process->command;
+    $parts[0] = basename((string) ($parts[0] ?? ''));
+
+    return implode(' ', $parts);
+}
+
 afterEach(function () {
     foreach ($GLOBALS['hordeuren_test_dirs'] ?? [] as $dir) {
         File::deleteDirectory($dir);
@@ -118,7 +130,7 @@ it('runs the playwright suite and mails the report', function () {
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
-    Process::assertRan(fn ($process) => implode(' ', (array) $process->command) === 'npx playwright test'
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test'
         && ($process->environment['RESET_RESULTS'] ?? null) === '1');
 
     Mail::assertSent(HordeurenAnalysisReport::class, function (HordeurenAnalysisReport $mail) {
@@ -128,7 +140,7 @@ it('runs the playwright suite and mails the report', function () {
     });
 
     Process::assertRanTimes(
-        fn ($process) => implode(' ', (array) $process->command) === 'npx playwright test',
+        fn ($process) => fakedCommand($process) === 'npx playwright test',
         times: 1
     );
 });
@@ -148,14 +160,14 @@ it('retries with sticky gap-filling passes until the suite is clean', function (
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
     Process::assertRanTimes(
-        fn ($process) => implode(' ', (array) $process->command) === 'npx playwright test',
+        fn ($process) => fakedCommand($process) === 'npx playwright test',
         times: 2
     );
 
-    Process::assertRan(fn ($process) => implode(' ', (array) $process->command) === 'npx playwright test'
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test'
         && ($process->environment['RESET_RESULTS'] ?? null) === '1');
 
-    Process::assertRan(fn ($process) => implode(' ', (array) $process->command) === 'npx playwright test'
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test'
         && ! array_key_exists('RESET_RESULTS', $process->environment ?? []));
 
     Mail::assertSent(
@@ -179,7 +191,7 @@ it('gives up gap-filling after the configured number of passes', function () {
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
     Process::assertRanTimes(
-        fn ($process) => implode(' ', (array) $process->command) === 'npx playwright test',
+        fn ($process) => fakedCommand($process) === 'npx playwright test',
         times: 3
     );
 
@@ -217,8 +229,23 @@ it('installs dependencies when missing and always refreshes chromium', function 
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
-    Process::assertRan(fn ($process) => implode(' ', (array) $process->command) === 'npm install');
-    Process::assertRan(fn ($process) => implode(' ', (array) $process->command) === 'npx playwright install --with-deps chromium');
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npm install');
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright install --with-deps chromium');
+});
+
+it('pins the configured node toolchain and prepends it to PATH', function () {
+    config()->set('competitor_pricing.hordeuren.node_bin', '/usr/local/node-24/bin');
+
+    Process::fake();
+    Mail::fake();
+
+    $dir = fakeScraperDir();
+    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    Process::assertRan(fn ($process) => ((array) $process->command)[0] === '/usr/local/node-24/bin/npx'
+        && str_starts_with((string) ($process->environment['PATH'] ?? ''), '/usr/local/node-24/bin:'));
 });
 
 it('throws and mails a failure notice when no report is produced', function () {

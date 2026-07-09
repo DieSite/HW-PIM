@@ -117,7 +117,7 @@ class RunHordeurenAnalysisJob implements ShouldQueue
             $result = Process::path($dir)
                 ->timeout((int) config('competitor_pricing.hordeuren.timeout'))
                 ->env($this->processEnv() + ($pass === 1 ? ['RESET_RESULTS' => '1'] : []))
-                ->run(['/home/pim_prod/bin/npx', 'playwright', 'test']);
+                ->run([$this->nodeBin().'/npx', 'playwright', 'test']);
 
             if ($result->successful()) {
                 break;
@@ -160,7 +160,8 @@ class RunHordeurenAnalysisJob implements ShouldQueue
 
         Process::path($dir)
             ->timeout(900)
-            ->run(['npm', 'install'])
+            ->env($this->processEnv())
+            ->run([$this->nodeBin().'/npm', 'install'])
             ->throw();
     }
 
@@ -178,8 +179,18 @@ class RunHordeurenAnalysisJob implements ShouldQueue
         Process::path($dir)
             ->timeout(1800)
             ->env($this->processEnv())
-            ->run(['/home/pim_prod/bin/npx', 'playwright', 'install', '--with-deps', 'chromium'])
+            ->run([$this->nodeBin().'/npx', 'playwright', 'install', '--with-deps', 'chromium'])
             ->throw();
+    }
+
+    /**
+     * Directory holding a matched node/npx/npm toolchain. The queue worker's
+     * inherited PATH may lead with an ancient Node (v14) whose bundled npm
+     * cannot even parse modern npm's source, so the toolchain must be pinned.
+     */
+    private function nodeBin(): string
+    {
+        return rtrim((string) config('competitor_pricing.hordeuren.node_bin'), '/');
     }
 
     /**
@@ -187,8 +198,11 @@ class RunHordeurenAnalysisJob implements ShouldQueue
      */
     private function processEnv(): array
     {
+        $currentPath = getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin';
+
         return [
             'PLAYWRIGHT_BROWSERS_PATH' => (string) config('competitor_pricing.hordeuren.browsers_path'),
+            'PATH'                     => $this->nodeBin().':'.$currentPath,
         ];
     }
 

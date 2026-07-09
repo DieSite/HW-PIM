@@ -54,6 +54,7 @@ return [
         'output'        => base_path('competitor-analysis/prijsvergelijking-plisse-hordeuren.xlsx'),
         'results'       => base_path('competitor-analysis/results.json'),
         'browsers_path' => env('PLAYWRIGHT_BROWSERS_PATH', base_path('competitor-analysis/.pw-browsers')),
+        'node_bin'      => env('HORDEUREN_NODE_BIN', '/usr/local/node-24/bin'),
     ],
 
     /*
