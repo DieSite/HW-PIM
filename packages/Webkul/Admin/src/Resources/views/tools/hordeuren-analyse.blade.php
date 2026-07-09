@@ -25,6 +25,13 @@
                 Zodra hij klaar is wordt het rapport gemaild naar het onderstaande e-mailadres.
             </p>
 
+            @if ($runningSince)
+                <p class="text-amber-600 dark:text-amber-400 mb-2">
+                    Er staat een analyse in de wachtrij of hij draait op dit moment
+                    (gestart {{ $runningSince->format('d-m-Y H:i') }}). Het rapport wordt gemaild zodra hij klaar is.
+                </p>
+            @endif
+
             @if ($lastReportAt)
                 <p class="text-gray-600 dark:text-gray-300 mb-6">
                     Laatste rapport: <strong>{{ $lastReportAt->format('d-m-Y H:i') }}</strong>

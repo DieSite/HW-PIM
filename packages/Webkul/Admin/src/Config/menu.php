@@ -206,6 +206,12 @@ return [
         'route'      => 'admin.tools.hordeuren-analyse.index',
         'sort'       => 14,
         'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.demunk-voorraad',
+        'name'       => 'De Munk voorraad-koppelingen',
+        'route'      => 'admin.tools.demunk-voorraad.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
     ],
 
     /**

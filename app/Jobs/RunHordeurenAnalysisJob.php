@@ -117,7 +117,7 @@ class RunHordeurenAnalysisJob implements ShouldQueue
             $result = Process::path($dir)
                 ->timeout((int) config('competitor_pricing.hordeuren.timeout'))
                 ->env($this->processEnv() + ($pass === 1 ? ['RESET_RESULTS' => '1'] : []))
-                ->run(['npx', 'playwright', 'test']);
+                ->run(['/home/pim_prod/bin/npx', 'playwright', 'test']);
 
             if ($result->successful()) {
                 break;
@@ -178,7 +178,7 @@ class RunHordeurenAnalysisJob implements ShouldQueue
         Process::path($dir)
             ->timeout(1800)
             ->env($this->processEnv())
-            ->run(['npx', 'playwright', 'install', '--with-deps', 'chromium'])
+            ->run(['/home/pim_prod/bin/npx', 'playwright', 'install', '--with-deps', 'chromium'])
             ->throw();
     }
 

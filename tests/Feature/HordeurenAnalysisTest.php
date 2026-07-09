@@ -47,6 +47,29 @@ it('shows the analysis form with the admin email prefilled', function () {
         ->assertSee($admin->email);
 });
 
+it('shows a notice while an analysis is queued or running', function () {
+    \Illuminate\Support\Facades\DB::table('jobs')->insert([
+        'queue'        => 'default',
+        'payload'      => json_encode(['displayName' => RunHordeurenAnalysisJob::class]),
+        'attempts'     => 0,
+        'reserved_at'  => null,
+        'available_at' => time(),
+        'created_at'   => time(),
+    ]);
+
+    $this->actingAs(Admin::first(), 'admin')
+        ->get(route('admin.tools.hordeuren-analyse.index'))
+        ->assertOk()
+        ->assertSee('in de wachtrij');
+});
+
+it('shows no running notice when the queue is empty', function () {
+    $this->actingAs(Admin::first(), 'admin')
+        ->get(route('admin.tools.hordeuren-analyse.index'))
+        ->assertOk()
+        ->assertDontSee('in de wachtrij');
+});
+
 it('dispatches the analysis job to the entered email', function () {
     Queue::fake();
 

@@ -24,6 +24,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('import:eurogros')->dailyAt('06:00')->timezone('Europe/Amsterdam');
+        $schedule->command('import:demunk')->dailyAt('05:30')->timezone('Europe/Amsterdam');
         $schedule->command('pricing:run-competitor-analysis')
             ->dailyAt('04:00')
             ->timezone('Europe/Amsterdam')
