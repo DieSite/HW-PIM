@@ -166,20 +166,31 @@ class RunHordeurenAnalysisJob implements ShouldQueue
     }
 
     /**
-     * Install headless Chromium (plus its system libraries) into the
-     * configured browsers path. Always runs: it is a cheap no-op when the
-     * matching browser revision is already present, and it repairs the two
-     * drift cases a presence check would miss — a Playwright upgrade needing
-     * a new browser revision, and a rebuilt container that kept the browser
-     * download (it lives in the mounted repository) but lost the apt
-     * libraries.
+     * Install the headless Chromium binary into the configured browsers path.
+     * Always runs: it is a cheap no-op when the matching browser revision is
+     * already present, and it repairs the drift a presence check would miss —
+     * a Playwright upgrade needing a newer browser revision.
+     *
+     * The browser download needs no root, but its apt system libraries do.
+     * The queue worker runs as an unprivileged user with no interactive sudo,
+     * so `--with-deps` is opt-in (config `hordeuren.install_deps`) for the rare
+     * host that has passwordless sudo. Otherwise the libraries are installed
+     * once, out of band, with `sudo npx playwright install-deps chromium`.
      */
     private function installChromium(string $dir): void
     {
+        $command = [$this->nodeBin().'/npx', 'playwright', 'install'];
+
+        if (config('competitor_pricing.hordeuren.install_deps') === true) {
+            $command[] = '--with-deps';
+        }
+
+        $command[] = 'chromium';
+
         Process::path($dir)
             ->timeout(1800)
             ->env($this->processEnv())
-            ->run([$this->nodeBin().'/npx', 'playwright', 'install', '--with-deps', 'chromium'])
+            ->run($command)
             ->throw();
     }
 

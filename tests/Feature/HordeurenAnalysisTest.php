@@ -230,6 +230,33 @@ it('installs dependencies when missing and always refreshes chromium', function 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
     Process::assertRan(fn ($process) => fakedCommand($process) === 'npm install');
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright install chromium');
+});
+
+it('installs chromium without sudo-requiring system deps by default', function () {
+    Process::fake();
+    Mail::fake();
+
+    $dir = fakeScraperDir();
+    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright install chromium');
+    Process::assertNotRan(fn ($process) => str_contains(fakedCommand($process), '--with-deps'));
+});
+
+it('adds --with-deps only when install_deps is enabled', function () {
+    config()->set('competitor_pricing.hordeuren.install_deps', true);
+
+    Process::fake();
+    Mail::fake();
+
+    $dir = fakeScraperDir();
+    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
     Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright install --with-deps chromium');
 });
 
