@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\CompetitorCatalogExporter;
 use Illuminate\Console\Command;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
@@ -55,13 +56,13 @@ class RunCompetitorAnalysisCommand extends Command
 
     /**
      * Run the browserless Node pipeline (`node catalog-volledig/run.js`) which
-     * rebuilds the competitor SQLite database from the manually exported catalog
-     * CSV. Returns false when it cannot / did not complete.
+     * rebuilds the competitor SQLite database. The catalog it reads is exported
+     * from the product database at runtime into a temporary CSV, so no manual
+     * export is required. Returns false when it cannot / did not complete.
      */
     private function runScraper(): bool
     {
         $dir = (string) config('competitor_pricing.scraper_dir');
-        $csv = (string) config('competitor_pricing.catalog_csv');
 
         if (! is_dir($dir)) {
             $this->error("Scraper directory not found: {$dir}");
@@ -69,33 +70,61 @@ class RunCompetitorAnalysisCommand extends Command
             return false;
         }
 
-        if (! file_exists($csv)) {
-            $this->error("Catalog CSV not found: {$csv}. Export it from the PIM first (SKU,Merk,Model,Maat,Prijs).");
+        $csv = $this->exportCatalogCsv();
 
+        if ($csv === null) {
             return false;
         }
 
-        if (! is_dir($dir.'/node_modules')) {
-            $this->info('Installing scraper dependencies (one-time)…');
+        try {
+            if (! is_dir($dir.'/node_modules')) {
+                $this->info('Installing scraper dependencies (one-time)…');
 
-            // --omit=dev skips the Playwright devDependency (and its Chromium
-            // download): the `volledig` pipeline is plain Node HTTP.
-            if (! $this->process(['npm', 'install', '--omit=dev'], $dir, 600)) {
-                return false;
+                // --omit=dev skips the Playwright devDependency (and its Chromium
+                // download): the `volledig` pipeline is plain Node HTTP.
+                if (! $this->process(['npm', 'install', '--omit=dev'], $dir, 600)) {
+                    return false;
+                }
             }
+
+            $this->info('Running competitor scraper (this can take several minutes)…');
+
+            return $this->process(
+                ['node', 'catalog-volledig/run.js'],
+                $dir,
+                (int) config('competitor_pricing.scraper_timeout'),
+                [
+                    'CATALOG_CSV' => $csv,
+                    'CONCURRENCY' => (string) config('competitor_pricing.concurrency'),
+                ],
+            );
+        } finally {
+            @unlink($csv);
+        }
+    }
+
+    /**
+     * Export the PIM catalog (SKU,Merk,Model,Maat,Prijs) from the database to a
+     * temporary CSV the Node scraper reads. Returns the temp file path, or null
+     * when the export failed (reported to Sentry so it is never silent).
+     */
+    private function exportCatalogCsv(): ?string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'catalog_');
+
+        try {
+            $rows = app(CompetitorCatalogExporter::class)->export($path);
+        } catch (\Throwable $e) {
+            $this->error('Failed to export the catalog from the database: '.$e->getMessage());
+            report($e);
+            @unlink($path);
+
+            return null;
         }
 
-        $this->info('Running competitor scraper (this can take several minutes)…');
+        $this->info("Exported {$rows} catalog rows to a temporary CSV.");
 
-        return $this->process(
-            ['node', 'catalog-volledig/run.js'],
-            $dir,
-            (int) config('competitor_pricing.scraper_timeout'),
-            [
-                'CATALOG_CSV' => $csv,
-                'CONCURRENCY' => (string) config('competitor_pricing.concurrency'),
-            ],
-        );
+        return $path;
     }
 
     /**

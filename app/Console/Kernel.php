@@ -29,7 +29,10 @@ class Kernel extends ConsoleKernel
             ->dailyAt('04:00')
             ->timezone('Europe/Amsterdam')
             ->withoutOverlapping(120)
-            ->runInBackground();
+            ->runInBackground()
+            ->onFailure(function (): void {
+                report(new \RuntimeException('Scheduled pricing:run-competitor-analysis exited with a failure.'));
+            });
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
         $schedule->command('app:import-eurogros-ean')->weeklyOn('2', '03:00')->timezone('Europe/Amsterdam');
     }

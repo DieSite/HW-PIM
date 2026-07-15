@@ -144,13 +144,41 @@ it('skips the pipeline when competitor analysis is toggled off', function () {
     DB::table('core_config')->where('code', 'general.pricing.settings.enabled')->delete();
 });
 
-it('aborts the full pipeline when the catalog CSV is missing', function () {
-    config([
-        'competitor_pricing.scraper_dir' => sys_get_temp_dir(),
-        'competitor_pricing.catalog_csv' => '/nonexistent/Result_6.csv',
-    ]);
+it('exports the catalog from the database to a scraper CSV', function () {
+    $variant = makePricedVariant([
+        'productnaam' => 'Diamante 01',
+        'maat'        => '170 cm x 240 cm',
+        'prijs'       => ['EUR' => 1299],
+    ], 'CPTEST-EXPORT');
 
-    $this->artisan('pricing:run-competitor-analysis')
-        ->expectsOutputToContain('Catalog CSV not found')
-        ->assertFailed();
+    // Brand lives on the parent, not the variant.
+    $variant->parent->values = ['common' => ['merk' => 'De Munk', 'productnaam' => 'Diamante 01']];
+    $variant->parent->save();
+
+    $path = tempnam(sys_get_temp_dir(), 'cat_');
+    $rows = app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    $csv = file_get_contents($path);
+    @unlink($path);
+
+    expect($rows)->toBeGreaterThanOrEqual(1)
+        ->and($csv)->toContain('CPTEST-EXPORT,De Munk,Diamante 01,170 cm x 240 cm,1299');
+});
+
+it('strips commas so the scraper cannot mis-split a catalog row', function () {
+    makePricedVariant([
+        'productnaam' => 'Rug, Special',
+        'maat'        => 'Maatwerk',
+        'prijs'       => ['EUR' => 999],
+    ], 'CPTEST-COMMA');
+
+    $path = tempnam(sys_get_temp_dir(), 'cat_');
+    app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    $csv = file_get_contents($path);
+    @unlink($path);
+
+    $line = collect(explode("\n", $csv))->first(fn ($l) => str_starts_with($l, 'CPTEST-COMMA'));
+
+    expect($line)->not->toBeNull()
+        ->and(substr_count($line, ','))->toBe(4)
+        ->and($line)->toContain('Rug  Special');
 });

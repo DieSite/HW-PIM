@@ -4,6 +4,7 @@ use App\Http\Controllers\BolSyncController;
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
 use App\Http\Controllers\PhotoroomController;
+use App\Http\Controllers\Tools\BulkEditController;
 use App\Http\Controllers\Tools\DeMunkStockController;
 use App\Http\Controllers\Tools\ErroredProductsController;
 use App\Http\Controllers\Tools\EurgrosController;
@@ -36,6 +37,10 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::post('/showroom-stock', [ProductHWStockEditorController::class, 'update'])->name('admin.tools.product-hw-stock-editor.post');
 
         Route::get('/errored-products', [ErroredProductsController::class, 'index'])->name('admin.tools.errored-products.index');
+
+        Route::get('/bulk-edit', [BulkEditController::class, 'index'])->name('admin.tools.bulk-edit.index');
+        Route::post('/bulk-edit/preview', [BulkEditController::class, 'preview'])->name('admin.tools.bulk-edit.preview');
+        Route::post('/bulk-edit', [BulkEditController::class, 'apply'])->name('admin.tools.bulk-edit.apply');
 
         Route::get('/eurogros/voorraadlijst', [EurgrosController::class, 'downloadVoorraadlijst'])->name('admin.tools.eurgros.vooraadlijst');
 

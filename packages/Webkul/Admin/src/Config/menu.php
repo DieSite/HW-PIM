@@ -201,6 +201,12 @@ return [
         'sort'       => 14,
         'icon'       => 'icon-product',
     ], [
+        'key'        => 'tools.bulk-edit',
+        'name'       => 'Bulk bewerken',
+        'route'      => 'admin.tools.bulk-edit.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
+    ], [
         'key'        => 'tools.hordeuren-analyse',
         'name'       => 'Hordeuren concurrentie-analyse',
         'route'      => 'admin.tools.hordeuren-analyse.index',

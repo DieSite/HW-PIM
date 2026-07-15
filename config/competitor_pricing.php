@@ -21,14 +21,14 @@ return [
     | Scraper (Node) pipeline
     |--------------------------------------------------------------------------
     |
-    | Directory of the copied-in Node/Playwright scraper and the manually
-    | exported PIM catalog CSV (SKU,Merk,Model,Maat,Prijs) it reads as input.
-    | `pricing:run-competitor-analysis` runs `node catalog-volledig/run.js`
-    | from this directory with CATALOG_CSV pointed at the file below.
+    | Directory of the copied-in Node/Playwright scraper.
+    | `pricing:run-competitor-analysis` runs `node catalog-volledig/run.js` from
+    | this directory. Its input catalog (SKU,Merk,Model,Maat,Prijs) is exported
+    | from the product database at runtime by App\Services\CompetitorCatalogExporter
+    | into a temporary CSV pointed at via CATALOG_CSV — no manual export needed.
     |
     */
     'scraper_dir'     => base_path('competitor-analysis'),
-    'catalog_csv'     => env('COMPETITOR_PRICING_CATALOG_CSV', base_path('competitor-analysis/Result_6.csv')),
     'concurrency'     => (int) env('COMPETITOR_PRICING_CONCURRENCY', 6),
     'scraper_timeout' => (int) env('COMPETITOR_PRICING_SCRAPER_TIMEOUT', 1800),
 
