@@ -398,6 +398,18 @@ class Exporter extends AbstractExporter
                 'options'   => $festoneren_banderen->unique()->toArray(),
             ];
 
+            $laagsteMinimalePrijs = $this->lowestMinimalePrijs(Arr::get($item, 'variants', []));
+
+            if (! is_null($laagsteMinimalePrijs)) {
+                $formatted['attributes'][] = [
+                    'id'        => 0,
+                    'name'      => 'minimale-prijs',
+                    'visible'   => false,
+                    'variation' => false,
+                    'options'   => [$laagsteMinimalePrijs],
+                ];
+            }
+
             $maat = $maat->sort(function ($a, $b) {
                 // Controleer eerst of een van beide waarden numeriek is
                 $aIsNumeric = is_numeric($a[0]);
@@ -769,6 +781,25 @@ class Exporter extends AbstractExporter
                 }
             }
         }
+    }
+
+    /**
+     * Resolve the lowest non-empty minimale_prijs across a parent's variants,
+     * formatted for WooCommerce, or null when no variant carries one. Exposed
+     * on the parent as the custom `minimale-prijs` product attribute so the
+     * storefront can read it via get_attribute('minimale-prijs').
+     *
+     * @param  array<int, array<string, mixed>>  $variants
+     */
+    protected function lowestMinimalePrijs(array $variants): ?string
+    {
+        $lowest = collect($variants)
+            ->map(fn ($variant) => Arr::get($variant, 'values.common.minimale_prijs.'.$this->currency))
+            ->filter(fn ($value): bool => $value !== null && $value !== '')
+            ->map(fn ($value): float => (float) $value)
+            ->min();
+
+        return is_null($lowest) ? null : number_format($lowest, 2, '.', '');
     }
 
     protected function formatAdditionalData(array &$formatted, array $attributes, array $imagesToExport, array $item): void
