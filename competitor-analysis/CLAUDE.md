@@ -144,10 +144,13 @@ node concurrenten-karpetten.js  # alleen Excel herbouwen (geen scrape)
 
 Naast de twee handmatig samengestelde vergelijkingen (26 hordeuren-cellen, 26
 karpetten-modellen) is er een **schaalbare** pipeline die de **hele**
-PIM-catalogus tegen de concurrenten prijst: `catalog-volledig/`. Input is de
-CSV-export uit het PIM (`SKU,Merk,Model,Maat,Prijs`; ~26k regels, ~20k met
-vaste maat, ~2.2k unieke modellen over De Munk/Eurogros/Karpi/Mart Visser/
-Louis De Poortere/Desso). Pad via `CATALOG_CSV` (default `../HW-PIM/Result_6.csv`).
+PIM-catalogus tegen de concurrenten prijst: `catalog-volledig/`. Input is een
+catalogus-CSV (`SKU,Merk,Model,Maat,Prijs`; ~26k regels, ~20k met vaste maat,
+~2.2k unieke modellen over De Munk/Eurogros/Karpi/Mart Visser/Louis De
+Poortere/Desso). Deze wordt bij `pricing:run-competitor-analysis` automatisch
+uit de productdatabase geëxporteerd door `App\Services\CompetitorCatalogExporter`
+naar een tijdelijk bestand; het pad komt binnen via `CATALOG_CSV` (geen
+handmatige export meer nodig).
 
 **Vereist Node 18+** (native `fetch` niet nodig, maar `better-sqlite3` is
 gebouwd tegen 18; zie `.nvmrc`). `nvm use` vóór het draaien.
