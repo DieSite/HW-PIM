@@ -28,6 +28,18 @@ class Product extends \Webkul\Product\Models\Product
     }
 
     /**
+     * Scope to products that carry a non-empty minimale_prijs (EUR).
+     *
+     * Stored per variant in the currency-keyed JSON field values.common.minimale_prijs.
+     */
+    public function scopeHasMinimalePrijs($query)
+    {
+        return $query
+            ->whereRaw("`values`->>'$.common.minimale_prijs.EUR' IS NOT NULL")
+            ->whereRaw("`values`->>'$.common.minimale_prijs.EUR' != ''");
+    }
+
+    /**
      * Products eligible to be listed on Bol.com: they have an EAN, Eurogros
      * stock, and are the variant without an underlay ("Zonder onderkleed").
      */
