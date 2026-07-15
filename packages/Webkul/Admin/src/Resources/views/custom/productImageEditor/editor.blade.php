@@ -120,7 +120,7 @@
                                 <div id="hw-image-editor-outline" style="position:absolute; inset:0; pointer-events:none; display:none;"></div>
                                 <div id="hw-image-editor-maskwrap" style="position:absolute; inset:0; pointer-events:none;">
                                     <div id="hw-image-editor-clip" style="position:absolute; overflow:hidden;">
-                                        <img id="hw-image-editor-rug" alt="" draggable="false" style="position:absolute; top:0; left:0; will-change:transform;" />
+                                        <img id="hw-image-editor-rug" alt="" draggable="false" style="position:absolute; top:0; left:0; max-width:none; max-height:none; will-change:transform;" />
                                     </div>
                                 </div>
                                 <div id="hw-image-editor-guide" style="position:absolute; border:1px dashed #9ca3af; pointer-events:none;"></div>
@@ -144,16 +144,16 @@
                             <p class="text-gray-500 dark:text-gray-400" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;">Bewerkingen</p>
                             <div class="space-y-3">
                                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" style="cursor:pointer;">
-                                    <input type="checkbox" id="hw-toggle-resize" checked style="accent-color:#7c3aed; width:15px; height:15px;" /> Formaat 917×1094
+                                    <input type="checkbox" id="hw-toggle-resize" checked style="accent-color:#ff6700; width:15px; height:15px;" /> Formaat 917×1094
                                 </label>
                                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" style="cursor:pointer;">
-                                    <input type="checkbox" id="hw-toggle-padding" checked style="accent-color:#7c3aed; width:15px; height:15px;" /> In wit kader plaatsen
+                                    <input type="checkbox" id="hw-toggle-padding" checked style="accent-color:#ff6700; width:15px; height:15px;" /> In wit kader plaatsen
                                 </label>
                                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" style="cursor:pointer;">
-                                    <input type="checkbox" id="hw-toggle-icon" checked style="accent-color:#7c3aed; width:15px; height:15px;" /> HW-icoon toevoegen
+                                    <input type="checkbox" id="hw-toggle-icon" checked style="accent-color:#ff6700; width:15px; height:15px;" /> HW-icoon toevoegen
                                 </label>
                                 <label id="hw-toggle-outline-wrap" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" style="cursor:pointer;">
-                                    <input type="checkbox" id="hw-toggle-outline" checked style="accent-color:#7c3aed; width:15px; height:15px;" /> Rand om vorm
+                                    <input type="checkbox" id="hw-toggle-outline" checked style="accent-color:#ff6700; width:15px; height:15px;" /> Rand om vorm
                                 </label>
                             </div>
                         </div>
@@ -162,7 +162,17 @@
                             <label class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 <span>Schaal</span><span id="hw-scale-label" class="text-gray-500 dark:text-gray-400">1.00×</span>
                             </label>
-                            <input type="range" id="hw-scale" min="0.5" max="3" step="0.01" value="1" class="w-full" style="accent-color:#7c3aed;" />
+                            <input type="range" id="hw-scale" min="0.5" max="3" step="0.01" value="1" class="w-full" style="accent-color:#ff6700;" />
+                        </div>
+
+                        <div id="hw-rotate-wrap">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Rotatie</label>
+                            <div id="hw-rotate-options" class="flex items-center gap-2">
+                                <button type="button" class="hw-rotate-opt text-sm text-gray-700 dark:text-gray-200" data-deg="0" style="flex:1; padding:7px 0; border:1px solid #d1d5db; border-radius:8px; background:transparent;">0°</button>
+                                <button type="button" class="hw-rotate-opt text-sm text-gray-700 dark:text-gray-200" data-deg="90" style="flex:1; padding:7px 0; border:1px solid #d1d5db; border-radius:8px; background:transparent;">90°</button>
+                                <button type="button" class="hw-rotate-opt text-sm text-gray-700 dark:text-gray-200" data-deg="180" style="flex:1; padding:7px 0; border:1px solid #d1d5db; border-radius:8px; background:transparent;">180°</button>
+                                <button type="button" class="hw-rotate-opt text-sm text-gray-700 dark:text-gray-200" data-deg="270" style="flex:1; padding:7px 0; border:1px solid #d1d5db; border-radius:8px; background:transparent;">270°</button>
+                            </div>
                         </div>
 
                         <button type="button" id="hw-image-editor-reset" class="text-xs text-blue-600 hover:underline">Herstel naar standaard</button>
@@ -221,6 +231,7 @@
         scale:   document.getElementById('hw-scale'),
         scaleLbl:document.getElementById('hw-scale-label'),
         scaleWrap: document.getElementById('hw-scale-wrap'),
+        rotateOptions: document.getElementById('hw-rotate-options'),
         tResize: document.getElementById('hw-toggle-resize'),
         tPadding:document.getElementById('hw-toggle-padding'),
         tIcon:   document.getElementById('hw-toggle-icon'),
@@ -239,7 +250,14 @@
     }
 
     function defaults() {
-        return { sourceAssetId: null, shape: defaultShape(), scale: 1, offsetX: 0, offsetY: 0, resize: true, padding: true, icon: true, outline: cfg.outline.enabled !== false };
+        return { sourceAssetId: null, shape: defaultShape(), scale: 1, rotation: 0, offsetX: 0, offsetY: 0, resize: true, padding: true, icon: true, outline: cfg.outline.enabled !== false };
+    }
+
+    // Rotation is limited to the four cardinal set points. Snap any angle to the
+    // nearest 90° and normalise into [0, 360) so restored/legacy values (e.g. a
+    // saved -90) resolve to one of 0/90/180/270.
+    function normalizeAngle(a) {
+        return (((Math.round(a / 90) * 90) % 360) + 360) % 360;
     }
 
     function activeShape() {
@@ -254,6 +272,20 @@
     function activeMaskUrl() {
         var shape = activeShape();
         return (state.padding && shape && shape.maskUrl) ? shape.maskUrl : null;
+    }
+
+    // Output-pixel centre the rug is drawn around. Scaling and rotation pivot on
+    // the rect centre; the pan offset is expressed in the rug's own (unrotated,
+    // unscaled) space, so it is scaled and rotated into place here. This keeps the
+    // pixel under the rect centre fixed while zooming/rotating.
+    function pivotCenter(rect) {
+        var s = Math.max(state.scale, 0.01);
+        var rad = state.rotation * Math.PI / 180;
+        var cos = Math.cos(rad), sin = Math.sin(rad);
+        return {
+            x: rect.x + rect.width / 2 + s * (state.offsetX * cos - state.offsetY * sin),
+            y: rect.y + rect.height / 2 + s * (state.offsetX * sin + state.offsetY * cos),
+        };
     }
 
     // Asset field inputs are named like `values[common][afbeelding][0]`, so match
@@ -280,6 +312,17 @@
         el.shape.value = state.shape;
         el.scale.value = state.scale;
         el.scaleLbl.textContent = Number(state.scale).toFixed(2) + '×';
+        updateRotationButtons();
+    }
+
+    function updateRotationButtons() {
+        var buttons = el.rotateOptions.querySelectorAll('.hw-rotate-opt');
+        Array.prototype.forEach.call(buttons, function (btn) {
+            var active = Number(btn.dataset.deg) === state.rotation;
+            btn.style.background = active ? '#ff6700' : 'transparent';
+            btn.style.borderColor = active ? '#ff6700' : '#d1d5db';
+            btn.style.color = active ? '#fff' : '';
+        });
     }
 
     function openModal() {
@@ -297,6 +340,7 @@
                 sourceAssetId: cfg.saved.source_asset_id,
                 shape: cfg.shapes[cfg.saved.shape] ? cfg.saved.shape : defaultShape(),
                 scale: Number(cfg.saved.scale) || 1,
+                rotation: normalizeAngle(Number(cfg.saved.rotation) || 0),
                 offsetX: Number(cfg.saved.offset_x) || 0,
                 offsetY: Number(cfg.saved.offset_y) || 0,
                 resize: cfg.saved.resize !== false,
@@ -361,8 +405,12 @@
             var drawScale = cover * Math.max(state.scale, 0.01);
             var dw = natural.w * drawScale;
             var dh = natural.h * drawScale;
-            var px = rect.x + rect.width / 2 + state.offsetX - dw / 2;
-            var py = rect.y + rect.height / 2 + state.offsetY - dh / 2;
+            // Zoom and rotation pivot on the centre of the visible rect (the pixel
+            // under it stays put). The pan offset picks that pixel and lives in the
+            // rug's own pre-rotation space, so it scales and rotates with the rug.
+            var center = pivotCenter(rect);
+            var px = center.x - dw / 2;
+            var py = center.y - dh / 2;
 
             if (maskUrl) {
                 // Masked shape: full-frame clip + CSS silhouette mask. The outline
@@ -405,6 +453,11 @@
             var fw = natural.w * fit, fh = natural.h * fit;
             sizeRug(fw, fh, (cfg.output.width - fw) / 2, (cfg.output.height - fh) / 2);
         }
+
+        // Rotate the rug around its own centre (default transform-origin). This
+        // matches the server, which pivots on the rug centre and expands the
+        // bounding box; corners exposed by the rotation read as white padding.
+        el.rug.style.transform = state.rotation ? ('rotate(' + state.rotation + 'deg)') : '';
 
         renderIcon(dH);
     }
@@ -478,8 +531,15 @@
     });
     el.stage.addEventListener('pointermove', function (e) {
         if (!dragging) { return; }
-        state.offsetX = startOX + (e.clientX - startX) / displayScale;
-        state.offsetY = startOY + (e.clientY - startY) / displayScale;
+        // Convert the on-screen drag into the rug's own (unrotated, unscaled)
+        // offset space so dragging stays 1:1 with the cursor at any zoom/rotation.
+        var dX = (e.clientX - startX) / displayScale;
+        var dY = (e.clientY - startY) / displayScale;
+        var rad = state.rotation * Math.PI / 180;
+        var cos = Math.cos(rad), sin = Math.sin(rad);
+        var s = Math.max(state.scale, 0.01);
+        state.offsetX = startOX + (dX * cos + dY * sin) / s;
+        state.offsetY = startOY + (-dX * sin + dY * cos) / s;
         render();
     });
     function endDrag() { dragging = false; el.stage.style.cursor = 'grab'; }
@@ -504,6 +564,17 @@
         state.scale = Number(el.scale.value);
         el.scaleLbl.textContent = state.scale.toFixed(2) + '×';
         render();
+    });
+
+    function setRotation(deg) {
+        state.rotation = normalizeAngle(deg);
+        updateRotationButtons();
+        render();
+    }
+
+    el.rotateOptions.addEventListener('click', function (e) {
+        var btn = e.target.closest('.hw-rotate-opt');
+        if (btn) { setRotation(Number(btn.dataset.deg)); }
     });
 
     el.tResize.addEventListener('change', function () { state.resize = el.tResize.checked; render(); });
@@ -573,6 +644,7 @@
             source_asset_id: state.sourceAssetId,
             shape: state.shape,
             scale: Number(state.scale).toFixed(4),
+            rotation: Math.round(state.rotation),
             offset_x: Math.round(state.offsetX),
             offset_y: Math.round(state.offsetY),
             resize: state.resize ? '1' : '0',

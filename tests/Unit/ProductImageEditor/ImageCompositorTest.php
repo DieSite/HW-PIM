@@ -20,10 +20,23 @@ function compositorTransform(array $overrides = []): array
         'scale'    => 1.0,
         'offset_x' => 0,
         'offset_y' => 0,
+        'rotation' => 0.0,
         'resize'   => true,
         'padding'  => true,
         'icon'     => true,
     ], $overrides);
+}
+
+/**
+ * A portrait image whose top half is red and bottom half is blue, so rotation
+ * can be detected by which colour ends up where.
+ */
+function compositorTwoTone(): string
+{
+    $image = app(ImageManager::class)->create(400, 600)->fill('0000ff');
+    $image->place(app(ImageManager::class)->create(400, 300)->fill('ff0000'), 'top-left', 0, 0);
+
+    return (string) $image->toPng();
 }
 
 beforeEach(function () {
@@ -141,6 +154,81 @@ it('places the rug into a supplied shape rectangle', function () {
     // Inside the supplied rect -> rug colour; far outside -> white padding.
     expect(compositorHexAt($out, 720, 170))->toBe('ff0000')
         ->and(compositorHexAt($out, 100, 800))->toBe('ffffff');
+});
+
+it('rotates the rug 180 degrees inside the white padding rectangle', function () {
+    $source = compositorTwoTone();
+
+    $upright = $this->compositor->render($source, compositorTransform(), null, false);
+    // Upright: red top half, blue bottom half within the rug rectangle.
+    expect(compositorHexAt($upright, 458, 200))->toBe('ff0000')
+        ->and(compositorHexAt($upright, 458, 900))->toBe('0000ff');
+
+    $rotated = $this->compositor->render($source, compositorTransform(['rotation' => 180]), null, false);
+    // Rotated 180°: the halves swap.
+    expect(compositorHexAt($rotated, 458, 200))->toBe('0000ff')
+        ->and(compositorHexAt($rotated, 458, 900))->toBe('ff0000');
+});
+
+it('rotates the rug when padding is disabled (contained on a white canvas)', function () {
+    $source = compositorTwoTone();
+
+    $upright = $this->compositor->render($source, compositorTransform(['padding' => false]), null, false);
+    expect(compositorHexAt($upright, 458, 100))->toBe('ff0000')
+        ->and(compositorHexAt($upright, 458, 1000))->toBe('0000ff');
+
+    $rotated = $this->compositor->render($source, compositorTransform(['padding' => false, 'rotation' => 180]), null, false);
+    expect(compositorHexAt($rotated, 458, 100))->toBe('0000ff')
+        ->and(compositorHexAt($rotated, 458, 1000))->toBe('ff0000');
+});
+
+it('rotates the rug inside a shape silhouette', function () {
+    $rondRect = config('product_image_editor.shapes.rond.rect');
+    $source = compositorTwoTone();
+
+    $transform = ['shape' => 'rond', 'rect' => $rondRect, 'outline' => false];
+
+    $upright = $this->compositor->render($source, compositorTransform($transform), null, false);
+    // Just above / below the circle centre: red on top, blue on the bottom.
+    expect(compositorHexAt($upright, 458, 350))->toBe('ff0000')
+        ->and(compositorHexAt($upright, 458, 750))->toBe('0000ff');
+
+    $rotated = $this->compositor->render($source, compositorTransform($transform + ['rotation' => 180]), null, false);
+    expect(compositorHexAt($rotated, 458, 350))->toBe('0000ff')
+        ->and(compositorHexAt($rotated, 458, 750))->toBe('ff0000');
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
+it('rotates clockwise for the 90 and 270 set points', function () {
+    $rondRect = config('product_image_editor.shapes.rond.rect');
+    $source = compositorTwoTone(); // red top half, blue bottom half
+    $base = ['shape' => 'rond', 'rect' => $rondRect, 'outline' => false];
+
+    // 90° clockwise: the red top edge swings to the right of the circle.
+    $cw90 = $this->compositor->render($source, compositorTransform($base + ['rotation' => 90]), null, false);
+    expect(compositorHexAt($cw90, 670, 547))->toBe('ff0000')
+        ->and(compositorHexAt($cw90, 250, 547))->toBe('0000ff');
+
+    // 270° clockwise: the red top edge swings to the left.
+    $cw270 = $this->compositor->render($source, compositorTransform($base + ['rotation' => 270]), null, false);
+    expect(compositorHexAt($cw270, 250, 547))->toBe('ff0000')
+        ->and(compositorHexAt($cw270, 670, 547))->toBe('0000ff');
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
+it('pivots zoom and rotation on the frame centre regardless of pan', function () {
+    // Red top / blue bottom; pan up so a solid red region sits under the rect
+    // centre. Whatever the zoom or rotation, that pixel must stay red because
+    // both operations pivot on the frame centre.
+    $source = compositorTwoTone();
+    $pan = ['offset_x' => 0, 'offset_y' => 250];
+    [$fx, $fy] = [458, 547];
+
+    $reference = $this->compositor->render($source, compositorTransform($pan), null, false);
+    expect(compositorHexAt($reference, $fx, $fy))->toBe('ff0000');
+
+    foreach ([['scale' => 1.8], ['rotation' => 90], ['rotation' => 180], ['scale' => 0.7, 'rotation' => 270]] as $extra) {
+        $out = $this->compositor->render($source, compositorTransform($pan + $extra), null, false);
+        expect(compositorHexAt($out, $fx, $fy))->toBe('ff0000');
+    }
 });
 
 it('keeps the rug clipped inside the rectangle when scaled up', function () {

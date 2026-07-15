@@ -147,7 +147,7 @@ class PrimaryImageEditorService
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{scale: float, offset_x: int, offset_y: int, resize: bool, padding: bool, icon: bool, shape: string}
+     * @return array{scale: float, offset_x: int, offset_y: int, rotation: float, resize: bool, padding: bool, icon: bool, outline: bool, shape: string}
      */
     private function normalizeTransform(array $input): array
     {
@@ -155,6 +155,7 @@ class PrimaryImageEditorService
             'scale'    => (float) ($input['scale'] ?? 1.0),
             'offset_x' => (int) round((float) ($input['offset_x'] ?? 0)),
             'offset_y' => (int) round((float) ($input['offset_y'] ?? 0)),
+            'rotation' => fmod((float) ($input['rotation'] ?? 0.0), 360.0),
             'resize'   => filter_var($input['resize'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'padding'  => filter_var($input['padding'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'icon'     => filter_var($input['icon'] ?? true, FILTER_VALIDATE_BOOLEAN),

@@ -1,6 +1,6 @@
 {
   "src/Resources/assets/css/app.css": {
-    "file": "assets/app-af93cc1e.css",
+    "file": "assets/app-5554c15e.css",
     "isEntry": true,
     "src": "src/Resources/assets/css/app.css"
   },
@@ -9,7 +9,7 @@
     "src": "src/Resources/assets/fonts/unopim-admin.woff"
   },
   "src/Resources/assets/images/dark_logo.svg": {
-    "file": "assets/dark_logo-95b7ed7c.svg",
+    "file": "assets/dark_logo-2e4f30fb.svg",
     "src": "src/Resources/assets/images/dark_logo.svg"
   },
   "src/Resources/assets/images/error.svg": {
@@ -17,7 +17,7 @@
     "src": "src/Resources/assets/images/error.svg"
   },
   "src/Resources/assets/images/favicon.svg": {
-    "file": "assets/favicon-19fbef86.svg",
+    "file": "assets/favicon-37556e74.svg",
     "src": "src/Resources/assets/images/square-logo.svg"
   },
   "src/Resources/assets/images/icon-add-product.svg": {
@@ -57,7 +57,7 @@
     "src": "src/Resources/assets/images/icon-products.svg"
   },
   "src/Resources/assets/images/logo.svg": {
-    "file": "assets/logo-aaa4be89.svg",
+    "file": "assets/logo-4d5bf5bd.svg",
     "src": "src/Resources/assets/images/logo.svg"
   },
   "src/Resources/assets/images/product-placeholders/front.svg": {
@@ -89,7 +89,7 @@
     "src": "src/Resources/assets/images/spinner.svg"
   },
   "src/Resources/assets/images/square-logo.svg": {
-    "file": "assets/favicon-19fbef86.svg",
+    "file": "assets/favicon-37556e74.svg",
     "src": "src/Resources/assets/images/square-logo.svg"
   },
   "src/Resources/assets/js/app.css": {
@@ -100,7 +100,7 @@
     "css": [
       "assets/app-9e2a2734.css"
     ],
-    "file": "assets/app-a4c93be9.js",
+    "file": "assets/app-702b5950.js",
     "isEntry": true,
     "src": "src/Resources/assets/js/app.js"
   }

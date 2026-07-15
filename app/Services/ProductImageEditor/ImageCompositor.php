@@ -20,7 +20,7 @@ class ImageCompositor
      * Render the composited image.
      *
      * @param  string  $sourceContents  Raw bytes of the source (rug) image.
-     * @param  array{scale?: float, offset_x?: int, offset_y?: int, resize?: bool, padding?: bool, icon?: bool, outline?: bool, shape?: string, rect?: array{x: int, y: int, width: int, height: int}}  $transform
+     * @param  array{scale?: float, offset_x?: int, offset_y?: int, rotation?: float, resize?: bool, padding?: bool, icon?: bool, outline?: bool, shape?: string, rect?: array{x: int, y: int, width: int, height: int}}  $transform
      * @param  string|null  $iconContents  Raw bytes of the HW icon, or null when unavailable.
      * @param  bool  $withIcon  Whether the icon overlay is allowed for this variant (e.g. false for the no-logo image).
      */
@@ -43,9 +43,9 @@ class ImageCompositor
         } elseif ($padding) {
             $canvas = $this->renderWithPadding($this->imageManager->read($sourceContents), $transform, $outputWidth, $outputHeight, $rect);
         } elseif ($resize) {
-            $canvas = $this->renderContained($this->imageManager->read($sourceContents), $outputWidth, $outputHeight);
+            $canvas = $this->renderContained($this->imageManager->read($sourceContents), $outputWidth, $outputHeight, $this->rotationAngle($transform));
         } else {
-            $canvas = $this->imageManager->read($sourceContents);
+            $canvas = $this->rotate($this->imageManager->read($sourceContents), $this->rotationAngle($transform));
         }
 
         if ($iconEnabled && $iconContents !== null && $iconContents !== '') {
@@ -126,8 +126,21 @@ class ImageCompositor
         $drawHeight = max(1, (int) round($sourceHeight * $drawScale));
         $rug->resizeImage($drawWidth, $drawHeight, \Imagick::FILTER_LANCZOS, 1);
 
-        $px = (int) round($rx + $rw / 2 + $offsetX - $drawWidth / 2);
-        $py = (int) round($ry + $rh / 2 + $offsetY - $drawHeight / 2);
+        $rotation = $this->rotationAngle($transform);
+
+        if ($rotation !== 0.0) {
+            // Imagick rotates clockwise for a positive angle (same as the CSS
+            // preview). The white fill blends into the white frame beneath.
+            $rug->rotateImage(new \ImagickPixel('white'), $rotation);
+            $drawWidth = $rug->getImageWidth();
+            $drawHeight = $rug->getImageHeight();
+        }
+
+        // Scaling and rotation pivot on the rect centre; the rug centre orbits it
+        // so the pixel under the rect centre stays fixed (matches the preview).
+        [$centerX, $centerY] = $this->pivotCenter($rect, $scale, $rotation, $offsetX, $offsetY);
+        $px = (int) round($centerX - $drawWidth / 2);
+        $py = (int) round($centerY - $drawHeight / 2);
 
         // The rug on a full white frame (so any area not covered by the rug but
         // inside the shape ends up white rather than transparent).
@@ -204,9 +217,15 @@ class ImageCompositor
 
         $resized = $source->resize($drawWidth, $drawHeight);
 
-        // Top-left of the scaled rug in output space (centered in the rect + manual offset).
-        $px = (int) round($rx + $rw / 2 + $offsetX - $drawWidth / 2);
-        $py = (int) round($ry + $rh / 2 + $offsetY - $drawHeight / 2);
+        $resized = $this->rotate($resized, $this->rotationAngle($transform));
+        $drawWidth = $resized->width();
+        $drawHeight = $resized->height();
+
+        // Scaling and rotation pivot on the rect centre; the rug centre orbits it
+        // so the pixel under the rect centre stays fixed (matches the preview).
+        [$centerX, $centerY] = $this->pivotCenter($rect, $scale, $this->rotationAngle($transform), $offsetX, $offsetY);
+        $px = (int) round($centerX - $drawWidth / 2);
+        $py = (int) round($centerY - $drawHeight / 2);
 
         // Determine the portion of the scaled rug that is visible inside the rect,
         // cropping to avoid negative placement offsets.
@@ -229,7 +248,7 @@ class ImageCompositor
     /**
      * Resize the source to fit (contain) inside the output on a white canvas.
      */
-    private function renderContained(ImageInterface $source, int $outputWidth, int $outputHeight): ImageInterface
+    private function renderContained(ImageInterface $source, int $outputWidth, int $outputHeight, float $rotation = 0.0): ImageInterface
     {
         $canvas = $this->imageManager->create($outputWidth, $outputHeight)->fill('ffffff');
 
@@ -238,9 +257,58 @@ class ImageCompositor
         $width = max(1, (int) round($source->width() * $scale));
         $height = max(1, (int) round($source->height() * $scale));
 
-        $canvas->place($source->resize($width, $height), 'center');
+        $canvas->place($this->rotate($source->resize($width, $height), $rotation), 'center');
 
         return $canvas;
+    }
+
+    /**
+     * Rotate an Intervention image around its centre, expanding the canvas and
+     * filling the exposed corners with white. A positive angle rotates
+     * clockwise to match the browser preview (CSS rotate) and the Imagick path.
+     * Intervention's rotate() is counter-clockwise for a positive angle, hence
+     * the negated angle.
+     */
+    private function rotate(ImageInterface $image, float $rotation): ImageInterface
+    {
+        if ($rotation === 0.0) {
+            return $image;
+        }
+
+        return $image->rotate(-$rotation, 'ffffff');
+    }
+
+    /**
+     * Normalise the requested rotation to the (-360, 360) range in degrees.
+     *
+     * @param  array<string, mixed>  $transform
+     */
+    private function rotationAngle(array $transform): float
+    {
+        return fmod((float) ($transform['rotation'] ?? 0.0), 360.0);
+    }
+
+    /**
+     * Output-pixel centre the rug is composited around. Zooming and rotation
+     * pivot on the rect (visible frame) centre rather than the rug centre, so the
+     * pixel under the frame centre stays fixed. The pan offset is expressed in the
+     * rug's own unrotated/unscaled space and is therefore scaled and rotated into
+     * output space here, matching the editor preview's pivotCenter().
+     *
+     * @param  array{x: int, y: int, width: int, height: int}  $rect
+     * @return array{0: float, 1: float}
+     */
+    private function pivotCenter(array $rect, float $scale, float $rotation, float $offsetX, float $offsetY): array
+    {
+        $s = max($scale, 0.01);
+        $rad = deg2rad($rotation);
+        $cos = cos($rad);
+        $sin = sin($rad);
+
+        return [
+            $rect['x'] + $rect['width'] / 2 + $s * ($offsetX * $cos - $offsetY * $sin),
+            $rect['y'] + $rect['height'] / 2 + $s * ($offsetX * $sin + $offsetY * $cos),
+        ];
     }
 
     /**
