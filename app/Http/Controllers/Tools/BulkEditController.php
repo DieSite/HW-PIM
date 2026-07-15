@@ -19,7 +19,7 @@ class BulkEditController extends Controller
     {
         return view('admin::tools.bulk-edit', [
             'brands'     => $this->bulkEditService->brands(),
-            'attributes' => $this->bulkEditService->editableAttributeCodes(),
+            'attributes' => $this->bulkEditService->editableAttributes(),
         ]);
     }
 

@@ -444,6 +444,10 @@
                         @endif
                     </div>
                 </div>
+
+                <!-- Price History (competitor analysis) -->
+                @include('admin::catalog.products.edit.price-history')
+
                 <!-- Categories View Blade File -->
                 @if($product->type !== 'simple')
                     @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])

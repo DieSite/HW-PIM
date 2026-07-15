@@ -50,6 +50,29 @@ class BulkEditService
     }
 
     /**
+     * Editable attributes as code + human-readable (locale) name, for dropdowns.
+     * Sorted by display name; whitelisting still uses editableAttributeCodes().
+     *
+     * @return list<array{code:string, name:string}>
+     */
+    public function editableAttributes(): array
+    {
+        return Attribute::query()
+            ->whereIn('type', ['text', 'textarea'])
+            ->where('value_per_locale', 0)
+            ->where('value_per_channel', 0)
+            ->with('translations')
+            ->get(['id', 'code', 'type'])
+            ->map(fn (Attribute $attribute): array => [
+                'code' => $attribute->code,
+                'name' => $attribute->name ?: $attribute->code,
+            ])
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Distinct brand (merk) values present on products.
      *
      * @return list<string>

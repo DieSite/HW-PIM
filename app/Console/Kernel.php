@@ -30,6 +30,7 @@ class Kernel extends ConsoleKernel
             ->timezone('Europe/Amsterdam')
             ->withoutOverlapping(120)
             ->runInBackground()
+            ->when(fn () => config('competitor_pricing.enabled'))
             ->onFailure(function (): void {
                 report(new \RuntimeException('Scheduled pricing:run-competitor-analysis exited with a failure.'));
             });

@@ -53,7 +53,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <select name="condition_attribute" v-model="filters.condition_attribute" class="w-full min-h-[39px] py-2 px-3 border rounded-md text-sm dark:bg-cherry-800 dark:border-gray-800">
                                 <option value="">— geen —</option>
-                                <option v-for="attr in attributes" :value="attr" v-text="attr"></option>
+                                <option v-for="attr in attributes" :value="attr.code" v-text="attr.name"></option>
                             </select>
                             <select name="condition_operator" v-model="filters.condition_operator" class="w-full min-h-[39px] py-2 px-3 border rounded-md text-sm dark:bg-cherry-800 dark:border-gray-800">
                                 <option value="contains">bevat</option>
@@ -73,7 +73,7 @@
                                 <x-admin::form.control-group.label>Attribuut</x-admin::form.control-group.label>
                                 <select name="target" v-model="operation.target" class="w-full min-h-[39px] py-2 px-3 border rounded-md text-sm dark:bg-cherry-800 dark:border-gray-800">
                                     <option value="">— kies attribuut —</option>
-                                    <option v-for="attr in attributes" :value="attr" v-text="attr"></option>
+                                    <option v-for="attr in attributes" :value="attr.code" v-text="attr.name"></option>
                                 </select>
                             </x-admin::form.control-group>
 

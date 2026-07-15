@@ -11,6 +11,8 @@ return [
     | variant SKU and holds one scraped price + source URL per competitor shop.
     |
     */
+    'enabled' => false,
+
     'db_path' => env(
         'COMPETITOR_PRICING_DB_PATH',
         base_path('competitor-analysis/catalog-volledig/data/catalog-volledig.db')
