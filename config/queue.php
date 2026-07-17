@@ -65,6 +65,22 @@ return [
             'block_for'   => null,
         ],
 
+        /**
+         * Long-running competitor scrapes (RunHordeurenAnalysisJob) live on
+         * their own connection so their multi-hour visibility timeout does not
+         * apply to every other job. retry_after must exceed the job's worst-
+         * case wall time (npm/browser install + max_passes × per-pass timeout;
+         * see the job's $timeout). Served by the dedicated Horizon supervisor
+         * "supervisor-hordeuren" listening on the "hordeuren" queue.
+         */
+        'redis-hordeuren' => [
+            'driver'      => 'redis',
+            'connection'  => 'default',
+            'queue'       => 'hordeuren',
+            'retry_after' => 21600,
+            'block_for'   => null,
+        ],
+
     ],
 
     /*

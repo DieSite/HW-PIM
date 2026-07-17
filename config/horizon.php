@@ -207,6 +207,27 @@ return [
             'timeout'             => 300,
             'nice'                => 0,
         ],
+
+        /**
+         * Dedicated worker for the multi-hour hordeuren competitor scrape
+         * (RunHordeurenAnalysisJob). Its own connection carries a matching
+         * retry_after (see config/queue.php redis-hordeuren) so the long run
+         * is never re-reserved mid-flight, and timeout leaves headroom over
+         * the job's own $timeout. One process: the scrape is not parallelised.
+         */
+        'supervisor-hordeuren' => [
+            'connection'          => 'redis-hordeuren',
+            'queue'               => ['hordeuren'],
+            'balance'             => 'simple',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses'        => 1,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 1024,
+            'tries'               => 1,
+            'timeout'             => 21600,
+            'nice'                => 0,
+        ],
     ],
 
     'environments' => [
@@ -219,6 +240,9 @@ return [
             'supervisor-bolcom' => [
                 'maxProcesses' => 2,
             ],
+            'supervisor-hordeuren' => [
+                'maxProcesses' => 1,
+            ],
         ],
 
         'local' => [
@@ -226,6 +250,9 @@ return [
                 'maxProcesses' => 3,
             ],
             'supervisor-bolcom' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-hordeuren' => [
                 'maxProcesses' => 1,
             ],
         ],

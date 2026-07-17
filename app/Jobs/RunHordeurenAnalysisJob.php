@@ -90,7 +90,18 @@ class RunHordeurenAnalysisJob implements ShouldQueue
      */
     public $timeout = 18000;
 
-    public function __construct(public string $email) {}
+    /**
+     * Run on a dedicated connection/queue (Horizon supervisor-hordeuren) whose
+     * retry_after exceeds this job's worst-case wall time. On the shared queue
+     * the 11-minute retry_after re-reserved the still-running scrape, and with
+     * $tries = 1 that second attempt failed instantly with "has been attempted
+     * too many times".
+     */
+    public function __construct(public string $email)
+    {
+        $this->onConnection('redis-hordeuren');
+        $this->onQueue('hordeuren');
+    }
 
     public function handle(): void
     {
