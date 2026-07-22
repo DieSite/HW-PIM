@@ -8,6 +8,7 @@
     "volledig:prijzen": "node catalog-volledig/fetch-prices.js",
     "volledig:excel": "node catalog-volledig/excel.js",
     "volledig:browser": "playwright test -c playwright.volledig.config.js",
+    "volledig:test": "node --test catalog-volledig/normalize.test.js",
     "test": "playwright test",
     "test:karpetten": "playwright test -c playwright.karpetten.config.js",
     "test:eigen": "playwright test 01-plissehordeurenwebshop",

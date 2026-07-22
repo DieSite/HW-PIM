@@ -10,7 +10,7 @@
  */
 
 const { getText, getJson, sleep } = require('../http');
-const { normBrand, normModel, parseSize, fmtEuro, extractModel } = require('../normalize');
+const { normBrand, normModel, parseSize, fmtEuro, extractModel, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
 
 /**
@@ -49,18 +49,20 @@ async function indexShopify(db, { shop, base, brands, catalogModels, bySku }) {
       });
       if (!matchedBrand) continue;
 
-      // Modelnaam = titel min merknaam
-      const rawBrand = brands[normBrands.indexOf(matchedBrand)];
-      const model    = normModel(extractModel(p.title ?? '', rawBrand));
-      const url      = `${base}/products/${p.handle}`;
+      // Modelnaam = titel min merknaam; vorm apart uit titel/handle
+      const rawBrand     = brands[normBrands.indexOf(matchedBrand)];
+      const model        = normModel(extractModel(p.title ?? '', rawBrand));
+      const url          = `${base}/products/${p.handle}`;
+      const productShape = detectShape(p.title, p.handle) ?? 'rechthoek';
 
-      upsertIndex(db, { shop, normBrand: matchedBrand, normModel: model, title: p.title, url, platform: 'shopify' });
+      upsertIndex(db, { shop, normBrand: matchedBrand, normModel: model, title: p.title, url, platform: 'shopify', shape: productShape });
       indexed++;
 
       // Koppel variantprijzen aan matching catalogusentries
       for (const v of p.variants ?? []) {
         const size = parseSize(v.title ?? v.public_title ?? '');
         if (!size) continue;
+        const variantShape = detectShape(v.title, v.public_title) ?? productShape;
         const priceStr = fmtEuro(parseFloat(v.price));
         if (!priceStr) continue;
 
@@ -74,9 +76,13 @@ async function indexShopify(db, { shop, base, brands, catalogModels, bySku }) {
           const fwdHits   = catTokens.filter(t => model.includes(t)).length;
           const revHits   = modTokens.filter(t => catModel.includes(t)).length;
           if (fwdHits < Math.min(2, catTokens.length) && revHits < Math.min(2, modTokens.length)) continue;
+          // Modelnaam moet echt voorkomen en kleurnummers mogen niet botsen
+          // ("Prosper 69" ≠ "Cendre vintage oker 69", "Brush 13" ≠ "Brush … 69")
+          if (!hasModelNameToken(model, catModel) || !numbersCompatible(catModel, model)) continue;
 
           for (const entry of entries) {
-            if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm) {
+            if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm && entry.shape === variantShape
+                && containsAllTokens(model, entry.mustHave)) {
               recordPrice(db, entry.sku, shop, priceStr, url);
               priced++;
             }

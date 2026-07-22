@@ -19,7 +19,7 @@ function makePricedVariant(array $common, string $sku = 'CPTEST-V1'): Product
 
     $parent = new Product();
     $parent->attribute_family_id = $familyId;
-    $parent->sku = 'CPTEST-PARENT';
+    $parent->sku = $sku.'-PARENT';
     $parent->type = 'configurable';
     $parent->status = 1;
     $parent->values = ['common' => []];
@@ -131,6 +131,64 @@ it('imports and parses competitor prices from a scraper SQLite database', functi
     @unlink($dbPath);
 });
 
+it('prunes competitor prices that are no longer in the scraper database', function () {
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+
+    CompetitorPrice::create([
+        'sku' => $variant->sku, 'shop' => 'stale.nl', 'price' => 700,
+        'url' => 'https://stale.nl/rug-rechthoek',
+    ]);
+
+    $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
+    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
+    $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
+        ->execute([$variant->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/x', '2026-06-17 13:07:30']);
+    $pdo = null;
+
+    // Without --prune the stale row survives.
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true])
+        ->assertSuccessful();
+    expect(CompetitorPrice::where('sku', $variant->sku)->pluck('shop')->sort()->values()->all())
+        ->toBe(['shopa.nl', 'stale.nl']);
+
+    // With --prune it is removed; the freshly scraped one stays.
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->expectsOutputToContain('Pruned 1 competitor prices')
+        ->assertSuccessful();
+    expect(CompetitorPrice::where('sku', $variant->sku)->pluck('shop')->all())->toBe(['shopa.nl']);
+
+    @unlink($dbPath);
+});
+
+it('prunes via the full pipeline wrapper', function () {
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'stale.nl', 'price' => 700]);
+
+    $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
+    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
+    $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
+        ->execute([$variant->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/x', '2026-06-17 13:07:30']);
+    $pdo = null;
+
+    config(['competitor_pricing.db_path' => $dbPath]);
+
+    $this->artisan('pricing:run-competitor-analysis', ['--skip-scrape' => true, '--no-recompute' => true])
+        ->assertSuccessful();
+
+    expect(CompetitorPrice::where('sku', $variant->sku)->pluck('shop')->all())->toBe(['shopa.nl']);
+
+    @unlink($dbPath);
+});
+
 it('skips the pipeline when competitor analysis is toggled off', function () {
     DB::table('core_config')->updateOrInsert(
         ['code' => 'general.pricing.settings.enabled'],
@@ -140,6 +198,72 @@ it('skips the pipeline when competitor analysis is toggled off', function () {
     $this->artisan('pricing:run-competitor-analysis')
         ->expectsOutputToContain('Concurrentie-analyse staat uit')
         ->assertSuccessful();
+
+    DB::table('core_config')->where('code', 'general.pricing.settings.enabled')->delete();
+});
+
+it('reverts system-applied discounts but leaves manual discounts alone', function () {
+    Queue::fake();
+
+    $system = makePricedVariant([
+        'prijs'              => ['EUR' => '750'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ], 'CPTEST-REVERT-SYS');
+
+    ProductPriceHistory::create([
+        'product_id' => $system->id,
+        'sku'        => $system->sku,
+        'old_price'  => 1000,
+        'new_price'  => 750,
+        'reason'     => 'Concurrent test.nl biedt € 750,00 — laagste concurrent.',
+        'changed_at' => now(),
+    ]);
+
+    $manual = makePricedVariant([
+        'prijs'              => ['EUR' => '800'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ], 'CPTEST-REVERT-MAN');
+
+    $this->artisan('pricing:revert-discounted-prices', ['--force' => true])
+        ->assertSuccessful();
+
+    $system->refresh();
+    $manual->refresh();
+    expect($system->values['common']['prijs']['EUR'])->toBe('1000')
+        ->and($manual->values['common']['prijs']['EUR'])->toBe('800');
+
+    $latest = ProductPriceHistory::where('sku', $system->sku)->orderByDesc('id')->first();
+    expect((float) $latest->old_price)->toBe(750.0)
+        ->and((float) $latest->new_price)->toBe(1000.0)
+        ->and($latest->reason)->toContain('revert-discounted-prices');
+
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class);
+});
+
+it('reverts manual discounts only with --all, and --dry-run changes nothing', function () {
+    Queue::fake();
+
+    $manual = makePricedVariant([
+        'prijs'              => ['EUR' => '800'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ], 'CPTEST-REVERT-DRY');
+
+    $this->artisan('pricing:revert-discounted-prices', ['--all' => true, '--dry-run' => true])
+        ->assertSuccessful();
+    expect($manual->refresh()->values['common']['prijs']['EUR'])->toBe('800');
+
+    $this->artisan('pricing:revert-discounted-prices', ['--all' => true, '--force' => true, '--no-sync' => true])
+        ->assertSuccessful();
+    expect($manual->refresh()->values['common']['prijs']['EUR'])->toBe('1000');
+
+    Queue::assertNothingPushed();
+});
+
+it('disables the nightly analysis with --disable-analysis', function () {
+    $this->artisan('pricing:revert-discounted-prices', ['--force' => true, '--disable-analysis' => true])
+        ->assertSuccessful();
+
+    expect(DB::table('core_config')->where('code', 'general.pricing.settings.enabled')->value('value'))->toBe('0');
 
     DB::table('core_config')->where('code', 'general.pricing.settings.enabled')->delete();
 });

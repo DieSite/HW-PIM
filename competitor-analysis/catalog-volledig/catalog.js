@@ -14,7 +14,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { normBrand, normModel, parseSize } = require('./normalize');
+const { normBrand, normModel, parseSize, detectShape } = require('./normalize');
 
 function loadCatalog(csvPath) {
   const text = fs.readFileSync(csvPath, 'utf8');
@@ -36,7 +36,8 @@ function loadCatalog(csvPath) {
 
     const size = parseSize(sizeStr);
     const isMaatwerk = !size;
-    const isOval     = /ovaal|oval|rond|round/i.test(sizeStr);
+    // Vorm zit in de modelnaam ("Diamante 01 Oval") en/of de maat ("Rond 200 cm")
+    const shape = detectShape(model, sizeStr) ?? 'rechthoek';
 
     const entry = {
       sku,
@@ -47,7 +48,7 @@ function loadCatalog(csvPath) {
       heightCm:  size?.heightCm ?? null,
       price,
       isMaatwerk,
-      isOval,
+      shape,
       normBrand: normBrand(brand),
       normModel: normModel(model),
     };
@@ -55,14 +56,34 @@ function loadCatalog(csvPath) {
     entries.push(entry);
     bySku.set(sku, entry);
 
-    if (!isMaatwerk && !isOval) {
+    if (!isMaatwerk) {
       const key = `${entry.normBrand}|${entry.normModel}`;
       if (!models.has(key)) models.set(key, []);
       models.get(key).push(entry);
     }
   }
 
-  const fixedEntries = entries.filter(e => !e.isMaatwerk && !e.isOval);
+  const fixedEntries = entries.filter(e => !e.isMaatwerk);
+
+  // Structuurvarianten: bestaat naast "gentle 13" ook "gentle 13 organic",
+  // dan zijn de extra (alfabetische) tokens VERPLICHT in de competitor-tekst.
+  // Anders pakt de duurdere variant de prijs van het basismodel.
+  for (const [key, keyEntries] of models) {
+    const [brand, model] = key.split('|');
+    const tokens = model.split(' ').filter(Boolean);
+    const extra = new Set();
+    for (const otherKey of models.keys()) {
+      if (otherKey === key || !otherKey.startsWith(brand + '|')) continue;
+      const otherTokens = otherKey.split('|')[1].split(' ').filter(Boolean);
+      if (!otherTokens.length || otherTokens.length >= tokens.length) continue;
+      if (!otherTokens.every(t => tokens.includes(t))) continue;
+      for (const t of tokens) {
+        if (!otherTokens.includes(t) && !/^\d+$/.test(t)) extra.add(t);
+      }
+    }
+    const mustHave = [...extra];
+    for (const entry of keyEntries) entry.mustHave = mustHave;
+  }
 
   return { entries, bySku, models, fixedEntries };
 }

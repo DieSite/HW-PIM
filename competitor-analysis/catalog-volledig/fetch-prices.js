@@ -18,7 +18,7 @@
 const path = require('path');
 const { openDb, getIndexForShop, recordPrice, unpricedSkus, findInIndex } = require('./storage');
 const { loadCatalog }  = require('./catalog');
-const { normBrand, normModel, isRealPrice, fmtEuro } = require('./normalize');
+const { normBrand, normModel, isRealPrice, fmtEuro, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens, pageMatchesEntry } = require('./normalize');
 const { getText, createQueue, sleep } = require('./http');
 const { extractJsonLdPrice, parsePriceStr } = require('./indexers/sitemap');
 const { CUSTOM_SHOPS } = require('./shops');
@@ -28,10 +28,16 @@ const CONCURRENCY = Number(process.env.CONCURRENCY || process.argv.find((_, i) =
 
 // ── Hulpfuncties ─────────────────────────────────────────────────────────────
 
-/** Geef het beste index-record voor (shop, entry) terug, of null. */
+/** Vorm van een index-rij; oude rijen (shape NULL) vallen terug op detectie uit model/URL. */
+function rowShape(row) {
+  return row.shape ?? detectShape(row.norm_model, row.url) ?? 'rechthoek';
+}
+
+/** Geef het beste index-record voor (shop, entry) terug, of null. Vorm moet overeenkomen. */
 function findUrl(db, shop, entry) {
   // Exacte match op normBrand + normModel
-  const rows = findInIndex(db, shop, entry.normBrand, entry.normModel);
+  const rows = findInIndex(db, shop, entry.normBrand, entry.normModel)
+    .filter(r => rowShape(r) === entry.shape);
   if (rows.length) return rows[0].url;
 
   // Fuzzy: zoek records met hetzelfde brand, check of entry.normModel start met
@@ -42,6 +48,9 @@ function findUrl(db, shop, entry) {
 
   const entryTokens = entry.normModel.split(' ').filter(Boolean);
   for (const row of brandRows) {
+    if (rowShape(row) !== entry.shape) continue;
+    if (!hasModelNameToken(row.norm_model, entry.normModel) || !numbersCompatible(entry.normModel, row.norm_model)) continue;
+    if (!containsAllTokens(row.norm_model + ' ' + row.url, entry.mustHave)) continue;
     const rowTokens = row.norm_model.split(' ').filter(Boolean);
     const hits = entryTokens.filter(t => rowTokens.includes(t)).length;
     if (hits >= Math.min(2, entryTokens.length) && hits / entryTokens.length >= 0.7) {
@@ -59,6 +68,14 @@ async function fetchOne(db, entry, shopCfg, url) {
     return;
   }
 
+  // Titel-guard: de slug waarop geïndexeerd is mist soms het dessinnummer dat
+  // de paginatitel wél toont — dan is dit tóch de verkeerde productpagina.
+  const pageTitle = html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? '';
+  if (!pageMatchesEntry(pageTitle, url, entry)) {
+    recordPrice(db, entry.sku, shopCfg.key, 'n.v.t.', null);
+    return;
+  }
+
   let priceStr = null;
 
   if (shopCfg.fromUrl) {
@@ -67,7 +84,7 @@ async function fetchOne(db, entry, shopCfg, url) {
     priceStr = p ? fmtEuro(p) : null;
     if (shopCfg.vanaf) priceStr = priceStr ? `Vanaf ${priceStr}` : null;
   } else if (shopCfg.getPrijs) {
-    priceStr = shopCfg.getPrijs(html, entry.widthCm, entry.heightCm);
+    priceStr = shopCfg.getPrijs(html, entry.widthCm, entry.heightCm, entry.shape);
     if (priceStr && shopCfg.vanaf) priceStr = `Vanaf ${priceStr}`;
   }
 
@@ -109,11 +126,13 @@ async function main() {
         continue;
       }
 
-      // Voor fromUrl shops: controleer of de maat in de URL zit
+      // Voor fromUrl shops: controleer of maat én vorm in de URL kloppen
+      // (bijv. "…-200x290ovaal" mag nooit de rechthoek-entry prijzen)
       if (shopCfg.fromUrl && shopCfg.sizeFromUrl) {
-        const urlSize = shopCfg.sizeFromUrl(url);
-        if (!urlSize || urlSize.widthCm !== entry.widthCm || urlSize.heightCm !== entry.heightCm) {
-          // Andere maat in URL; we kunnen de prijs hier niet zeker bepalen
+        const urlSize  = shopCfg.sizeFromUrl(url);
+        const urlShape = detectShape(url) ?? 'rechthoek';
+        if (!urlSize || urlSize.widthCm !== entry.widthCm || urlSize.heightCm !== entry.heightCm || urlShape !== entry.shape) {
+          // Andere maat of vorm in URL; we kunnen de prijs hier niet zeker bepalen
           recordPrice(db, sku, shopCfg.key, 'n.v.t.', null);
           continue;
         }

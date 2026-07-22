@@ -10,7 +10,9 @@ const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-const DB_PATH = path.join(__dirname, 'data', 'catalog-volledig.db');
+// CATALOG_DB maakt een alternatieve database mogelijk (tests/verificatieruns
+// zonder de productiedata te raken)
+const DB_PATH = process.env.CATALOG_DB || path.join(__dirname, 'data', 'catalog-volledig.db');
 
 let _db = null;
 
@@ -32,6 +34,7 @@ function openDb() {
       title       TEXT NOT NULL,
       url         TEXT NOT NULL,
       platform    TEXT,
+      shape       TEXT,
       indexed_at  TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(shop, url)
     );
@@ -46,22 +49,28 @@ function openDb() {
       PRIMARY KEY (sku, shop)
     );
   `);
+  // Migratie voor bestaande databases van vóór de vorm-kolom
+  const hasShape = _db.prepare(`PRAGMA table_info(competitor_index)`).all().some(c => c.name === 'shape');
+  if (!hasShape) {
+    _db.exec(`ALTER TABLE competitor_index ADD COLUMN shape TEXT`);
+  }
   return _db;
 }
 
 /* ── competitor_index ───────────────────────────────────────────────────── */
 
-function upsertIndex(db, { shop, normBrand, normModel, title, url, platform }) {
+function upsertIndex(db, { shop, normBrand, normModel, title, url, platform, shape }) {
   db.prepare(`
-    INSERT INTO competitor_index (shop, norm_brand, norm_model, title, url, platform)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO competitor_index (shop, norm_brand, norm_model, title, url, platform, shape)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(shop, url) DO UPDATE SET
       norm_brand = excluded.norm_brand,
       norm_model = excluded.norm_model,
       title      = excluded.title,
       platform   = excluded.platform,
+      shape      = excluded.shape,
       indexed_at = datetime('now')
-  `).run(shop, normBrand, normModel, title, url, platform ?? null);
+  `).run(shop, normBrand, normModel, title, url, platform ?? null, shape ?? null);
 }
 
 function clearIndex(db, shop) {
@@ -110,10 +119,19 @@ function collectPrices(db) {
   return out;
 }
 
-/** SKU's die voor een bepaalde shop nog geen echte prijs hebben. */
-function unpricedSkus(db, shop, allSkus) {
+/**
+ * SKU's die voor een bepaalde shop geen VERSE echte prijs hebben. Een echte
+ * prijs ouder dan REFRESH_DAYS (default 7) telt als verlopen en wordt opnieuw
+ * opgehaald — anders blijven custom-shopprijzen voor eeuwig op hun eerste
+ * scrape staan terwijl de concurrent zijn prijzen allang verhoogd heeft.
+ * (Sticky blijft gelden: een mislukte her-scrape overschrijft de oude prijs
+ * niet met n.v.t.)
+ */
+function unpricedSkus(db, shop, allSkus, maxAgeDays = Number(process.env.REFRESH_DAYS || 7)) {
   const priced = new Set(
-    db.prepare(`SELECT sku FROM prices WHERE shop = ? AND price_str LIKE '€%'`).all(shop).map(r => r.sku)
+    db.prepare(
+      `SELECT sku FROM prices WHERE shop = ? AND price_str LIKE '€%' AND scraped_at >= datetime('now', ?)`
+    ).all(shop, `-${maxAgeDays} days`).map(r => r.sku)
   );
   return allSkus.filter(s => !priced.has(s));
 }

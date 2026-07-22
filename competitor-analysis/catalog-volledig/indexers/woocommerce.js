@@ -14,7 +14,7 @@
  */
 
 const { getText, getJson, sleep } = require('../http');
-const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore } = require('../normalize');
+const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
 
 /**
@@ -70,10 +70,11 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku }
         // Sla producten over die niet echt bij dit merk horen
         if (!nb.split(' ').every(t => t.length < 3 || titleNorm.includes(t) || p.name?.toLowerCase().includes(t))) continue;
 
-        const model = normModel(extractModel(p.name ?? '', brand));
-        const url   = p.permalink ?? `${base}/?p=${p.id}`;
+        const model        = normModel(extractModel(p.name ?? '', brand));
+        const url          = p.permalink ?? `${base}/?p=${p.id}`;
+        const productShape = detectShape(p.name, url) ?? 'rechthoek';
 
-        upsertIndex(db, { shop, normBrand: nb, normModel: model, title: p.name, url, platform: 'woocommerce' });
+        upsertIndex(db, { shop, normBrand: nb, normModel: model, title: p.name, url, platform: 'woocommerce', shape: productShape });
         indexed++;
 
         // Haal productpagina op voor inline variatie-JSON
@@ -87,6 +88,7 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku }
               const attrs = JSON.stringify(v.attributes ?? {});
               const size  = parseSize(attrs) ?? parseSize(Object.values(v.attributes ?? {}).join(' '));
               if (!size) continue;
+              const variantShape = detectShape(attrs) ?? productShape;
               const priceStr = typeof v.display_price === 'number' ? fmtEuro(v.display_price) : null;
               if (!priceStr) continue;
 
@@ -99,8 +101,10 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku }
                 const fwdHits   = catTokens.filter(t => model.includes(t)).length;
                 const revHits   = modTokens.filter(t => catModel.includes(t)).length;
                 if (fwdHits < Math.min(2, catTokens.length) && revHits < Math.min(2, modTokens.length)) continue;
+                if (!hasModelNameToken(model, catModel) || !numbersCompatible(catModel, model)) continue;
                 for (const entry of entries) {
-                  if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm) {
+                  if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm && entry.shape === variantShape
+                      && containsAllTokens(model, entry.mustHave)) {
                     recordPrice(db, entry.sku, shop, priceStr, url);
                     priced++;
                   }

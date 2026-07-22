@@ -35,6 +35,7 @@ class RunCompetitorAnalysisCommand extends Command
 
         return $this->call('pricing:import-competitor-prices', [
             '--no-recompute' => (bool) $this->option('no-recompute'),
+            '--prune'        => true,
         ]);
     }
 

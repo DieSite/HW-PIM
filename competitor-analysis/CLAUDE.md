@@ -190,6 +190,56 @@ white-label-aliassen (Antoin Carpets→Eurogros, Core by Dersimo→Karpi,
 Headlam→Karpi, "De Munk Carpets"→De Munk). Dekking is **patchy**: een lege cel
 betekent dat de shop dat model (in die maat) niet in de index had.
 
+**Vorm (rechthoek/ovaal/rond/loper) is een aparte matchdimensie** (toegevoegd
+2026-07-22). `detectShape()` in `normalize.js` leest de vorm uit modelnaam,
+maat, competitor-titel/variant of URL-slug; `normModel()` stript vormwoorden
+zodat "Diamante 01 Oval" en "Diamante 01" hetzelfde model zijn met een andere
+`entry.shape`. Elke prijskoppeling (Shopify/Woo-variant, index-URL,
+`sizeFromUrl`, `getPrijs(html,w,h,shape)`) eist vormgelijkheid — vóór deze fix
+kregen 614 ovale varianten (`.Oval`-parents met rechthoekige maat) de
+rechthoekprijs van vloerkledenloods.nl/hetdesignhuys.nl. Ronde maten ("Rond
+200 cm", "Ø 200") parsen nu als w=h met shape `rond` en doen dus mee.
+`competitor_index` heeft een `shape`-kolom (auto-migratie in `storage.js`);
+oude rijen zonder shape vallen terug op detectie uit model+URL. Unit tests:
+`npm run volledig:test`. De PIM-import kent nu `--prune` (verwijdert
+`competitor_prices`-rijen die niet meer in de SQLite staan); de nachtelijke
+`pricing:run-competitor-analysis` geeft die standaard mee.
+
+**Drie extra matchguards** (2026-07-22, zelfde sessie) — elke koppeling eist nu:
+(1) `hasModelNameToken`: de modelnaam zelf ("prosper") moet in de
+competitor-titel/slug staan — kleed.nl koppelde "Prosper 69 - Vintage Copper"
+aan de Cendre-pagina op de sfeertokens "vintage 69"; (2) `numbersCompatible`:
+kleur-/dessinnummers mogen niet botsen ("Brush Ovale 13" kreeg de prijs van de
+69-kleurpagina); maatparen en ID's ≥5 cijfers tellen niet mee, "01"≡"1";
+(3) `mustHave` (berekend in `catalog.js`): bestaat naast "Gentle 13" ook
+"Gentle 13 Organic", dan is "organic" verplicht in de competitor-tekst — de
+structuur-/vormvarianten (Organic/Pebble/Plaza/Wing/Eye, €919 i.p.v. €599)
+kregen allemaal de basisprijs. "Ellips" is als vormwoord (→ ovaal) toegevoegd.
+Opgeruimd: 614 (vorm) + 1.026 (model/kleur) + 3.408 (variant/ellips) foute
+prijsrijen uit SQLite én `competitor_prices`. Geen live prijzen geraakt
+(price history was leeg).
+
+**Live-verificatie (2026-07-22, 48-rijen steekproef + volero/gigameubel
+integraal) leverde nog drie fixes op:** (a) `normModel` translitereert nu
+accenten ("Suède"→"suede" — anders verwierp de modelnaam-guard geldige
+matches); (b) `pageMatchesEntry` in `normalize.js` als tweede verdedigings-
+linie bij custom shops: fetch-prices en de browser-spec checken de
+PAGINATITEL (met entity-stripping en vormcheck) vóór het vastleggen — de slug
+mist soms het dessinnummer dat de titel wél toont (volero prijsde "Fading
+World Babylon 8545" van de "Pink Flash 8261"-pagina; alle 24 rijen verwijderd);
+(c) "organisch/organic" is een VORM (De Munk/Karpi organische kleden) —
+floorpassion's "… in Organische Vorm"-pagina's (€759) prijsden onze
+rechthoekige Vernons (advies €429); 16 rijen verwijderd. Verder verversen
+custom-shopprijzen nu wekelijks: `unpricedSkus` beschouwt echte prijzen ouder
+dan `REFRESH_DAYS` (default 7) als verlopen — vier karpettenkelder-drifts
+(o.a. €5.975→€6.335) bewezen dat prijzen anders eeuwig op de eerste scrape
+blijven staan. Eindstand: 9.768 rijen in beide stores, audit schoon;
+ratio-verdeling concurrent/advies: 94% in 75–110%, de 9 rijen <60% zijn
+live geverifieerd echt (o.a. Vogue 170x240 €344 bij vloerkledenloods — hún
+datafout, maar de échte paginaprijs). gigameubel (32 rijen) blijft
+onverifieerbaar: slugs/titels dragen geen kleurnummer ("prosper …-wit"),
+kleuren kosten daar vermoedelijk hetzelfde.
+
 **Per-shop config staat in `catalog-volledig/shops.js`** (platform, merkfilter,
 `getPrijs`, `detectBrand`, `sizeFromUrl`). Een nieuwe concurrent = één entry
 toevoegen. De recipes zijn dezelfde als in de karpetten-suite, hergebruikt en

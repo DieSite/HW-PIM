@@ -42,7 +42,7 @@ class ImportVoorraadDeMunkJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('import-demunk-voorraad'))->expireAfter(1800)->dontRelease()];
+        return [(new WithoutOverlapping('import-demunk-voorraad'))->expireAfter($this->timeout)->dontRelease()];
     }
 
     public function handle(DeMunkMatcher $matcher, DeMunkStockWriter $writer): void

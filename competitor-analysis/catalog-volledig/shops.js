@@ -85,10 +85,11 @@ const CUSTOM_SHOPS = [
     brands:     ['Eurogros', 'De Munk', 'Karpi'],
     sitemapUrl: 'https://www.karpettenkelder.nl/sitemap.xml',
     brandKeys:  ['eurogros', 'de-munk-carpets', 'core-by-dersimo', 'desso', 'de-poortere'],
-    // Prijs zit in data-prijs attribuut bij de maat-radio
-    getPrijs(html, w, h) {
+    // Prijs zit in data-prijs attribuut bij de maat-radio; de data-title
+    // benoemt de vorm ("200 x 290 rechthoek" / "… ovaal"), dus match die mee
+    getPrijs(html, w, h, shape = 'rechthoek') {
       const maat = `${w} x ${h}`;
-      const m = html.match(new RegExp(`data-title="${maat} rechthoek"[\\s\\S]{0,600}?data-prijs="([\\d.,]+)"`, 'i'));
+      const m = html.match(new RegExp(`data-title="${maat} ${shape}"[\\s\\S]{0,600}?data-prijs="([\\d.,]+)"`, 'i'));
       if (!m) return null;
       return fmt(parsePriceStr(m[1]));
     },

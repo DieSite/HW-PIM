@@ -193,7 +193,7 @@ class CompetitorPricingService
      *
      * @param  array<int, Product>  $changedVariants
      */
-    private function dispatchSync(array $changedVariants): void
+    public function dispatchSync(array $changedVariants): void
     {
         $syncedParents = [];
 

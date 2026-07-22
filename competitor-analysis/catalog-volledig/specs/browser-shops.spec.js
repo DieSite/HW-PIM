@@ -34,10 +34,12 @@ const path = require('path');
 
 const { openDb, getIndexForShop, recordPrice, unpricedSkus } = require('../storage');
 const { loadCatalog } = require('../catalog');
-const { normBrand } = require('../normalize');
+const { normBrand, detectShape, pageMatchesEntry } = require('../normalize');
 const { fetchSitemapUrls } = require('../indexers/sitemap');
 const { indexUrls } = require('../discover');
 const { CUSTOM_SHOPS } = require('../shops');
+
+const BROWSER_SHOPS = CUSTOM_SHOPS.filter(s => s.browser);
 
 const CSV_PATH  = process.env.CATALOG_CSV || path.join(__dirname, '..', '..', '..', 'HW-PIM', 'Result_6.csv');
 const MAX_PAGES = Number(process.env.MAX_PAGES || 600);   // veiligheidsplafond per shop
@@ -175,10 +177,11 @@ for (const shopCfg of BROWSER_SHOPS) {
       const urls = byModel.get(`${entry.normBrand}|${entry.normModel}`);
       if (!urls) { recordPrice(db, entry.sku, shopCfg.key, 'n.v.t.', null); continue; }
 
-      // Kies de URL waarvan de maat-in-slug overeenkomt met deze entry
+      // Kies de URL waarvan maat én vorm in de slug overeenkomen met deze entry
       const url = urls.find(u => {
         const sz = shopCfg.sizeFromUrl?.(u);
-        return sz && sz.widthCm === entry.widthCm && sz.heightCm === entry.heightCm;
+        return sz && sz.widthCm === entry.widthCm && sz.heightCm === entry.heightCm
+          && (detectShape(u) ?? 'rechthoek') === entry.shape;
       });
       if (!url) { recordPrice(db, entry.sku, shopCfg.key, 'n.v.t.', null); continue; }
 
@@ -190,8 +193,11 @@ for (const shopCfg of BROWSER_SHOPS) {
         const free = await passChallenge(page);
         if (free) { await saveSession(); } else { blocked++; }
         const html = await safeContent(page);
-        priceStr = shopCfg.getPrijs(html, entry.widthCm, entry.heightCm);
-        if (priceStr && shopCfg.vanaf) priceStr = `Vanaf ${priceStr}`;
+        const pageTitle = html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? '';
+        if (pageMatchesEntry(pageTitle, url, entry)) {
+          priceStr = shopCfg.getPrijs(html, entry.widthCm, entry.heightCm, entry.shape);
+          if (priceStr && shopCfg.vanaf) priceStr = `Vanaf ${priceStr}`;
+        }
       } catch (e) {
         console.log(`  [${shopCfg.key}] ${entry.model} ${entry.sizeLabel}: ${e.message.split('\n')[0]}`);
       }

@@ -14,7 +14,8 @@ class ImportCompetitorPricesCommand extends Command
      */
     protected $signature = 'pricing:import-competitor-prices
                             {--db= : Path to the scraper SQLite database (defaults to config)}
-                            {--no-recompute : Only import competitor prices, skip price recomputation}';
+                            {--no-recompute : Only import competitor prices, skip price recomputation}
+                            {--prune : Delete competitor prices that no longer exist in the scraper database}';
 
     /**
      * @var string
@@ -39,7 +40,12 @@ class ImportCompetitorPricesCommand extends Command
             return self::SUCCESS;
         }
 
-        $touchedSkus = array_values(array_unique(array_column($rows, 'sku')));
+        $staleIds = $this->option('prune') ? $this->stalePriceIds($rows) : collect();
+
+        $touchedSkus = array_values(array_unique(array_merge(
+            array_column($rows, 'sku'),
+            CompetitorPrice::whereIn('id', $staleIds)->pluck('sku')->all(),
+        )));
 
         $previousSnapshot = $this->currentSnapshot($touchedSkus);
         $productIds = Product::whereIn('sku', $touchedSkus)->pluck('id', 'sku');
@@ -58,6 +64,16 @@ class ImportCompetitorPricesCommand extends Command
                     ],
                 );
             }
+        }
+
+        if ($staleIds->isNotEmpty()) {
+            $deleted = 0;
+
+            foreach ($staleIds->chunk(500) as $chunk) {
+                $deleted += CompetitorPrice::whereIn('id', $chunk->all())->delete();
+            }
+
+            $this->info("Pruned {$deleted} competitor prices that are no longer in the scraper database.");
         }
 
         if ($this->option('no-recompute')) {
@@ -105,6 +121,28 @@ class ImportCompetitorPricesCommand extends Command
         }
 
         return $rows;
+    }
+
+    /**
+     * IDs of stored competitor prices whose (sku, shop) pair no longer has a
+     * real price in the scraper database.
+     *
+     * @param  array<int, array{sku: string, shop: string}>  $rows
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function stalePriceIds(array $rows): \Illuminate\Support\Collection
+    {
+        $scraped = [];
+
+        foreach ($rows as $row) {
+            $scraped[$row['sku'].'|'.$row['shop']] = true;
+        }
+
+        return CompetitorPrice::query()
+            ->get(['id', 'sku', 'shop'])
+            ->reject(fn (CompetitorPrice $price): bool => isset($scraped[$price->sku.'|'.$price->shop]))
+            ->pluck('id')
+            ->values();
     }
 
     /**
