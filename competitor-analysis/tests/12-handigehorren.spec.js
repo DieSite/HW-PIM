@@ -10,7 +10,14 @@
  * Alle standaardopties (wit 9016/9010, in het kozijn, schroeven, vlakke
  * onderkant) zijn +€0; er is geen gaaskleur-optie. De verplichte radio's zijn
  * alleen nodig voor add-to-cart, niet om de toeslag te tonen — we blijven dus
- * netjes vóór de winkelwagen. Cart-geverifieerd: enkel 730×1970 = €274,50.
+ * netjes vóór de winkelwagen.
+ *
+ * Klantverzoek: de optie "Op maat zagen: Ja" (+€20, zowel bij enkel als
+ * dubbel — zie de Easify option-set JSON) hoort er wél bij: zonder die optie
+ * levert Handige Horren een kit die de klant zelf moet inkorten, terwijl alle
+ * andere bronnen een kant-en-klare deur op de opgegeven maat prijzen. Vaste
+ * toeslag, geen live selectie nodig (geen gaaskleur- of maatafhankelijkheid).
+ * Cart-geverifieerd (excl. deze optie): enkel 730×1970 = €274,50.
  *
  * LET OP: al onze 6 maten hebben een toeslag > 0, dus we EISEN dat het
  * toeslag-element verschijnt; ontbreekt het, dan is de herberekening mislukt
@@ -31,6 +38,7 @@ const URLS = {
   dubbel: 'https://www.handigehorren.nl/products/dubbele-plisse-hordeur',
 };
 const HANDLES = { enkel: 'plisse-hordeur', dubbel: 'dubbele-plisse-hordeur' };
+const OP_MAAT_ZAGEN_TOESLAG = 20; // "Op maat zagen: Ja" — vast, zowel enkel als dubbel
 
 async function haalPrijs(page, type, breedte, hoogte) {
   const w = page.locator('input[name="properties[Dimension-Breedte in mm]"]').first();
@@ -58,7 +66,7 @@ async function haalPrijs(page, type, breedte, hoogte) {
   }, HANDLES[type]).catch(() => null);
   if (!basis) return null;
 
-  const totaal = basis + toeslag;
+  const totaal = basis + toeslag + OP_MAAT_ZAGEN_TOESLAG;
   return `€ ${totaal.toFixed(2).replace('.', ',')}`;
 }
 

@@ -228,6 +228,26 @@ return [
             'timeout'             => 21600,
             'nice'                => 0,
         ],
+
+        /**
+         * Dedicated worker for ImportVoorraadDeMunkJob's slow portal crawl.
+         * Its own connection carries a matching retry_after (see
+         * config/queue.php redis-demunk) so the job is never re-reserved
+         * mid-flight. One process: the crawl is not parallelised.
+         */
+        'supervisor-demunk' => [
+            'connection'          => 'redis-demunk',
+            'queue'               => ['demunk'],
+            'balance'             => 'simple',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses'        => 1,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 1024,
+            'tries'               => 1,
+            'timeout'             => 1800,
+            'nice'                => 0,
+        ],
     ],
 
     'environments' => [
@@ -243,6 +263,9 @@ return [
             'supervisor-hordeuren' => [
                 'maxProcesses' => 1,
             ],
+            'supervisor-demunk' => [
+                'maxProcesses' => 1,
+            ],
         ],
 
         'local' => [
@@ -253,6 +276,9 @@ return [
                 'maxProcesses' => 1,
             ],
             'supervisor-hordeuren' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-demunk' => [
                 'maxProcesses' => 1,
             ],
         ],

@@ -81,6 +81,24 @@ return [
             'block_for'   => null,
         ],
 
+        /**
+         * ImportVoorraadDeMunkJob crawls the De Munk dealer portal (dozens of
+         * collections/qualities, ~8 sequential HTTP calls each) and can run
+         * well past the shared "default" queue's 660s retry_after, causing
+         * Redis to re-reserve the job mid-flight and fail it with
+         * MaxAttemptsExceededException. Its own connection carries a
+         * retry_after comfortably above the job's $timeout (1800s). Served by
+         * the dedicated Horizon supervisor "supervisor-demunk" on the
+         * "demunk" queue.
+         */
+        'redis-demunk' => [
+            'driver'      => 'redis',
+            'connection'  => 'default',
+            'queue'       => 'demunk',
+            'retry_after' => 3600,
+            'block_for'   => null,
+        ],
+
     ],
 
     /*

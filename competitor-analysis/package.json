@@ -12,15 +12,11 @@
     "test": "playwright test",
     "test:karpetten": "playwright test -c playwright.karpetten.config.js",
     "test:eigen": "playwright test 01-plissehordeurenwebshop",
-    "test:unilux": "playwright test 02-unilux",
     "test:horrentotaal": "playwright test 03-horrentotaal",
     "test:horrengigant": "playwright test 04-horrengigant",
     "test:horren-com": "playwright test 05-horren-com",
     "test:praxis": "playwright test 06-praxis",
-    "test:luxaflex": "playwright test 07-luxaflex",
     "test:creon": "playwright test 08-creon-kozijnen",
-    "test:gamma": "playwright test 09-gamma",
-    "test:bruynzeel": "playwright test 10-bruynzeel",
     "install-browsers": "playwright install chromium"
   },
   "devDependencies": {

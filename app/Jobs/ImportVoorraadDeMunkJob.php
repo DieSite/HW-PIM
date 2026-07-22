@@ -38,6 +38,19 @@ class ImportVoorraadDeMunkJob implements ShouldQueue
     public int $maxExceptions = 1;
 
     /**
+     * Run on a dedicated connection/queue (Horizon supervisor-demunk) whose
+     * retry_after exceeds this job's worst-case wall time. On the shared
+     * queue the 11-minute retry_after re-reserved the still-running crawl,
+     * and with $tries = 1 that second attempt failed instantly with "has
+     * been attempted too many times".
+     */
+    public function __construct()
+    {
+        $this->onConnection('redis-demunk');
+        $this->onQueue('demunk');
+    }
+
+    /**
      * @return array<int, WithoutOverlapping>
      */
     public function middleware(): array

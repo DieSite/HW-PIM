@@ -10,10 +10,12 @@
  * Prijs per hit: facets.price_praxis (geverifieerd gelijk aan de
  * productpagina-prijs). Maat zit in de productnaam als "BBBxHHH cm".
  *
- * Mapping per doelmaat: goedkoopste WITTE deur-plissehor waarvan de
- * standaardmaat de doelmaat dekt (breedte én hoogte >= doel; inkorten kan,
- * oprekken niet) — zelfde principe als horrenbouw (spec 15). Niet gedekt
- * (bv. enkel 1030 breed: aanbod is max 100 cm) -> eerlijk n.v.t.
+ * Klantverzoek: het moet specifiek de "CanDo Plisséhordeur Premium"-lijn zijn
+ * (niet de goedkoopste willekeurige lijn zoals Comfort/Livn/Dtch die ook aan
+ * de maat voldoet — die zijn niet vergelijkbaar in kwaliteit). Mapping per
+ * doelmaat: goedkoopste WITTE Premium-hordeur waarvan de standaardmaat de
+ * doelmaat dekt (breedte én hoogte >= doel; inkorten kan, oprekken niet).
+ * Niet gedekt (bv. enkel 1030 breed, of geen Premium-maat die past) -> n.v.t.
  */
 
 const { test, expect } = require('@playwright/test');
@@ -48,8 +50,11 @@ async function haalAssortiment(request) {
     // alleen witte plissé-DEURhorren: de categorie bevat ook raam-plissé,
     // rolhorren en telescopische hordeuren (daar kwam de foute €79 vandaan)
     .filter(p => /wit/i.test(p.naam))
-    .filter(p => /plisse/i.test(p.naam) && /deur/i.test(p.naam))
-    .filter(p => !/raam|rolhor|telescopisch/i.test(p.naam));
+    // "plisse" i.p.v. "plissé": CanDo-producten schrijven het met accent
+    .filter(p => /pliss[eé]/i.test(p.naam) && /deur/i.test(p.naam))
+    .filter(p => !/raam|rolhor|telescopisch/i.test(p.naam))
+    // klant wil specifiek de Premium-lijn (niet de goedkopere Comfort/Livn/Dtch-lijnen)
+    .filter(p => /premium/i.test(p.naam));
   return assortiment;
 }
 

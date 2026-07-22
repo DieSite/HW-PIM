@@ -8,8 +8,9 @@
  *  2. #edit_breedte / #edit_hoogte  -> LET OP: site verwacht CENTIMETERS (mm/10)
  *  3. label[for=rbMountingType0]  (montage in het kozijn = in de dag)
  *  4. label[for=rbSingleDoor] / rbDoubleDoor
- *  5. "Volgende >"  -> Stap 3 (Accessoires; standaard RAL 9010 wit + zwart gaas)
- *  6. "Volgende >"  -> Overzicht; eindprijs in #ctl17_lTotalPriceHeader
+ *  5. label[for=screenChoiceZwart] / screenChoiceGrijs  (Kleur gaas, geen meerprijs voor grijs)
+ *  6. "Volgende >"  -> Stap 3 (Accessoires; standaard RAL 9010 wit)
+ *  7. "Volgende >"  -> Overzicht; eindprijs in #ctl17_lTotalPriceHeader
  *
  * Elke "Volgende" is een WebForms-postback (volledige herlaad) → traag maar echt.
  */
@@ -27,7 +28,7 @@ async function leesPrijs(page) {
   return normalizePrice(raw);
 }
 
-async function haalPrijs(page, breedte, hoogte, dubbel) {
+async function haalPrijs(page, breedte, hoogte, dubbel, gaas) {
   await page.getByText(/kies dit type/i).first().click({ timeout: 8000 });
   await page.waitForTimeout(2500);
 
@@ -36,6 +37,7 @@ async function haalPrijs(page, breedte, hoogte, dubbel) {
   await page.locator('#edit_hoogte').fill(String(Math.round(hoogte / 10)));
   await page.locator('label[for="rbMountingType0"]').click({ timeout: 3000 }).catch(() => {});
   await page.locator(`label[for="${dubbel ? 'rbDoubleDoor' : 'rbSingleDoor'}"]`).click({ timeout: 3000 }).catch(() => {});
+  await page.locator(`label[for="${gaas === 'grijs' ? 'screenChoiceGrijs' : 'screenChoiceZwart'}"]`).first().click({ timeout: 3000 }).catch(() => {});
   await page.waitForTimeout(400);
 
   // Volgende x2: Maat&Kleur -> Accessoires -> Overzicht (eindprijs)
@@ -56,18 +58,12 @@ async function haalPrijs(page, breedte, hoogte, dubbel) {
 for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
   test(`${COMP} – ${naam} (${breedte}×${hoogte}mm)`, async ({ page }) => {
     test.setTimeout(90_000); // 3 WebForms-postbacks à ±3-8s + retryslack: 60s is te krap onder load
-    // De gaaskleur zit (als die er al is) pas in latere WebForms-stappen en is
-    // niet betrouwbaar te kiezen; grijs is hier dus niet te configureren.
-    if (gaas === 'grijs') {
-      recordPrice(COMP, naam, 'n.v.t.');
-      return;
-    }
     let prijs = null;
     try {
       await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await acceptCookies(page);
       await page.waitForTimeout(600);
-      prijs = await haalPrijs(page, breedte, hoogte, type === 'dubbel');
+      prijs = await haalPrijs(page, breedte, hoogte, type === 'dubbel', gaas);
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);
     }
