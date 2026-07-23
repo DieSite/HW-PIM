@@ -13,6 +13,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Sentry;
 use Throwable;
 
@@ -60,6 +61,8 @@ class ImportVoorraadDeMunkJob implements ShouldQueue
 
     public function handle(DeMunkMatcher $matcher, DeMunkStockWriter $writer): void
     {
+        $this->disconnectRedis();
+
         try {
             $client = (new DeMunkPortalClient())->login();
 
@@ -129,5 +132,21 @@ class ImportVoorraadDeMunkJob implements ShouldQueue
             'linked'        => $matchResult['linked'],
             'unmatched'     => array_values($unmatched),
         ], now()->addDays(14));
+    }
+
+    /**
+     * The Horizon worker's Redis sockets ("default" for the queue push and
+     * WithoutOverlapping's lock, "cache" for the snapshot cache::put) are
+     * reused for the process lifetime and sit fully idle during the portal
+     * crawl below (up to $timeout = 1800s). That idle stretch has repeatedly
+     * let the connection go stale (Redis/network-level idle close), causing
+     * Predis\Connection\ConnectionException "Error while reading/writing
+     * bytes to the server" as soon as this job resumes using it. Disconnect
+     * up front so every Redis touch after the crawl opens a fresh socket.
+     */
+    private function disconnectRedis(): void
+    {
+        Redis::connection('default')->disconnect();
+        Redis::connection('cache')->disconnect();
     }
 }
