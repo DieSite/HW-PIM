@@ -180,6 +180,18 @@ class DeMunkPortalClient
     }
 
     /**
+     * A stable de-duplication key for an in-stock article. Public and static
+     * so the per-collection import jobs can merge their partial results on the
+     * same identity.
+     *
+     * @param  WebArticle  $article
+     */
+    public static function articleKey(array $article): string
+    {
+        return (string) ($article['ArtikelCodeLang'] ?? $article['ArticleCode'] ?? spl_object_hash((object) $article));
+    }
+
+    /**
      * Complete the carpet for one composition and read its stock alternatives.
      *
      * @param  WebArticle  $composition
@@ -292,16 +304,6 @@ class DeMunkPortalClient
         if (! $this->authenticated) {
             $this->login();
         }
-    }
-
-    /**
-     * A stable de-duplication key for an in-stock article.
-     *
-     * @param  WebArticle  $article
-     */
-    private function articleKey(array $article): string
-    {
-        return (string) ($article['ArtikelCodeLang'] ?? $article['ArticleCode'] ?? spl_object_hash((object) $article));
     }
 
     /**

@@ -15,6 +15,14 @@ class UpdateCreateIndex implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
+     * Reindexing by id is idempotent, so retry instead of failing with
+     * MaxAttemptsExceededException when a worker dies mid-run.
+     *
+     * @var int
+     */
+    public $tries = 3;
+
+    /**
      * Create a new job instance.
      *
      * @param  array  $productIds

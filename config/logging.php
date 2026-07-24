@@ -83,6 +83,20 @@ return [
             'level'  => env('BOLCOM_LOG_LEVEL', 'info'),
             'days'   => 30,
         ],
+
+        /**
+         * One line per queue-job lifecycle transition (started/finished/failed/
+         * timed out), written by App\Listeners\QueueLifecycleLogger. An attempt
+         * that logs "started" but never anything after it was killed mid-flight
+         * (deploy restart, OOM) — the MaxAttemptsExceededException that pops up
+         * retry_after seconds later is the symptom, not the cause.
+         */
+        'queue' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/queue.log'),
+            'level'  => 'info',
+            'days'   => 30,
+        ],
     ],
 
 ];

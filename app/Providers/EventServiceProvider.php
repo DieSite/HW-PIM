@@ -14,6 +14,13 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [];
 
     /**
+     * @var array<int, class-string>
+     */
+    protected $subscribe = [
+        \App\Listeners\QueueLifecycleLogger::class,
+    ];
+
+    /**
      * Register any events for your application.
      */
     public function boot(): void {}

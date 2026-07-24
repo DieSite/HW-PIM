@@ -57,45 +57,64 @@ return [
             'region' => env('SQS_REGION', 'us-east-1'),
         ],
 
+        /**
+         * retry_after must stay strictly above the timeout of every job and
+         * supervisor on the connection (enforced by
+         * tests/Unit/QueueTimingInvariantsTest.php): when a running job
+         * crosses retry_after, Redis re-reserves it mid-flight and the extra
+         * attempt surfaces as MaxAttemptsExceededException.
+         */
         'redis' => [
             'driver'      => 'redis',
             'connection'  => 'default',
             'queue'       => env('REDIS_QUEUE', 'default'),
-            'retry_after' => 660,
+            'retry_after' => 900,
             'block_for'   => null,
         ],
 
         /**
-         * Long-running competitor scrapes (RunHordeurenAnalysisJob) live on
-         * their own connection so their multi-hour visibility timeout does not
-         * apply to every other job. retry_after must exceed the job's worst-
-         * case wall time (npm/browser install + max_passes × per-pass timeout;
-         * see the job's $timeout). Served by the dedicated Horizon supervisor
-         * "supervisor-hordeuren" listening on the "hordeuren" queue.
+         * Hordeuren competitor analysis (RunHordeurenAnalysisJob and the
+         * per-competitor scrape batch it dispatches) lives on its own
+         * connection so its visibility timeout does not apply to every other
+         * job. retry_after must exceed the largest job timeout on the queue
+         * (the toolchain-install orchestrator, 3000s). Served by the dedicated
+         * Horizon supervisor "supervisor-hordeuren".
          */
         'redis-hordeuren' => [
             'driver'      => 'redis',
             'connection'  => 'default',
             'queue'       => 'hordeuren',
-            'retry_after' => 21600,
+            'retry_after' => 3600,
             'block_for'   => null,
         ],
 
         /**
-         * ImportVoorraadDeMunkJob crawls the De Munk dealer portal (dozens of
-         * collections/qualities, ~8 sequential HTTP calls each) and can run
-         * well past the shared "default" queue's 660s retry_after, causing
-         * Redis to re-reserve the job mid-flight and fail it with
-         * MaxAttemptsExceededException. Its own connection carries a
-         * retry_after comfortably above the job's $timeout (1800s). Served by
-         * the dedicated Horizon supervisor "supervisor-demunk" on the
-         * "demunk" queue.
+         * The De Munk voorraad import (ImportVoorraadDeMunkJob orchestrator,
+         * the per-collection fetch batch and the final apply job) crawls the
+         * dealer portal and runs well past the shared "default" queue's
+         * retry_after. Its own connection carries a retry_after comfortably
+         * above the largest job timeout on the queue (900s). Served by the
+         * dedicated Horizon supervisor "supervisor-demunk".
          */
         'redis-demunk' => [
             'driver'      => 'redis',
             'connection'  => 'default',
             'queue'       => 'demunk',
             'retry_after' => 3600,
+            'block_for'   => null,
+        ],
+
+        /**
+         * Generic slot for long-running jobs (currently BulkEditProductsJob,
+         * $timeout 3600) so they never sit on the shared "default" queue whose
+         * short retry_after would re-reserve them mid-flight. Served by the
+         * dedicated Horizon supervisor "supervisor-long".
+         */
+        'redis-long' => [
+            'driver'      => 'redis',
+            'connection'  => 'default',
+            'queue'       => 'long',
+            'retry_after' => 7200,
             'block_for'   => null,
         ],
 

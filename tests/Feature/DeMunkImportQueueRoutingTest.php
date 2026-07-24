@@ -1,34 +1,33 @@
 <?php
 
+use App\Jobs\ApplyDeMunkStockJob;
+use App\Jobs\FetchDeMunkCollectionStockJob;
 use App\Jobs\ImportVoorraadDeMunkJob;
 
-it('runs on the dedicated long-running connection and queue', function () {
-    $job = new ImportVoorraadDeMunkJob();
+it('runs every demunk job on the dedicated connection and queue', function () {
+    $jobs = [
+        new ImportVoorraadDeMunkJob(),
+        new FetchDeMunkCollectionStockJob('BASIC'),
+        new ApplyDeMunkStockJob(['BASIC']),
+    ];
 
-    expect($job->connection)->toBe('redis-demunk');
-    expect($job->queue)->toBe('demunk');
-    expect($job->tries)->toBe(1);
+    foreach ($jobs as $job) {
+        expect($job->connection)->toBe('redis-demunk');
+        expect($job->queue)->toBe('demunk');
+    }
 });
 
-it('gives the dedicated connection a retry_after longer than the job timeout', function () {
+it('reaches the orchestrator retry only through silent worker death', function () {
     $job = new ImportVoorraadDeMunkJob();
 
-    $retryAfter = (int) config("queue.connections.{$job->connection}.retry_after");
-
-    expect(config("queue.connections.{$job->connection}.queue"))->toBe($job->queue);
-    expect($retryAfter)->toBeGreaterThan($job->timeout);
+    expect($job->tries)->toBe(2);
+    expect($job->maxExceptions)->toBe(1);
+    expect($job->failOnTimeout)->toBeTrue();
 });
 
-it('has a horizon supervisor serving the demunk queue on the dedicated connection', function () {
-    $job = new ImportVoorraadDeMunkJob();
+it('retries a flaky collection fetch', function () {
+    $job = new FetchDeMunkCollectionStockJob('BASIC');
 
-    $supervisors = collect(config('horizon.defaults'))
-        ->filter(fn (array $supervisor) => in_array($job->queue, $supervisor['queue'], true));
-
-    expect($supervisors)->toHaveCount(1);
-
-    $supervisor = $supervisors->first();
-
-    expect($supervisor['connection'])->toBe($job->connection);
-    expect((int) $supervisor['timeout'])->toBeGreaterThanOrEqual($job->timeout);
+    expect($job->tries)->toBeGreaterThan(1);
+    expect($job->failOnTimeout)->toBeTrue();
 });

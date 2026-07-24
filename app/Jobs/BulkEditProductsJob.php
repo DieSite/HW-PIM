@@ -20,6 +20,11 @@ class BulkEditProductsJob implements ShouldQueue
     public $timeout = 3600;
 
     /**
+     * Run on the dedicated long-running connection/queue (Horizon
+     * supervisor-long): the shared "default" queue's retry_after is far below
+     * this job's timeout, so a long bulk edit there would be re-reserved
+     * mid-flight and fail with MaxAttemptsExceededException.
+     *
      * @param  array<string, mixed>  $filters
      * @param  array<string, mixed>  $operation
      */
@@ -28,7 +33,10 @@ class BulkEditProductsJob implements ShouldQueue
         private array $operation,
         private bool $syncWoo,
         private int $runId,
-    ) {}
+    ) {
+        $this->onConnection('redis-long');
+        $this->onQueue('long');
+    }
 
     public function handle(BulkEditService $bulkEditService, ProductService $productService): void
     {

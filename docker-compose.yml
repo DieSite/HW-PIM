@@ -12,8 +12,14 @@ services:
     ports:
       - "8000:80"
     restart: "no"
+    # Zelfde queue-opstelling als productie (Redis + Horizon); process-env
+    # gaat vóór .env, dus dit dwingt de juiste driver af.
+    environment:
+      QUEUE_DRIVER: redis
+      REDIS_HOST: unopim-redis
     depends_on:
       - unopim-mysql
+      - unopim-redis
 
   unopim-mysql:
     image: mysql:8
@@ -39,8 +45,19 @@ services:
     restart: no
     networks:
         - diesite
+    environment:
+      QUEUE_DRIVER: redis
+      REDIS_HOST: unopim-redis
     depends_on:
       - unopim-mysql
+      - unopim-redis
+
+  unopim-redis:
+    image: redis:7-alpine
+    container_name: unopim-redis
+    networks:
+        - diesite
+    restart: "no"
 
 #  unopim-mailpit:
 #    image: 'axllent/mailpit:latest'

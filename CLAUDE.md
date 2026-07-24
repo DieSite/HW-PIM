@@ -120,7 +120,11 @@ Custom code specific to this HW deployment lives in `app/`:
 
 ### Queue
 
-Laravel Horizon manages background jobs. The queue driver is `database`. The `unopim-q` container runs the queue worker automatically. To run manually: `docker exec -i unopim-web php artisan queue:work`.
+Laravel Horizon manages background jobs on the `redis` queue driver. Besides the shared `redis` connection there are dedicated connections/queues for long-running work: `redis-hordeuren` (hordeuren analysis batch), `redis-demunk` (De Munk import batch) and `redis-long` (generic long jobs such as `BulkEditProductsJob`), each served by its own Horizon supervisor in `config/horizon.php`.
+
+**Timing invariant** (enforced by `tests/Unit/QueueTimingInvariantsTest.php`): every job/supervisor timeout must stay strictly below its connection's `retry_after`, or a running job gets re-reserved mid-flight and fails with `MaxAttemptsExceededException`. New queueable classes must be registered in that test's factory map. Job lifecycle transitions are logged to `storage/logs/queue-*.log` (see `App\Listeners\QueueLifecycleLogger`).
+
+The `unopim-q` container runs `php artisan horizon` automatically. To run manually: `docker exec -i unopim-web php artisan horizon`. After changing queue/horizon config: `php artisan horizon:terminate` so a fresh master picks it up.
 
 ### Routes
 

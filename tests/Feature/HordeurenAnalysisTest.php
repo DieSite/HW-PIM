@@ -1,23 +1,34 @@
 <?php
 
+use App\Jobs\MailHordeurenAnalysisReportJob;
 use App\Jobs\RunHordeurenAnalysisJob;
+use App\Jobs\ScrapeHordeurenCompetitorJob;
 use App\Mail\HordeurenAnalysisFailed;
 use App\Mail\HordeurenAnalysisReport;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Testing\Fakes\PendingBatchFake;
 use Webkul\User\Models\Admin;
 
 /**
- * Point the job at a throwaway scraper directory that already has the
- * Playwright test runner, so the npm install step is skipped.
+ * Point the jobs at a throwaway scraper directory that already has the
+ * Playwright test runner (so the npm install step is skipped) and two
+ * competitor specs.
  */
-function fakeScraperDir(): string
+function fakeScraperDir(array $specs = ['01-voorbeeld.spec.js', '02-ander.spec.js']): string
 {
     $dir = sys_get_temp_dir().'/hordeuren-analyse-test-'.uniqid();
 
     File::makeDirectory($dir.'/node_modules/@playwright/test', 0755, true);
+    File::makeDirectory($dir.'/tests', 0755, true);
+
+    foreach ($specs as $spec) {
+        file_put_contents($dir.'/tests/'.$spec, '// spec');
+    }
 
     config()->set('competitor_pricing.scraper_dir', $dir);
     config()->set('competitor_pricing.hordeuren.browsers_path', $dir.'/browsers');
@@ -30,7 +41,7 @@ function fakeScraperDir(): string
 }
 
 /**
- * The job invokes node/npx/npm through an absolute, pinned toolchain path, so
+ * The jobs invoke node/npx/npm through an absolute, pinned toolchain path, so
  * compare commands by the binary's basename to stay independent of node_bin.
  */
 function fakedCommand($process): string
@@ -60,14 +71,7 @@ it('shows the analysis form with the admin email prefilled', function () {
 });
 
 it('shows a notice while an analysis is queued or running', function () {
-    \Illuminate\Support\Facades\DB::table('jobs')->insert([
-        'queue'        => 'default',
-        'payload'      => json_encode(['displayName' => RunHordeurenAnalysisJob::class]),
-        'attempts'     => 0,
-        'reserved_at'  => null,
-        'available_at' => time(),
-        'created_at'   => time(),
-    ]);
+    Cache::put(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY, now()->toIso8601String(), 600);
 
     $this->actingAs(Admin::first(), 'admin')
         ->get(route('admin.tools.hordeuren-analyse.index'))
@@ -75,14 +79,16 @@ it('shows a notice while an analysis is queued or running', function () {
         ->assertSee('in de wachtrij');
 });
 
-it('shows no running notice when the queue is empty', function () {
+it('shows no running notice when no analysis is active', function () {
+    Cache::forget(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY);
+
     $this->actingAs(Admin::first(), 'admin')
         ->get(route('admin.tools.hordeuren-analyse.index'))
         ->assertOk()
         ->assertDontSee('in de wachtrij');
 });
 
-it('dispatches the analysis job to the entered email', function () {
+it('dispatches the analysis job to the entered email and flags the run', function () {
     Queue::fake();
 
     $this->actingAs(Admin::first(), 'admin')
@@ -93,6 +99,8 @@ it('dispatches the analysis job to the entered email', function () {
         RunHordeurenAnalysisJob::class,
         fn (RunHordeurenAnalysisJob $job) => $job->email === 'rapport@voorbeeld.nl'
     );
+
+    expect(Cache::get(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY))->not->toBeNull();
 });
 
 it('rejects an invalid email address', function () {
@@ -116,147 +124,57 @@ it('requires an authenticated admin', function () {
     Queue::assertNothingPushed();
 });
 
-it('runs on the dedicated long-running connection and queue', function () {
-    $job = new RunHordeurenAnalysisJob('rapport@voorbeeld.nl');
+it('runs every hordeuren job on the dedicated connection and queue', function () {
+    $jobs = [
+        new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'),
+        new ScrapeHordeurenCompetitorJob('01-voorbeeld.spec.js'),
+        new MailHordeurenAnalysisReportJob('rapport@voorbeeld.nl', now()),
+    ];
 
-    expect($job->connection)->toBe('redis-hordeuren');
-    expect($job->queue)->toBe('hordeuren');
-    expect($job->tries)->toBe(1);
+    foreach ($jobs as $job) {
+        expect($job->connection)->toBe('redis-hordeuren');
+        expect($job->queue)->toBe('hordeuren');
+    }
 });
 
-it('gives the dedicated connection a retry_after longer than the job timeout', function () {
-    $job = new RunHordeurenAnalysisJob('rapport@voorbeeld.nl');
-
-    $retryAfter = (int) config("queue.connections.{$job->connection}.retry_after");
-
-    expect(config("queue.connections.{$job->connection}.queue"))->toBe($job->queue);
-    expect($retryAfter)->toBeGreaterThan($job->timeout);
-});
-
-it('has a horizon supervisor serving the hordeuren queue on the dedicated connection', function () {
-    $job = new RunHordeurenAnalysisJob('rapport@voorbeeld.nl');
-
-    $supervisors = collect(config('horizon.defaults'))
-        ->filter(fn (array $supervisor) => in_array($job->queue, $supervisor['queue'], true));
-
-    expect($supervisors)->toHaveCount(1);
-
-    $supervisor = $supervisors->first();
-
-    expect($supervisor['connection'])->toBe($job->connection);
-    expect((int) $supervisor['timeout'])->toBeGreaterThanOrEqual($job->timeout);
-});
-
-it('runs the playwright suite and mails the report', function () {
+it('prepares the toolchain and dispatches one scrape job per competitor spec', function () {
+    Bus::fake();
     Process::fake();
-    Mail::fake();
 
-    $dir = fakeScraperDir();
+    $dir = fakeScraperDir(['01-a.spec.js', '02-b.spec.js', '03-c.spec.js']);
 
-    file_put_contents($dir.'/results.json', json_encode([
-        'shop-a.nl' => ['Enkele klein' => '€ 100,00', 'Enkele groot' => 'n.v.t.'],
-        'shop-b.nl' => ['Enkele klein' => 'Op aanvraag'],
-    ]));
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+    File::makeDirectory($dir.'/results-parts');
+    file_put_contents($dir.'/results-parts/oud.json', '{}');
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
-    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test'
-        && ($process->environment['RESET_RESULTS'] ?? null) === '1');
+    expect(is_dir($dir.'/results-parts'))->toBeFalse();
 
-    Mail::assertSent(HordeurenAnalysisReport::class, function (HordeurenAnalysisReport $mail) {
-        return $mail->hasTo('rapport@voorbeeld.nl')
-            && $mail->summary === ['shops' => 2, 'cells' => 3, 'priced' => 1, 'missing' => 65]
-            && ! $mail->hadFailures;
+    Bus::assertBatched(function (PendingBatchFake $batch) {
+        return $batch->name === 'hordeuren-analyse'
+            && $batch->jobs->count() === 3
+            && $batch->jobs->every(fn ($job) => $job instanceof ScrapeHordeurenCompetitorJob);
     });
-
-    Process::assertRanTimes(
-        fn ($process) => fakedCommand($process) === 'npx playwright test',
-        times: 1
-    );
 });
 
-it('retries with sticky gap-filling passes until the suite is clean', function () {
-    Process::fake([
-        '*playwright*test*' => Process::sequence()
-            ->push(Process::result(output: '', errorOutput: '2 failed', exitCode: 1))
-            ->push(Process::result()),
-        '*' => Process::result(),
-    ]);
-    Mail::fake();
+it('throws when the scraper has no competitor specs', function () {
+    Bus::fake();
+    Process::fake();
 
-    $dir = fakeScraperDir();
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+    fakeScraperDir(specs: []);
 
-    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+    expect(fn () => (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle())
+        ->toThrow(RuntimeException::class, 'No competitor specs');
 
-    Process::assertRanTimes(
-        fn ($process) => fakedCommand($process) === 'npx playwright test',
-        times: 2
-    );
-
-    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test'
-        && ($process->environment['RESET_RESULTS'] ?? null) === '1');
-
-    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test'
-        && ! array_key_exists('RESET_RESULTS', $process->environment ?? []));
-
-    Mail::assertSent(
-        HordeurenAnalysisReport::class,
-        fn (HordeurenAnalysisReport $mail) => ! $mail->hadFailures
-    );
-});
-
-it('gives up gap-filling after the configured number of passes', function () {
-    config()->set('competitor_pricing.hordeuren.max_passes', 3);
-
-    Process::fake([
-        '*playwright*test*' => Process::result(output: '', errorOutput: '1 failed', exitCode: 1),
-        '*'                 => Process::result(),
-    ]);
-    Mail::fake();
-
-    $dir = fakeScraperDir();
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
-
-    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
-
-    Process::assertRanTimes(
-        fn ($process) => fakedCommand($process) === 'npx playwright test',
-        times: 3
-    );
-
-    Mail::assertSent(
-        HordeurenAnalysisReport::class,
-        fn (HordeurenAnalysisReport $mail) => $mail->hadFailures
-    );
-});
-
-it('flags partial scrape failures in the report mail', function () {
-    Process::fake([
-        '*playwright*test*' => Process::result(output: '', errorOutput: '1 failed', exitCode: 1),
-        '*'                 => Process::result(),
-    ]);
-    Mail::fake();
-
-    $dir = fakeScraperDir();
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
-
-    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
-
-    Mail::assertSent(
-        HordeurenAnalysisReport::class,
-        fn (HordeurenAnalysisReport $mail) => $mail->hadFailures
-    );
+    Bus::assertNothingBatched();
 });
 
 it('installs dependencies when missing and always refreshes chromium', function () {
+    Bus::fake();
     Process::fake();
-    Mail::fake();
 
     $dir = fakeScraperDir();
     File::deleteDirectory($dir.'/node_modules');
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
@@ -265,11 +183,10 @@ it('installs dependencies when missing and always refreshes chromium', function 
 });
 
 it('installs chromium without sudo-requiring system deps by default', function () {
+    Bus::fake();
     Process::fake();
-    Mail::fake();
 
-    $dir = fakeScraperDir();
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+    fakeScraperDir();
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
@@ -280,11 +197,10 @@ it('installs chromium without sudo-requiring system deps by default', function (
 it('adds --with-deps only when install_deps is enabled', function () {
     config()->set('competitor_pricing.hordeuren.install_deps', true);
 
+    Bus::fake();
     Process::fake();
-    Mail::fake();
 
-    $dir = fakeScraperDir();
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+    fakeScraperDir();
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
@@ -294,25 +210,122 @@ it('adds --with-deps only when install_deps is enabled', function () {
 it('pins the configured node toolchain and prepends it to PATH', function () {
     config()->set('competitor_pricing.hordeuren.node_bin', '/usr/local/node-24/bin');
 
+    Bus::fake();
     Process::fake();
-    Mail::fake();
 
     $dir = fakeScraperDir();
-    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+    File::deleteDirectory($dir.'/node_modules');
 
     (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
 
-    Process::assertRan(fn ($process) => ((array) $process->command)[0] === '/usr/local/node-24/bin/npx'
+    Process::assertRan(fn ($process) => ((array) $process->command)[0] === '/usr/local/node-24/bin/npm'
         && str_starts_with((string) ($process->environment['PATH'] ?? ''), '/usr/local/node-24/bin:'));
 });
 
-it('throws and mails a failure notice when no report is produced', function () {
+it('mails a failure notice and clears the running flag when preparation fails', function () {
+    Mail::fake();
+    Cache::put(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY, now()->toIso8601String(), 600);
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->failed(new RuntimeException('boom'));
+
+    expect(Cache::get(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY))->toBeNull();
+
+    Mail::assertSent(
+        HordeurenAnalysisFailed::class,
+        fn (HordeurenAnalysisFailed $mail) => $mail->hasTo('rapport@voorbeeld.nl') && str_contains($mail->error, 'boom')
+    );
+});
+
+it('scrapes a single competitor spec', function () {
     Process::fake();
+
+    fakeScraperDir();
+
+    (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle();
+
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test tests/01-a.spec.js');
+});
+
+it('throws so the scrape is retried when the spec leaves empty cells', function () {
+    Process::fake([
+        '*playwright*test*' => Process::result(output: '', errorOutput: '2 failed', exitCode: 1),
+    ]);
+
+    fakeScraperDir();
+
+    expect(fn () => (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle())
+        ->toThrow(RuntimeException::class, '01-a.spec.js');
+});
+
+it('mails the report with a summary and clears the running flag', function () {
+    Mail::fake();
+    Cache::put(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY, now()->toIso8601String(), 600);
+
+    $dir = fakeScraperDir();
+
+    file_put_contents($dir.'/results.json', json_encode([
+        'shop-a.nl' => ['Enkele klein' => '€ 100,00', 'Enkele groot' => 'n.v.t.'],
+        'shop-b.nl' => ['Enkele klein' => 'Op aanvraag'],
+    ]));
+    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+
+    (new MailHordeurenAnalysisReportJob('rapport@voorbeeld.nl', now()))->handle();
+
+    Mail::assertSent(HordeurenAnalysisReport::class, function (HordeurenAnalysisReport $mail) {
+        return $mail->hasTo('rapport@voorbeeld.nl')
+            && $mail->summary === ['shops' => 2, 'cells' => 3, 'priced' => 1, 'missing' => 65]
+            && $mail->hadFailures;
+    });
+
+    expect(Cache::get(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY))->toBeNull();
+});
+
+it('reports a clean run when every size cell is filled and no scrape failed', function () {
+    Mail::fake();
+
+    $dir = fakeScraperDir();
+
+    $sizes = (new ReflectionClass(MailHordeurenAnalysisReportJob::class))->getConstant('SIZES');
+
+    file_put_contents($dir.'/results.json', json_encode([
+        'shop-a.nl' => array_fill_keys($sizes, '€ 100,00'),
+    ]));
+    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+
+    (new MailHordeurenAnalysisReportJob('rapport@voorbeeld.nl', now(), failedScrapes: 0))->handle();
+
+    Mail::assertSent(
+        HordeurenAnalysisReport::class,
+        fn (HordeurenAnalysisReport $mail) => ! $mail->hadFailures && $mail->summary['missing'] === 0
+    );
+});
+
+it('flags the report when competitor scrapes failed', function () {
+    Mail::fake();
+
+    $dir = fakeScraperDir();
+
+    $sizes = (new ReflectionClass(MailHordeurenAnalysisReportJob::class))->getConstant('SIZES');
+
+    file_put_contents($dir.'/results.json', json_encode([
+        'shop-a.nl' => array_fill_keys($sizes, '€ 100,00'),
+    ]));
+    touch($dir.'/prijsvergelijking-plisse-hordeuren.xlsx', time() + 60);
+
+    (new MailHordeurenAnalysisReportJob('rapport@voorbeeld.nl', now(), failedScrapes: 2))->handle();
+
+    Mail::assertSent(
+        HordeurenAnalysisReport::class,
+        fn (HordeurenAnalysisReport $mail) => $mail->hadFailures
+    );
+});
+
+it('throws and mails a failure notice when no report is produced', function () {
     Mail::fake();
 
     fakeScraperDir();
 
-    $job = new RunHordeurenAnalysisJob('rapport@voorbeeld.nl');
+    $job = new MailHordeurenAnalysisReportJob('rapport@voorbeeld.nl', now());
 
     expect(fn () => $job->handle())->toThrow(RuntimeException::class);
 

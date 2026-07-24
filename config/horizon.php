@@ -209,11 +209,12 @@ return [
         ],
 
         /**
-         * Dedicated worker for the multi-hour hordeuren competitor scrape
-         * (RunHordeurenAnalysisJob). Its own connection carries a matching
-         * retry_after (see config/queue.php redis-hordeuren) so the long run
-         * is never re-reserved mid-flight, and timeout leaves headroom over
-         * the job's own $timeout. One process: the scrape is not parallelised.
+         * Dedicated worker for the hordeuren competitor analysis: the
+         * toolchain-install orchestrator plus the batch of per-competitor
+         * scrape jobs it dispatches. Its own connection carries a matching
+         * retry_after (see config/queue.php redis-hordeuren) so no job is
+         * re-reserved mid-flight, and timeout leaves headroom over the largest
+         * job $timeout (3000). One process: the scrapes run sequentially.
          */
         'supervisor-hordeuren' => [
             'connection'          => 'redis-hordeuren',
@@ -225,7 +226,7 @@ return [
             'maxJobs'             => 0,
             'memory'              => 1024,
             'tries'               => 1,
-            'timeout'             => 21600,
+            'timeout'             => 3300,
             'nice'                => 0,
         ],
 
@@ -248,6 +249,25 @@ return [
             'timeout'             => 1800,
             'nice'                => 0,
         ],
+
+        /**
+         * Dedicated worker for generic long-running jobs on the "long" queue
+         * (see config/queue.php redis-long), e.g. BulkEditProductsJob.
+         * timeout stays below the connection's retry_after (7200).
+         */
+        'supervisor-long' => [
+            'connection'          => 'redis-long',
+            'queue'               => ['long'],
+            'balance'             => 'simple',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses'        => 1,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 1024,
+            'tries'               => 1,
+            'timeout'             => 5400,
+            'nice'                => 0,
+        ],
     ],
 
     'environments' => [
@@ -266,6 +286,9 @@ return [
             'supervisor-demunk' => [
                 'maxProcesses' => 1,
             ],
+            'supervisor-long' => [
+                'maxProcesses' => 1,
+            ],
         ],
 
         'local' => [
@@ -279,6 +302,9 @@ return [
                 'maxProcesses' => 1,
             ],
             'supervisor-demunk' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-long' => [
                 'maxProcesses' => 1,
             ],
         ],

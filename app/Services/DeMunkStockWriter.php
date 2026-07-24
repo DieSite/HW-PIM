@@ -26,10 +26,17 @@ class DeMunkStockWriter
     /**
      * Apply a fetched stock set to every active link.
      *
+     * A link whose identity is absent from the stock set gets quantity 0, so
+     * the caller must say which collections were actually fetched when the
+     * fetch was partial: links outside $fetchedCollections keep their current
+     * stock instead of being zeroed by a gap in the crawl. Null means the
+     * fetch was complete.
+     *
      * @param  list<array<string, mixed>>  $articles  Tagged WebArticles from DeMunkPortalClient
+     * @param  list<string>|null  $fetchedCollections
      * @return array{products:int, variants_changed:int}
      */
-    public function apply(array $articles): array
+    public function apply(array $articles, ?array $fetchedCollections = null): array
     {
         $stockMap = self::buildStockMap($articles);
         $syncExternal = (bool) config('demunk.sync_external');
@@ -45,6 +52,10 @@ class DeMunkStockWriter
             ->get();
 
         foreach ($links as $link) {
+            if ($fetchedCollections !== null && ! in_array($link->demunk_collectie, $fetchedCollections, true)) {
+                continue;
+            }
+
             $identityKey = self::identityKey($link->demunk_collectie, $link->demunk_kwaliteit, $link->demunk_kleur);
             $sizeStock = $stockMap[$identityKey] ?? [];
 

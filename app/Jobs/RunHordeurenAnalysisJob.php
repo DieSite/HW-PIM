@@ -2,100 +2,78 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\HordeurenScraperEnvironment;
 use App\Mail\HordeurenAnalysisFailed;
-use App\Mail\HordeurenAnalysisReport;
+use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
 use Throwable;
 
 /**
- * Run the plissé-hordeuren competitor analysis (the Playwright suite in
- * `competitor-analysis/tests/`) and mail the resulting Excel report to the
- * address entered in the admin (Tools → Hordeuren concurrentie-analyse).
+ * Kick off the plissé-hordeuren competitor analysis (the Playwright suite in
+ * `competitor-analysis/tests/`) for the address entered in the admin
+ * (Tools → Hordeuren concurrentie-analyse).
  *
- * The suite drives live competitor configurators for 34 door configurations,
- * so a full run takes 30–60 minutes (more when gap-filling passes are
- * needed). Chromium and its system libraries are installed on first run
- * (the containers run as root and already ship Node 20).
+ * This job only prepares the toolchain (npm install + Chromium on first run)
+ * and then dispatches one ScrapeHordeurenCompetitorJob per competitor spec as
+ * a batch; MailHordeurenAnalysisReportJob mails the Excel when the batch
+ * finishes. Splitting the former multi-hour monolith means a killed worker
+ * (deploy restart, OOM) loses one competitor's scrape instead of the whole
+ * run, and each competitor retries independently.
  */
 class RunHordeurenAnalysisJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, HordeurenScraperEnvironment, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The door configurations every competitor is checked against: six
-     * generic sizes plus the own assortment (7 type codes, each as single
-     * and double door, in black and grey mesh).
-     * Mirrors `competitor-analysis/tests/sizes.js`.
-     *
-     * @var list<string>
+     * Cache key flagging a queued/running analysis for the admin notice,
+     * holding the ISO start time. Cleared when the report (or failure) mail
+     * goes out; the TTL is a backstop against a run that dies entirely.
      */
-    private const SIZES = [
-        'Enkele klein',
-        'Enkele middel',
-        'Enkele groot',
-        'Dubbele klein',
-        'Dubbele middel',
-        'Dubbele groot',
-        '96E zwart gaas',
-        '96E grijs gaas',
-        '96O zwart gaas',
-        '96O grijs gaas',
-        '110O zwart gaas',
-        '110O grijs gaas',
-        '130E zwart gaas',
-        '130E grijs gaas',
-        '130N zwart gaas',
-        '130N grijs gaas',
-        '160N zwart gaas',
-        '160N grijs gaas',
-        '190N zwart gaas',
-        '190N grijs gaas',
-        'Dubbel 96E zwart gaas',
-        'Dubbel 96E grijs gaas',
-        'Dubbel 96O zwart gaas',
-        'Dubbel 96O grijs gaas',
-        'Dubbel 110O zwart gaas',
-        'Dubbel 110O grijs gaas',
-        'Dubbel 130E zwart gaas',
-        'Dubbel 130E grijs gaas',
-        'Dubbel 130N zwart gaas',
-        'Dubbel 130N grijs gaas',
-        'Dubbel 160N zwart gaas',
-        'Dubbel 160N grijs gaas',
-        'Dubbel 190N zwart gaas',
-        'Dubbel 190N grijs gaas',
-    ];
+    public const RUNNING_CACHE_KEY = 'hordeuren_analysis_running_since';
 
     /**
-     * A failed scrape must not silently re-run for another 10+ minutes; the
-     * failure mail tells the user to simply start it again.
+     * With failOnTimeout and maxExceptions = 1, the second attempt is reached
+     * exclusively when the first attempt died silently (worker killed on
+     * deploy/restart, OOM): the installs are idempotent, so re-preparing is
+     * safe. A genuine timeout or exception still fails immediately and mails
+     * the failure notice.
      *
      * @var int
      */
-    public $tries = 1;
+    public $tries = 2;
 
     /**
-     * Room for max_passes gap-filling passes of the grown suite (34
-     * configurations, up to 90 min per pass).
+     * Room for npm install (900) plus the Chromium download (1800).
      *
      * @var int
      */
-    public $timeout = 18000;
+    public $timeout = 3000;
+
+    /**
+     * @var bool
+     */
+    public $failOnTimeout = true;
+
+    /**
+     * @var int
+     */
+    public $maxExceptions = 1;
 
     /**
      * Run on a dedicated connection/queue (Horizon supervisor-hordeuren) whose
-     * retry_after exceeds this job's worst-case wall time. On the shared queue
-     * the 11-minute retry_after re-reserved the still-running scrape, and with
-     * $tries = 1 that second attempt failed instantly with "has been attempted
-     * too many times".
+     * retry_after exceeds every hordeuren job's timeout. On the shared queue
+     * the short retry_after re-reserved still-running jobs, which surfaced as
+     * "has been attempted too many times".
      */
     public function __construct(public string $email)
     {
@@ -106,55 +84,63 @@ class RunHordeurenAnalysisJob implements ShouldQueue
     public function handle(): void
     {
         $dir = (string) config('competitor_pricing.scraper_dir');
-        $output = (string) config('competitor_pricing.hordeuren.output');
 
         if (! is_dir($dir)) {
             throw new RuntimeException("Scraper directory not found: {$dir}");
         }
 
+        $specs = $this->competitorSpecs($dir);
+
+        if ($specs === []) {
+            throw new RuntimeException("No competitor specs found in {$dir}/tests");
+        }
+
         $this->ensurePlaywrightInstalled($dir);
         $this->installChromium($dir);
 
-        $startedAt = now();
-        $maxPasses = max(1, (int) config('competitor_pricing.hordeuren.max_passes'));
-
         /**
-         * Pass 1 starts clean (RESET_RESULTS=1); the suite's recorder is
-         * sticky, so every later pass keeps the real prices already scraped
-         * and only the missing cells get a fresh attempt. A non-zero exit
-         * means at least one spec recorded nothing, i.e. an empty cell.
+         * Fresh start: the suite's recorder is sticky (results-parts/ survives
+         * runs so retries only fill missing cells), so the previous analysis'
+         * parts must be cleared before the new batch begins.
          */
-        for ($pass = 1; $pass <= $maxPasses; $pass++) {
-            $result = Process::path($dir)
-                ->timeout((int) config('competitor_pricing.hordeuren.timeout'))
-                ->env($this->processEnv() + ($pass === 1 ? ['RESET_RESULTS' => '1'] : []))
-                ->run([$this->nodeBin().'/npx', 'playwright', 'test']);
+        File::deleteDirectory($dir.'/results-parts');
 
-            if ($result->successful()) {
-                break;
-            }
-        }
+        $email = $this->email;
+        $startedAt = now();
 
-        if (! $this->reportWasRebuilt($output, $startedAt)) {
-            throw new RuntimeException(
-                'De Playwright-run heeft geen nieuw Excel-rapport opgeleverd. Output: '
-                .mb_substr($result->errorOutput() ?: $result->output(), -2000)
-            );
-        }
-
-        Mail::to($this->email)->send(new HordeurenAnalysisReport(
-            reportPath: $output,
-            summary: $this->summarizeResults(),
-            hadFailures: ! $result->successful(),
-            startedAt: $startedAt,
-            finishedAt: now(),
-        ));
+        Bus::batch(array_map(
+            fn (string $spec) => new ScrapeHordeurenCompetitorJob($spec),
+            $specs,
+        ))
+            ->allowFailures()
+            ->name('hordeuren-analyse')
+            ->finally(function (Batch $batch) use ($email, $startedAt): void {
+                MailHordeurenAnalysisReportJob::dispatch($email, $startedAt, $batch->failedJobs);
+            })
+            ->onConnection('redis-hordeuren')
+            ->onQueue('hordeuren')
+            ->dispatch();
     }
 
     public function failed(?Throwable $exception): void
     {
+        Cache::forget(self::RUNNING_CACHE_KEY);
+
         Mail::to($this->email)->send(new HordeurenAnalysisFailed(
             error: $exception?->getMessage() ?? 'Onbekende fout',
+        ));
+    }
+
+    /**
+     * One spec file per competitor shop.
+     *
+     * @return list<string>
+     */
+    private function competitorSpecs(string $dir): array
+    {
+        return array_values(array_map(
+            fn (string $path) => basename($path),
+            glob($dir.'/tests/*.spec.js') ?: [],
         ));
     }
 
@@ -203,89 +189,5 @@ class RunHordeurenAnalysisJob implements ShouldQueue
             ->env($this->processEnv())
             ->run($command)
             ->throw();
-    }
-
-    /**
-     * Directory holding a matched node/npx/npm toolchain. The queue worker's
-     * inherited PATH may lead with an ancient Node (v14) whose bundled npm
-     * cannot even parse modern npm's source, so the toolchain must be pinned.
-     */
-    private function nodeBin(): string
-    {
-        return rtrim((string) config('competitor_pricing.hordeuren.node_bin'), '/');
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function processEnv(): array
-    {
-        $currentPath = getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin';
-
-        return [
-            'PLAYWRIGHT_BROWSERS_PATH' => (string) config('competitor_pricing.hordeuren.browsers_path'),
-            'PATH'                     => $this->nodeBin().':'.$currentPath,
-        ];
-    }
-
-    /**
-     * The suite always exits through its teardown, which rebuilds the Excel —
-     * so a report older than the run means the suite crashed before scraping.
-     */
-    private function reportWasRebuilt(string $output, Carbon $startedAt): bool
-    {
-        clearstatcache(true, $output);
-
-        return is_file($output) && filemtime($output) >= $startedAt->getTimestamp();
-    }
-
-    /**
-     * Summarize results.json (competitor → size → price/label) for the mail
-     * body: how many competitors were checked, how many cells hold a real
-     * scraped price versus an honest label such as "n.v.t." or "Op aanvraag",
-     * and how many of the expected size cells are still empty.
-     *
-     * @return array{shops: int, cells: int, priced: int, missing: int}|null
-     */
-    private function summarizeResults(): ?array
-    {
-        $path = (string) config('competitor_pricing.hordeuren.results');
-
-        if (! is_file($path)) {
-            return null;
-        }
-
-        $results = json_decode((string) file_get_contents($path), true);
-
-        if (! is_array($results)) {
-            return null;
-        }
-
-        $cells = 0;
-        $priced = 0;
-        $missing = 0;
-
-        foreach ($results as $sizes) {
-            if (! is_array($sizes)) {
-                continue;
-            }
-
-            $missing += count(array_diff(self::SIZES, array_keys($sizes)));
-
-            foreach ($sizes as $value) {
-                $cells++;
-
-                if (is_string($value) && str_contains($value, '€')) {
-                    $priced++;
-                }
-            }
-        }
-
-        return [
-            'shops'   => count($results),
-            'cells'   => $cells,
-            'priced'  => $priced,
-            'missing' => $missing,
-        ];
     }
 }

@@ -21,6 +21,17 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
     public $timeout = 600;
 
     /**
+     * A re-sync is idempotent (the exporter upserts by SKU), so retry instead
+     * of dying when a worker is killed mid-run (deploy restart, OOM) — the
+     * expired reservation then re-runs the sync instead of surfacing as
+     * MaxAttemptsExceededException, and transient WooCommerce 5xx errors get
+     * a second chance too.
+     */
+    public $tries = 3;
+
+    public $backoff = 60;
+
+    /**
      * Create a new job instance.
      */
     public function __construct(
@@ -58,10 +69,10 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
         $syncError = $product?->additional['product_sync_error'] ?? 'unknown';
 
         Log::error('WooCommerce sync failed for product', [
-            'product_id' => $this->product->id,
-            'sku' => $this->product->sku,
+            'product_id'         => $this->product->id,
+            'sku'                => $this->product->sku,
             'product_sync_error' => $syncError,
-            'exception' => $exception->getMessage(),
+            'exception'          => $exception->getMessage(),
         ]);
 
         Sentry::captureException($exception);

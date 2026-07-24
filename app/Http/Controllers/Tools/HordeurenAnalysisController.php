@@ -7,7 +7,7 @@ use App\Jobs\RunHordeurenAnalysisJob;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class HordeurenAnalysisController extends Controller
@@ -19,12 +19,10 @@ class HordeurenAnalysisController extends Controller
         /**
          * Een analyse die in de wachtrij staat of draait, is anders volledig
          * onzichtbaar voor de admin: het rapport komt pas na 30–60 minuten
-         * per mail, en een run die tussentijds sneuvelt (bv. door een
-         * herstart van de queue-worker) laat géén spoor na.
+         * per mail. De cache-vlag wordt gezet bij het starten en gewist zodra
+         * de rapport- of foutmail is verstuurd.
          */
-        $runningSince = DB::table('jobs')
-            ->where('payload', 'like', '%RunHordeurenAnalysisJob%')
-            ->min('created_at');
+        $runningSince = Cache::get(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY);
 
         return view('admin::tools.hordeuren-analyse', [
             'defaultEmail' => auth()->guard('admin')->user()?->email,
@@ -32,7 +30,7 @@ class HordeurenAnalysisController extends Controller
                 ? Carbon::createFromTimestamp(filemtime($reportPath))->timezone('Europe/Amsterdam')
                 : null,
             'runningSince' => $runningSince
-                ? Carbon::createFromTimestamp((int) $runningSince)->timezone('Europe/Amsterdam')
+                ? Carbon::parse($runningSince)->timezone('Europe/Amsterdam')
                 : null,
         ]);
     }
@@ -44,6 +42,12 @@ class HordeurenAnalysisController extends Controller
         ]);
 
         RunHordeurenAnalysisJob::dispatch($validated['email']);
+
+        Cache::put(
+            RunHordeurenAnalysisJob::RUNNING_CACHE_KEY,
+            now()->toIso8601String(),
+            now()->addHours(6),
+        );
 
         session()->flash(
             'success',

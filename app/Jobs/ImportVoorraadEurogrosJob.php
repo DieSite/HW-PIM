@@ -20,7 +20,14 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 1;
+    /**
+     * With failOnTimeout and maxExceptions = 1, the second attempt is reached
+     * exclusively when the first attempt died silently (worker killed on
+     * deploy/restart, OOM) and the reservation expired: a genuine timeout or
+     * exception still fails immediately. The import overwrites, so a re-run
+     * is safe.
+     */
+    public int $tries = 2;
 
     public int $timeout = 600;
 
@@ -30,9 +37,15 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
 
     protected $path = 'private/eurogros/Voorraad_Eurogros.csv';
 
+    /**
+     * expireAfter must stay at or below the connection's retry_after: the
+     * silent-death retry arrives exactly retry_after seconds after dispatch,
+     * and an unexpired lock combined with dontRelease() would swallow that
+     * retry without a trace.
+     */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('import-eurogros-voorraad'))->expireAfter(900)->dontRelease()];
+        return [(new WithoutOverlapping('import-eurogros-voorraad'))->expireAfter($this->timeout)->dontRelease()];
     }
 
     public function handle(): void

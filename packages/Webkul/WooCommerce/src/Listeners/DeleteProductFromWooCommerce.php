@@ -21,7 +21,7 @@ class DeleteProductFromWooCommerce implements ShouldQueue
 
     public $tries = 5;
 
-    public $timeout = 300000;
+    public $timeout = 300;
 
     protected $batch;
 
