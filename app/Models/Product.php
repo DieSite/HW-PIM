@@ -40,6 +40,15 @@ class Product extends \Webkul\Product\Models\Product
     }
 
     /**
+     * Scope to variants sold in a custom size: "Maatwerk", "Rond Maatwerk" and
+     * "Vierkant Maatwerk" all carry the word in values.common.maat.
+     */
+    public function scopeMaatwerk(Builder $query): Builder
+    {
+        return $query->whereRaw("LOWER(`values`->>'$.common.maat') LIKE '%maatwerk%'");
+    }
+
+    /**
      * Products eligible to be listed on Bol.com: they have an EAN, Eurogros
      * stock, and are the variant without an underlay ("Zonder onderkleed").
      */
