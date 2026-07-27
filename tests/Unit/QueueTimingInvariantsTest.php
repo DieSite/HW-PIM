@@ -146,6 +146,75 @@ it('keeps every WithoutOverlapping lock expiry at or below the connection retry_
     }
 });
 
+/**
+ * Connections whose jobs must bound their retries by a deadline instead of an
+ * attempt count. Add a connection here once its jobs are converted.
+ *
+ * The timing invariants above only stop a *running* job from being re-reserved.
+ * They cannot help when the worker itself disappears — a deploy restart, an
+ * OOM kill, a replaced container. That reserves the job, bumps its attempt
+ * counter and then vanishes without running failed(), releasing the job or
+ * recording an exception, so the attempt is burnt invisibly. On a queue whose
+ * jobs run for many minutes those deaths accumulate, and the attempt after the
+ * last one dies instantly with "has been attempted too many times" — the job
+ * that never even started.
+ *
+ * retryUntil() removes the attempt counter from that decision entirely
+ * (Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts returns early while the
+ * deadline is in the future), and maxExceptions keeps genuine failures bounded
+ * because that counter only advances when handle() actually threw.
+ *
+ * @var list<string>
+ */
+const DEADLINE_BOUNDED_CONNECTIONS = ['redis-hordeuren'];
+
+it('bounds long-running jobs by a deadline instead of an attempt count', function () {
+    foreach (queueTimingJobFactories() as $class => $factory) {
+        $job = $factory();
+
+        if (! in_array($job->connection ?? 'redis', DEADLINE_BOUNDED_CONNECTIONS, true)) {
+            continue;
+        }
+
+        expect(method_exists($job, 'retryUntil'))->toBeTrue(
+            "[{$class}] runs on a queue where workers are killed mid-job (deploy, OOM). It must define retryUntil() so a silent worker death cannot burn an attempt and surface as MaxAttemptsExceededException."
+        );
+
+        expect($job->retryUntil())->toBeInstanceOf(
+            DateTimeInterface::class,
+            "[{$class}] retryUntil() must return a DateTimeInterface."
+        );
+
+        expect($job->retryUntil()->getTimestamp())->toBeGreaterThan(
+            now()->getTimestamp(),
+            "[{$class}] retryUntil() must be in the future, or every attempt fails immediately."
+        );
+
+        expect((int) ($job->tries ?? 0))->toBe(
+            0,
+            "[{$class}] still sets \$tries. With retryUntil() the worker ignores it, so leaving it set only misleads the next reader."
+        );
+
+        expect($job->maxExceptions ?? null)->toBeGreaterThan(
+            0,
+            "[{$class}] must cap genuine failures with \$maxExceptions: with retryUntil() and no cap, a permanently broken job retries until the deadline and blocks the single-process queue behind it."
+        );
+    }
+});
+
+it('gives the hordeuren scrape deadline room for a whole sequential batch', function () {
+    $job = new ScrapeHordeurenCompetitorJob('01-voorbeeld.spec.js');
+
+    $specs = glob(base_path('competitor-analysis/tests/*.spec.js')) ?: [];
+
+    $worstCasePass = max(1, count($specs)) * $job->timeout;
+
+    expect($job->retryUntil()->getTimestamp() - now()->getTimestamp())->toBeGreaterThan(
+        $worstCasePass,
+        'Every competitor of a run is dispatched at once but scraped sequentially by the single supervisor-hordeuren process, and retryUntil() is frozen into the payload at dispatch. A deadline shorter than a worst-case pass ('.count($specs).' specs x '.$job->timeout.'s) would make the last competitors fail on arrival — the exact symptom this replaced.'
+    );
+});
+
 it('covers every queueable class with a factory so new jobs cannot dodge the invariants', function () {
     $scanned = collect(glob(app_path('Jobs/*.php')))
         ->map(fn (string $file) => 'App\\Jobs\\'.basename($file, '.php'))

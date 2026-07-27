@@ -88,7 +88,11 @@ class QueueLifecycleLogger
 
         if ($event->exception instanceof MaxAttemptsExceededException
             && ! $event->exception instanceof TimeoutExceededException) {
-            $context['likely_cause'] = $this->likelyCause($event->connectionName, $context['seconds_since_dispatch']);
+            $context['likely_cause'] = $this->likelyCause(
+                $event->connectionName,
+                $event->job,
+                $context['seconds_since_dispatch'],
+            );
         }
 
         Log::channel('queue')->error('job failed', $context);
@@ -97,12 +101,27 @@ class QueueLifecycleLogger
 
     /**
      * A MaxAttemptsExceededException is thrown when a job is popped with its
-     * attempts already spent — meaning an earlier attempt never reported back.
-     * When the job's age since dispatch matches the connection's retry_after,
-     * that earlier attempt's worker died without failing the job.
+     * retry budget already spent — meaning an earlier attempt never reported
+     * back. Which budget ran out matters, because the two cases call for
+     * opposite responses and carry the identical error message.
      */
-    private function likelyCause(string $connection, ?float $secondsSinceDispatch): string
+    private function likelyCause(string $connection, Job $job, ?float $secondsSinceDispatch): string
     {
+        $retryUntil = method_exists($job, 'retryUntil') ? $job->retryUntil() : null;
+
+        /**
+         * The job bounds retries by a deadline, so its attempt count was never
+         * consulted: no number of killed workers can produce this. It simply
+         * was still being retried when the deadline passed.
+         */
+        if ($retryUntil !== null) {
+            return sprintf(
+                'retryUntil deadline (%s) expired — NOT the attempt-burning failure: this job ignores its attempt count. The run was still retrying %s seconds after dispatch, so either it is genuinely that slow or workers are being killed faster than a run can absorb. Grep this log for "job started" lines with no matching "job finished".',
+                date('c', (int) $retryUntil),
+                $secondsSinceDispatch !== null ? (string) (int) $secondsSinceDispatch : 'an unknown number of',
+            );
+        }
+
         $retryAfter = (int) config("queue.connections.{$connection}.retry_after");
 
         if ($secondsSinceDispatch !== null && $retryAfter > 0 && abs($secondsSinceDispatch - $retryAfter) < 90) {

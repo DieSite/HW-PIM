@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Mail\HordeurenAnalysisFailed;
 use App\Mail\HordeurenAnalysisReport;
+use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -71,9 +72,20 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
     ];
 
     /**
+     * Bounded by retryUntil() rather than by attempts, so a worker killed
+     * while this job runs costs a free retry instead of eating one of two
+     * lives and eventually failing with MaxAttemptsExceededException.
+     *
      * @var int
      */
-    public $tries = 2;
+    public $tries = 0;
+
+    /**
+     * A missing report is a real failure worth mailing about straight away.
+     *
+     * @var int
+     */
+    public $maxExceptions = 1;
 
     /**
      * @var int
@@ -99,6 +111,15 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
         $this->onQueue('hordeuren');
     }
 
+    /**
+     * Dispatched by the batch's finally callback, so it is already at the end
+     * of a run that may have taken hours; an hour of retry room is plenty.
+     */
+    public function retryUntil(): DateTimeInterface
+    {
+        return now()->addHour();
+    }
+
     public function handle(): void
     {
         $output = (string) config('competitor_pricing.hordeuren.output');
@@ -121,11 +142,13 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
         ));
 
         Cache::forget(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY);
+        Cache::forget(RunHordeurenAnalysisJob::BATCH_CACHE_KEY);
     }
 
     public function failed(?Throwable $exception): void
     {
         Cache::forget(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY);
+        Cache::forget(RunHordeurenAnalysisJob::BATCH_CACHE_KEY);
 
         Mail::to($this->email)->send(new HordeurenAnalysisFailed(
             error: $exception?->getMessage() ?? 'Onbekende fout',

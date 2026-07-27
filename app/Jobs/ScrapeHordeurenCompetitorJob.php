@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Jobs\Concerns\HordeurenScraperEnvironment;
+use DateTimeInterface;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -25,17 +26,33 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
     use Batchable, Dispatchable, HordeurenScraperEnvironment, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * Live competitor sites are flaky; each retry only fills the cells still
-     * missing thanks to the sticky recorder.
+     * Retries are bounded by a deadline, not by an attempt count — see
+     * retryUntil(). An attempt counter cannot tell "this scrape failed" from
+     * "the worker carrying this scrape was killed", and every silent death
+     * (deploy restart, OOM kill, container replacement) burns an attempt
+     * without ever running failed() or recording an exception. With $tries the
+     * lost attempts eventually surfaced as MaxAttemptsExceededException on a
+     * job that had never even started: attempt $tries + 1, ~0.01s runtime.
      *
      * @var int
      */
-    public $tries = 3;
+    public $tries = 0;
+
+    /**
+     * Genuine failures are what stays bounded: this counter only advances when
+     * handle() actually threw, so a permanently broken spec still gives up
+     * while a killed worker costs nothing. Requires a shared cache store
+     * (production runs the file driver), which the worker gets from
+     * WorkCommand::runWorker().
+     *
+     * @var int
+     */
+    public $maxExceptions = 3;
 
     /**
      * @var int
      */
-    public $backoff = 30;
+    public $backoff = 60;
 
     /**
      * One spec drives one competitor's configurator through all 34 door
@@ -54,6 +71,24 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
     {
         $this->onConnection('redis-hordeuren');
         $this->onQueue('hordeuren');
+    }
+
+    /**
+     * While this deadline is in the future the worker skips the attempt-count
+     * check entirely (Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts), so
+     * no number of silent worker deaths can produce a
+     * MaxAttemptsExceededException.
+     *
+     * The deadline is frozen into the payload at dispatch time and every
+     * competitor of a run is dispatched at once, so it must cover a whole
+     * batch, not one scrape: the specs run sequentially on the single
+     * supervisor-hordeuren process, so a worst-case pass is
+     * (competitors × $timeout) ≈ 6 hours. A day leaves room for retries on top
+     * of that while still guaranteeing an abandoned run cannot linger forever.
+     */
+    public function retryUntil(): DateTimeInterface
+    {
+        return now()->addDay();
     }
 
     public function handle(): void

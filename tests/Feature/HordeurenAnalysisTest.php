@@ -52,6 +52,10 @@ function fakedCommand($process): string
     return implode(' ', $parts);
 }
 
+beforeEach(function () {
+    Cache::forget(RunHordeurenAnalysisJob::BATCH_CACHE_KEY);
+});
+
 afterEach(function () {
     foreach ($GLOBALS['hordeuren_test_dirs'] ?? [] as $dir) {
         File::deleteDirectory($dir);
@@ -155,6 +159,50 @@ it('prepares the toolchain and dispatches one scrape job per competitor spec', f
             && $batch->jobs->count() === 3
             && $batch->jobs->every(fn ($job) => $job instanceof ScrapeHordeurenCompetitorJob);
     });
+});
+
+it('does not queue a second batch or wipe live results when a killed attempt re-runs', function () {
+    Bus::fake();
+    Process::fake();
+
+    $dir = fakeScraperDir(['01-a.spec.js', '02-b.spec.js']);
+
+    $job = new RunHordeurenAnalysisJob('rapport@voorbeeld.nl');
+    $job->handle();
+
+    File::makeDirectory($dir.'/results-parts');
+    file_put_contents($dir.'/results-parts/01-a.json', '{"prijs":"€ 100,00"}');
+
+    /** The worker was killed after dispatching; the retry re-enters handle(). */
+    $job->handle();
+
+    Bus::assertBatchCount(1);
+    expect(file_exists($dir.'/results-parts/01-a.json'))->toBeTrue();
+});
+
+it('starts a fresh batch once the previous one has finished', function () {
+    Bus::fake();
+    Process::fake();
+
+    fakeScraperDir(['01-a.spec.js']);
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    $batchId = Cache::get(RunHordeurenAnalysisJob::BATCH_CACHE_KEY);
+    Bus::findBatch($batchId)->cancel();
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    Bus::assertBatchCount(2);
+});
+
+it('clears the batch marker when the run is closed out', function () {
+    Mail::fake();
+    Cache::put(RunHordeurenAnalysisJob::BATCH_CACHE_KEY, 'some-batch-id', 600);
+
+    (new MailHordeurenAnalysisReportJob('rapport@voorbeeld.nl', now()))->failed(new RuntimeException('boom'));
+
+    expect(Cache::get(RunHordeurenAnalysisJob::BATCH_CACHE_KEY))->toBeNull();
 });
 
 it('throws when the scraper has no competitor specs', function () {
