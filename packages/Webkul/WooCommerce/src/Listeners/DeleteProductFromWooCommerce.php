@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Webkul\WooCommerce\Services\WooCommerceService;
 use Webkul\WooCommerce\Traits\DataTransferMappingTrait;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class DeleteProductFromWooCommerce implements ShouldQueue
 {
@@ -40,6 +41,18 @@ class DeleteProductFromWooCommerce implements ShouldQueue
     /**
      * Execute the job.
      */
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
+
     public function handle()
     {
         $this->connectorService = app(WooCommerceService::class);

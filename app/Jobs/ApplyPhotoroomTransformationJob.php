@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Webkul\Attribute\Models\Attribute;
 use Webkul\DAM\Models\Asset;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class ApplyPhotoroomTransformationJob implements ShouldQueue
 {
@@ -29,6 +30,18 @@ class ApplyPhotoroomTransformationJob implements ShouldQueue
         public readonly int $productId,
         public readonly string $targetAttributeCode,
     ) {}
+
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
 
     public function handle(PhotoroomService $photoroomService): void
     {

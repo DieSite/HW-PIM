@@ -76,6 +76,7 @@
                                         <x-admin::table.th>Voorraad De Munk</x-admin::table.th>
                                         <x-admin::table.th>Voorraad Showroom</x-admin::table.th>
                                         <x-admin::table.th>Uitverkoop</x-admin::table.th>
+                                        <x-admin::table.th>Extra korting (%)</x-admin::table.th>
                                     </x-admin::table.thead.tr>
                                 </x-admin::table.thead>
                                 <x-admin::table.tbody>
@@ -159,6 +160,25 @@
                                                     </v-field>
                                                 </x-admin::form.control-group>
                                             </x-admin::table.td>
+                                            <x-admin::table.td>
+                                                <x-admin::form.control-group>
+                                                    <v-field
+                                                        type="text"
+                                                        :name="'product[' + product.id + '][extra_korting]'"
+                                                        :value="product.extra_korting"
+                                                        v-slot="{ field }"
+                                                    >
+                                                        <input
+                                                            type="text"
+                                                            :id="'product[' + product.id + '][extra_korting]'"
+                                                            class="flex w-full min-h-[39px] py-2 px-3 border rounded-md text-sm text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 dark:focus:border-gray-400 focus:border-gray-400 dark:bg-cherry-800 dark:border-gray-800"
+                                                            name="'product[' + product.id + '][extra_korting]'"
+                                                            v-model="product.extra_korting"
+                                                            v-bind="field"
+                                                        >
+                                                    </v-field>
+                                                </x-admin::form.control-group>
+                                            </x-admin::table.td>
                                         </x-admin::table.tbody.tr>
                                     </template>
                                     <template v-else>
@@ -185,7 +205,21 @@
                 data() {
                     return {
                         search: '',
+                        confirmPct: {{ (int) config('competitor_pricing.manual_discount_confirm_pct') }},
                     };
+                },
+
+                mounted() {
+                    /**
+                     * Capture phase, on the form itself: this has to run before
+                     * the framework's own submit handler, or the page has
+                     * already posted by the time we ask.
+                     */
+                    this.$el.closest('form')?.addEventListener(
+                        'submit',
+                        this.confirmDeepDiscounts,
+                        true
+                    );
                 },
 
                 created() {
@@ -197,6 +231,46 @@
                 },
 
                 methods: {
+                    /**
+                     * An extra korting is applied on top of whatever the
+                     * competitor analysis computes, so a mistyped 90 goes live
+                     * on WooCommerce and Bol at the next nightly run. Above the
+                     * threshold, spell out the consequence per rug instead of
+                     * asking a generic "are you sure".
+                     */
+                    confirmDeepDiscounts(event) {
+                        const deep = this.products.data.filter(p => {
+                            const pct = parseFloat(p.extra_korting);
+
+                            return !isNaN(pct) && pct > this.confirmPct;
+                        });
+
+                        if (! deep.length) {
+                            return;
+                        }
+
+                        const lines = deep.map(p => {
+                            const pct = parseFloat(p.extra_korting);
+                            const current = parseFloat(p.prijs);
+                            const after = isNaN(current) ? null : Math.round(current * (1 - pct / 100));
+
+                            return after === null
+                                ? `• ${p.productnaam} ${p.maat}: −${pct}%`
+                                : `• ${p.productnaam} ${p.maat}: −${pct}% → circa € ${after} (nu € ${Math.round(current)})`;
+                        });
+
+                        const ok = window.confirm(
+                            `Let op: ${deep.length} kleed(en) krijgen een korting boven ${this.confirmPct}%.\n\n`
+                            + lines.join('\n')
+                            + `\n\nDeze korting komt bovenop de concurrentieprijs en gaat zo live op de webshop en Bol. Doorgaan?`
+                        );
+
+                        if (! ok) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                    },
+
                     doSearch() {
                         const url = new URL(window.location.href);
                         if (this.search.length > 0) {

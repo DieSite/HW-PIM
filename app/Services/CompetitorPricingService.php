@@ -27,6 +27,9 @@ class CompetitorPricingService
 
         Product::whereIn('sku', array_values(array_unique($skus)))
             ->whereNotNull('parent_id')
+            // De handmatige korting valt terug op de parent, dus die hoort in
+            // dezelfde query mee — anders is het een lazy load per variant.
+            ->with('parent')
             ->chunkById(200, function (Collection $variants) use (&$changedVariants, $previousSnapshot): void {
                 foreach ($variants as $variant) {
                     $history = $this->recompute($variant, $previousSnapshot[$variant->sku] ?? []);
@@ -90,6 +93,18 @@ class CompetitorPricingService
         $lowestPrice = $lowest?->price !== null ? (float) $lowest->price : null;
         $newPrice = $this->computePrice($advies, $lowestPrice, $pct);
 
+        /**
+         * De handmatige korting gaat er ná de concurrentielogica overheen, dus
+         * hij stapelt bewust: zakt een concurrent, dan zakt deze prijs mee én
+         * blijft de korting erop staan. Hij breekt daarmee door de normale
+         * bodem heen — dat is precies waarvoor het veld bestaat.
+         */
+        $manualPct = $this->manualDiscountPercentage($variant);
+
+        if ($manualPct > 0.0) {
+            $newPrice = (float) round($newPrice * (1 - $manualPct / 100));
+        }
+
         $currentPrice = $this->readPrice($variant, 'prijs');
 
         if ($currentPrice !== null && abs($newPrice - $currentPrice) < 0.005) {
@@ -109,6 +124,7 @@ class CompetitorPricingService
             competitors: $competitors,
             previousForSku: $previousForSku,
             lowest: $lowest,
+            manualPct: $manualPct,
         );
 
         return ProductPriceHistory::create([
@@ -270,6 +286,55 @@ class CompetitorPricingService
      * The maximum allowed discount (%) below the adviesverkoopprijs. Admin
      * editable; falls back to the config default when unset/invalid.
      */
+    /**
+     * The handmatige extra korting (%) for one rug: read from the variant, and
+     * otherwise from its parent so a whole model can be discounted in one
+     * place without a second mechanism for "the whole model".
+     *
+     * Deliberately NOT capped at the confirmation threshold — a bigger number
+     * has already been confirmed by a human at every route into the field, and
+     * quietly shaving it down would produce a price nobody chose. It is only
+     * logged, so an unusual discount leaves a trail.
+     *
+     * A value outside 0–100 is refused rather than applied: at 100% or more
+     * there is no price left to sell, and a negative would be a markup. That
+     * is not a discount anyone confirmed, it is a broken value.
+     */
+    public function manualDiscountPercentage(Product $variant): float
+    {
+        $raw = $variant->values['common']['extra_korting']
+            ?? $variant->parent?->values['common']['extra_korting']
+            ?? null;
+
+        if (! is_numeric($raw)) {
+            return 0.0;
+        }
+
+        $pct = (float) $raw;
+
+        if ($pct <= 0.0) {
+            return 0.0;
+        }
+
+        if ($pct >= 100.0) {
+            Log::error('Extra korting genegeerd: buiten 0–100%', [
+                'sku'           => $variant->sku,
+                'extra_korting' => $raw,
+            ]);
+
+            return 0.0;
+        }
+
+        if ($pct > (float) config('competitor_pricing.manual_discount_confirm_pct')) {
+            Log::warning('Ongebruikelijk hoge handmatige korting toegepast', [
+                'sku'           => $variant->sku,
+                'extra_korting' => $pct,
+            ]);
+        }
+
+        return $pct;
+    }
+
     public function maxDiscountPercentage(): float
     {
         $configured = core()->getConfigData('general.pricing.settings.max_kortingspercentage');
@@ -294,10 +359,22 @@ class CompetitorPricingService
         Collection $competitors,
         array $previousForSku,
         ?CompetitorPrice $lowest,
+        float $manualPct = 0.0,
     ): string {
         $clamped = $lowest !== null && (float) $lowest->price < $floor;
 
         $suffix = $clamped ? ' (begrensd op adviesprijs −'.rtrim(rtrim(number_format($pct, 2, ',', '.'), '0'), ',').'%).' : '';
+
+        /**
+         * Zonder deze regel is een handmatig afgeprijsd kleed niet te
+         * onderscheiden van een kleed dat door een concurrent omlaag is
+         * getrokken — en dan weet niemand meer waarom het zo goedkoop staat.
+         */
+        if ($manualPct > 0.0) {
+            $suffix .= ' Daarna handmatige extra korting −'
+                .rtrim(rtrim(number_format($manualPct, 2, ',', '.'), '0'), ',')
+                .'% toegepast (eindprijs '.$this->euro($newPrice).').';
+        }
 
         if ($lowest === null) {
             return 'Teruggezet naar adviesprijs ('.$this->euro($advies).'): geen concurrent goedkoper.'.$suffix;

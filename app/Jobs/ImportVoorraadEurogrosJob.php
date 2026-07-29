@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Sentry;
 use Throwable;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class ImportVoorraadEurogrosJob implements ShouldQueue
 {
@@ -45,7 +46,7 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('import-eurogros-voorraad'))->expireAfter($this->timeout)->dontRelease()];
+        return [(new WithoutOverlapping('import-eurogros-voorraad'))->expireAfter($this->timeout)->dontRelease(), new DisconnectsIdleRedis()];
     }
 
     public function handle(): void

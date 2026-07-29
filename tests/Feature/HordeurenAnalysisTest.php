@@ -2,6 +2,7 @@
 
 use App\Jobs\MailHordeurenAnalysisReportJob;
 use App\Jobs\RunHordeurenAnalysisJob;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\ScrapeHordeurenCompetitorJob;
 use App\Mail\HordeurenAnalysisFailed;
 use App\Mail\HordeurenAnalysisReport;
@@ -432,28 +433,19 @@ it('scrapes a single competitor spec', function () {
  * sailed through.
  */
 it('drops the idle-prone Redis sockets before handing over to the scrape', function () {
-    Process::fake();
+    $middleware = array_map(
+        fn ($m) => $m::class,
+        (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->middleware()
+    );
 
-    fakeScraperDir();
-
-    $order = [];
-
-    $connection = Mockery::mock();
-    $connection->shouldReceive('disconnect')->once()->andReturnUsing(function () use (&$order) {
-        $order[] = 'disconnect';
-    });
-
-    Redis::shouldReceive('connections')->andReturn([$connection]);
-
-    Process::fake(['*' => function () use (&$order) {
-        $order[] = 'scrape';
-
-        return Process::result();
-    }]);
-
-    (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle();
-
-    expect($order)->toBe(['disconnect', 'scrape']);
+    /**
+     * Declared as middleware rather than called inside handle(): middleware
+     * runs after the worker has raised JobProcessing — so after Horizon's own
+     * listeners have written their Redis state — which a call inside handle()
+     * cannot guarantee. The disconnect's behaviour is covered in
+     * tests/Unit/DisconnectsIdleRedisTest.php.
+     */
+    expect($middleware)->toContain(DisconnectsIdleRedis::class);
 });
 
 it('sends Playwright output to the spec log so it outlives a lost worker', function () {

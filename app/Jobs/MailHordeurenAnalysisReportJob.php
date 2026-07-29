@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Throwable;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 /**
  * Close out a hordeuren analysis batch: verify the Excel report was rebuilt,
@@ -113,6 +114,18 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
     public function retryUntil(): DateTimeInterface
     {
         return now()->addHour();
+    }
+
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
     }
 
     public function handle(): void

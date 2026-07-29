@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Sentry;
 use Throwable;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 /**
  * Kick off the De Munk voorraad import: list the portal's collections and
@@ -82,7 +83,7 @@ class ImportVoorraadDeMunkJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('import-demunk-voorraad'))->expireAfter($this->timeout)->dontRelease()];
+        return [(new WithoutOverlapping('import-demunk-voorraad'))->expireAfter($this->timeout)->dontRelease(), new DisconnectsIdleRedis()];
     }
 
     public function handle(): void

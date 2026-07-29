@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Tools;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Services\CompetitorPricingService;
 use App\Services\ProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,9 @@ class ProductStockEditorController extends Controller
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.voorraad_5_korting_handmatig'), '') as voorraad_5_korting_handmatig"),
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.voorraad_hw_5_korting'), '') as voorraad_hw_5_korting"),
             DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.uitverkoop_15_korting'), '') as uitverkoop_15_korting"),
+            DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.extra_korting'), '') as extra_korting"),
+            DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.adviesverkoopprijs.EUR'), '') as adviesverkoopprijs"),
+            DB::raw("COALESCE(JSON_UNQUOTE(`values`->'$.common.prijs.EUR'), '') as prijs"),
         ])->whereNotNull('parent_id')
             ->where('values->common->onderkleed', 'Zonder onderkleed')
             ->where('values->common->maat', '!=', 'Maatwerk')
@@ -58,6 +62,10 @@ class ProductStockEditorController extends Controller
                     $product->uitverkoop_15_korting = '';
                 }
 
+                if ($product->extra_korting === 'null' || $product->extra_korting === '0') {
+                    $product->extra_korting = '';
+                }
+
                 return $product;
             });
 
@@ -74,6 +82,15 @@ class ProductStockEditorController extends Controller
         $productData = $request->input('product', []);
         $products = Product::whereIn('id', array_keys($productData))->get();
         $parents = [];
+
+        /**
+         * SKUs whose extra korting changed. Saving the percentage does not
+         * change `prijs` — CompetitorPricingService owns that field — so
+         * without an immediate recompute the shop and Bol would keep the old
+         * price until the nightly run, and the discount would look like it
+         * silently did nothing.
+         */
+        $repriced = [];
         foreach ($products as $product) {
             $data = $productData[$product->id];
             if (is_null($product)) {
@@ -88,6 +105,7 @@ class ProductStockEditorController extends Controller
                 'voorraad_5_korting_handmatig',
                 'voorraad_hw_5_korting',
                 'uitverkoop_15_korting',
+                'extra_korting',
             ];
 
             $allEqual = true;
@@ -111,6 +129,24 @@ class ProductStockEditorController extends Controller
             $values['common']['voorraad_hw_5_korting'] = (int) $data['voorraad_hw_5_korting'];
             $values['common']['uitverkoop_15_korting'] = (int) $data['uitverkoop_15_korting'];
 
+            /**
+             * Leeg betekent "geen handmatige korting", niet "0%": een 0 in de
+             * JSON laat CompetitorPricingService even hard met rust, maar
+             * vervuilt wel elk product met een veld dat niets doet.
+             */
+            $extraKorting = (int) ($data['extra_korting'] ?? 0);
+            $previousKorting = (int) ($values['common']['extra_korting'] ?? 0);
+
+            if ($extraKorting > 0) {
+                $values['common']['extra_korting'] = $extraKorting;
+            } else {
+                unset($values['common']['extra_korting']);
+            }
+
+            if ($extraKorting !== $previousKorting) {
+                $repriced[] = $product->sku;
+            }
+
             $product->values = $values;
             $product->save();
 
@@ -121,6 +157,16 @@ class ProductStockEditorController extends Controller
         $parents = Product::whereIn('id', $parents)->get();
         foreach ($parents as $parent) {
             Event::dispatch('catalog.product.update.after', $parent);
+        }
+
+        /**
+         * Recompute AFTER the values are saved, so the service reads the new
+         * percentage. It writes `prijs`, logs the price history and pushes the
+         * result to WooCommerce and Bol itself, which is why this is one call
+         * rather than another sync loop here.
+         */
+        if ($repriced !== []) {
+            app(CompetitorPricingService::class)->recomputeForSkus($repriced);
         }
 
         if ($request->has('next_page')) {

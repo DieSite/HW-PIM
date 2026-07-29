@@ -72,4 +72,26 @@ return [
     |
     */
     'default_max_discount_pct' => 25,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confirmation threshold for the handmatige extra korting
+    |--------------------------------------------------------------------------
+    |
+    | The `extra_korting` attribute discounts a single rug on top of the price
+    | the competitor logic computed, deliberately breaking through the normal
+    | max-discount floor. That is the point of the field, so this is NOT a cap:
+    | a percentage above it is applied in full.
+    |
+    | It is the point where the admin editor stops accepting the number
+    | silently and makes you confirm the resulting price, and the point above
+    | which CompetitorPricingService logs a warning — so an unusual discount is
+    | always a deliberate act with a trail, never a quiet typo.
+    |
+    | The nightly run cannot ask anyone, so by design it applies whatever is
+    | stored: every route into the field (the voorraad editor, the bulk edit
+    | tool) puts a human confirmation in front of it.
+    |
+    */
+    'manual_discount_confirm_pct' => (int) env('COMPETITOR_PRICING_MANUAL_DISCOUNT_CONFIRM_PCT', 50),
 ];

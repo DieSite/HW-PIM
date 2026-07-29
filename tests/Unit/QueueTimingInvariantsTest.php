@@ -6,6 +6,7 @@ use App\Jobs\BulkEditProductsJob;
 use App\Jobs\BulkSyncProductsWithBolComJob;
 use App\Jobs\FetchDeMunkCollectionStockJob;
 use App\Jobs\ImportProductsJob;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\ImportVoorraadDeMunkJob;
 use App\Jobs\ImportVoorraadEurogrosJob;
 use App\Jobs\MailHordeurenAnalysisReportJob;
@@ -118,6 +119,59 @@ it('keeps every job timeout within its supervisor timeout and below its connecti
         expect($timeout)->toBeLessThan(
             $retryAfter,
             "[{$class}] timeout ({$timeout}) must stay strictly below [{$connection}] retry_after ({$retryAfter})."
+        );
+    }
+});
+
+/**
+ * Production Redis closes any client idle this long — verified 2026-07-29 on
+ * the live instance: `CONFIG GET timeout` => 120, `tcp-keepalive` => 300 (so
+ * the keepalive never fires first and cannot help).
+ *
+ * @var int
+ */
+const REDIS_IDLE_TIMEOUT = 120;
+
+/**
+ * Every queue job ends with a Redis command whether or not its body issues one:
+ * RedisJob::delete() is how a finished job leaves the reserved set. So a body
+ * that can run past REDIS_IDLE_TIMEOUT without talking to Redis will find the
+ * socket closed when it succeeds — Predis throws "Error while writing bytes to
+ * the server", the worker quits on the lost connection, the job stays reserved,
+ * and retry_after later it returns as an attempt nothing explains.
+ *
+ * That is the confirmed cause of the hordeuren scrape failures, and it does not
+ * depend on the job doing anything unusual — only on it taking more than two
+ * minutes. Anything whose effective timeout admits that must drop its sockets
+ * up front. The middleware is a no-op when it is not needed, so the cost of
+ * applying it too widely is nil and the cost of forgetting it is a run that
+ * fails for a reason its own failure record cannot show.
+ *
+ * NOTE: cache here is the file driver, so `Cache::` calls do NOT count as
+ * Redis traffic. Only a job dispatch (a queue push) does.
+ */
+it('drops idle redis sockets on every job that can outlive the redis idle timeout', function () {
+    foreach (queueTimingJobFactories() as $class => $factory) {
+        $job = $factory();
+
+        $connection = $job->connection ?? 'redis';
+        $queue = $job->queue ?? config("queue.connections.{$connection}.queue", 'default');
+        $supervisor = queueTimingSupervisorForQueue($queue);
+
+        $timeout = (int) ($job->timeout ?? $supervisor['config']['timeout']);
+
+        if ($timeout < REDIS_IDLE_TIMEOUT) {
+            continue;
+        }
+
+        expect(method_exists($job, 'middleware'))->toBeTrue(
+            "[{$class}] may run for {$timeout}s, past the ".REDIS_IDLE_TIMEOUT."s Redis idle timeout, so it must declare middleware() applying DisconnectsIdleRedis."
+        );
+
+        $middleware = array_map(fn ($m) => $m::class, $job->middleware());
+
+        expect(in_array(DisconnectsIdleRedis::class, $middleware, true))->toBeTrue(
+            "[{$class}] may run for {$timeout}s, past the ".REDIS_IDLE_TIMEOUT."s Redis idle timeout. Without DisconnectsIdleRedis the delete() that retires it on SUCCESS dies on a closed socket and the job comes back as an unexplained extra attempt."
         );
     }
 });

@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class BulkSyncProductsWithBolComJob implements ShouldQueue
 {
@@ -35,6 +36,18 @@ class BulkSyncProductsWithBolComJob implements ShouldQueue
     /**
      * Execute the job.
      */
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
+
     public function handle()
     {
         $query = Product::query()

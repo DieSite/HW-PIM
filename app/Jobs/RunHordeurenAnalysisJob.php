@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
 use Throwable;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 /**
  * Kick off the plissé-hordeuren competitor analysis (the Playwright suite in
@@ -96,6 +97,18 @@ class RunHordeurenAnalysisJob implements ShouldQueue
     public function retryUntil(): DateTimeInterface
     {
         return now()->addHours(4);
+    }
+
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
     }
 
     public function handle(): void

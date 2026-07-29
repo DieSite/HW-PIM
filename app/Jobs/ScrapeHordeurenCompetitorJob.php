@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 /**
  * Scrape one competitor shop of the hordeuren analysis by running its single
@@ -60,6 +61,21 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
         $this->onQueue('hordeuren');
     }
 
+    /**
+     * The scrape is minutes of pure subprocess time issuing no Redis command of
+     * its own. Left open, the worker's sockets go idle past Redis's 120s cutoff
+     * and the delete() that retires this job on SUCCESS dies on the closed
+     * socket — taking the worker down with a scrape that had actually worked.
+     * That, not a crashing spec, is what "de worker sneuvelde" was reporting.
+     * {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
+
     public function handle(): void
     {
         /** An earlier competitor already failed and stopped the run. */
@@ -82,15 +98,6 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
         );
 
         $this->startLog();
-
-        /**
-         * The scrape is minutes of pure subprocess time. Left open, the
-         * worker's Redis sockets go idle long enough for Redis to hang up, and
-         * the delete() that retires this job on success then dies on the
-         * half-closed socket — taking the worker down with a scrape that had
-         * actually succeeded. {@see disconnectRedis()}
-         */
-        $this->disconnectRedis();
 
         $result = Process::path($dir)
             ->timeout($this->timeout - 60)

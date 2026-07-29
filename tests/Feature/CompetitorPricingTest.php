@@ -618,3 +618,206 @@ it('refuses to write a bundle price below the bare rug', function () {
     expect($sibling)->toBeNull()
         ->and((float) $met->fresh()->values['common']['prijs']['EUR'])->toBe(1329.0);
 });
+
+/**
+ * The handmatige extra korting: a per-rug discount applied ON TOP of whatever
+ * the competitor logic computed, deliberately breaking through the normal
+ * max-discount floor. That is the point of the field — it is how a single rug
+ * gets a custom discount without the nightly run flattening it again.
+ */
+it('applies a manual extra discount on top of the competitor price', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'extra_korting'      => 10,
+    ]);
+
+    CompetitorPrice::create([
+        'sku' => $variant->sku, 'shop' => 'shopa.nl', 'price' => 850, 'url' => null,
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    /** 850 from the competitor, then −10% = 765 — below the 25% floor of 750? No: 765 > 750, but the floor no longer binds it. */
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('765');
+});
+
+it('lets the manual discount break through the normal max-discount floor', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'extra_korting'      => 40,
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    /**
+     * No competitor, so the algorithm lands on the advies price (1000) and the
+     * 25% floor would normally stop anything below 750. The manual discount is
+     * applied after that bound, so 600 is the whole point.
+     */
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('600');
+});
+
+/**
+ * The compounding was chosen deliberately: a competitor drop and the manual
+ * discount stack, so the rug stays the agreed percentage below the market
+ * rather than drifting back up.
+ */
+it('compounds the manual discount with a competitor drop', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'extra_korting'      => 10,
+    ]);
+
+    CompetitorPrice::create([
+        'sku' => $variant->sku, 'shop' => 'shopa.nl', 'price' => 500, 'url' => null,
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    /** Competitor 500 is below the 750 floor, so the algorithm clamps to 750, then −10% = 675. */
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('675');
+});
+
+it('inherits the manual discount from the parent so a whole model can be discounted at once', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+
+    $parent = $variant->parent;
+    $parent->values = ['common' => ['extra_korting' => 20]];
+    $parent->save();
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('800');
+});
+
+/**
+ * The confirmation threshold is a prompt in the admin editor, NOT a cap: a
+ * bigger number has already been confirmed by a human, and quietly shaving it
+ * down would produce a price nobody chose.
+ */
+it('applies a discount above the confirmation threshold in full', function () {
+    Queue::fake();
+
+    config()->set('competitor_pricing.manual_discount_confirm_pct', 50);
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'extra_korting'      => 70,
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('300');
+});
+
+it('refuses a manual discount outside 0-100 instead of pricing a rug at nothing', function (int|string $pct) {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'extra_korting'      => $pct,
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    /** Untouched: the advies price, with no discount applied at all. */
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('1000');
+})->with([100, 150, -10, 0, '', 'tien']);
+
+it('records the manual discount in the price history so a cheap rug is explainable', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'extra_korting'      => 30,
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    $history = ProductPriceHistory::where('sku', $variant->sku)->first();
+
+    expect($history)->not->toBeNull()
+        ->and((float) $history->new_price)->toBe(700.0)
+        ->and($history->reason)->toContain('handmatige extra korting')
+        ->and($history->reason)->toContain('30%');
+});
+
+/**
+ * Saving the percentage does not write `prijs` — CompetitorPricingService owns
+ * that field — so without an immediate recompute the shop and Bol keep serving
+ * the old price until the nightly run, and the discount looks like it silently
+ * did nothing.
+ */
+it('reprices and syncs straight away when the extra discount is saved in the editor', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'onderkleed'         => 'Zonder onderkleed',
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::first(), 'admin')
+        ->post(route('admin.tools.product-stock-editor.post'), [
+            'product' => [
+                $variant->id => [
+                    'voorraad_eurogros'            => '',
+                    'voorraad_5_korting_handmatig' => '',
+                    'voorraad_hw_5_korting'        => '',
+                    'uitverkoop_15_korting'        => '',
+                    'extra_korting'                => '20',
+                ],
+            ],
+        ])
+        ->assertRedirect();
+
+    expect($variant->fresh()->values['common']['extra_korting'])->toBe(20)
+        ->and($variant->fresh()->values['common']['prijs']['EUR'])->toBe('800');
+
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class);
+});
+
+it('does not repeatedly reprice when the editor is saved without touching the discount', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+        'onderkleed'         => 'Zonder onderkleed',
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::first(), 'admin')
+        ->post(route('admin.tools.product-stock-editor.post'), [
+            'product' => [
+                $variant->id => [
+                    'voorraad_eurogros'            => '5',
+                    'voorraad_5_korting_handmatig' => '',
+                    'voorraad_hw_5_korting'        => '',
+                    'uitverkoop_15_korting'        => '',
+                    'extra_korting'                => '',
+                ],
+            ],
+        ])
+        ->assertRedirect();
+
+    /** Stock changed, price did not: no discount, so no price history row. */
+    expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('1000')
+        ->and(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(0);
+});

@@ -13,6 +13,7 @@ use Sentry\Laravel\Facade as Sentry;
 use Throwable;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\DTO\ProductBatch;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class SerializedProcessProductsToWooCommerce implements ShouldQueue
 {
@@ -43,6 +44,18 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
     /**
      * Execute the job.
      */
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
+
     public function handle(): void
     {
         $this->product = Product::find($this->product->id);

@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class SyncProductWithBolComJob implements ShouldQueue
 {
@@ -30,6 +31,18 @@ class SyncProductWithBolComJob implements ShouldQueue
         protected bool $unchecked = false,
     ) {
         $this->onQueue('bolcom');
+    }
+
+    /**
+     * May run past the Redis idle timeout without issuing a Redis command of
+     * its own, so the delete() that retires it on success would find a closed
+     * socket. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
     }
 
     public function handle(BolSyncStateMachine $stateMachine): void
