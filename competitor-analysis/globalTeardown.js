@@ -230,7 +230,7 @@ module.exports = async function globalTeardown() {
     ['Geen kleur',        'Geen vergelijkbare prijs (label zoals Op aanvraag / n.v.t.)'],
     ['', ''],
     ['METHODE PER BRON',  ''],
-    ['Eigen winkel',      'ECHTE per-maat prijs uit de configurator (Hordeur-regel, excl. afhaalkorting/promo)'],
+    ['Eigen winkel',      'ECHTE per-maat prijs uit de configurator: Hordeur-regel MIN de lopende promokorting (bv. "Zomerkorting 2026"), want die geldt voor iedere klant. Excl. de afhaalkorting uit het Totaal — die geldt alleen bij ophalen in Gorinchem'],
     ['Horrengigant',      'ECHTE per-maat prijs: WebForms-configurator volledig doorlopen (let op: cm-invoer), incl. gaaskleur (Zwart/Grijs, geen meerprijs)'],
     ['Qniq',              'ECHTE configuratorprijs; qniq prijst per deurtype (enkel/dubbel), niet per exacte mm'],
     ['Horrenconcurrent',  'ECHTE per-maat prijs: WooCommerce/PEWC live totaal (prijs in maatbanden)'],

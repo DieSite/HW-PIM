@@ -16,16 +16,17 @@
  *  8. Handgreep    : label[for=handgreep-1]   ("Nee, zonder handgreep")
  *  9. Powertape    : label[for=powertape-1]   ("Nee, ik ga schroeven")
  *
- * Prijs: tabel .configurator__totals, rij "Hordeur" -> huidige (niet-doorgestreepte)
- * prijs = de KALE PRODUCTPRIJS voor de geconfigureerde deur. We nemen bewust NIET
- * het order-totaal, want dat bevat afhaalkorting + tijdelijke promo (niet
- * vergelijkbaar met concurrenten).
+ * Prijs: tabel .configurator__totals, rij "Hordeur" (huidige, niet-doorgestreepte
+ * prijs) MIN de lopende promokorting-regel. Zie tests/_eigenwinkel.js voor het
+ * waarom; kort: de promo geldt voor iedere klant en hoort er dus in, de
+ * afhaalkorting in het Totaal geldt alleen bij ophalen en hoort er dus uit.
  */
 
 const { test, expect } = require('@playwright/test');
 const { SIZES } = require('./sizes');
 const { recordPrice } = require('./priceRecorder');
-const { acceptCookies, clickLabelById, normalizePrice } = require('./helpers');
+const { acceptCookies, clickLabelById } = require('./helpers');
+const { eigenWinkelPrijs, euro } = require('./_eigenwinkel');
 
 const COMP = 'plissehordeurenwebshop.nl';
 const URLS = {
@@ -56,17 +57,27 @@ async function configure(page, breedte, hoogte, gaas) {
   await clickLabelById(page, 'powertape-1');              // Geen tape (schroeven)
 
   // Poll tot de "Hordeur"-rij een productprijs toont (i.p.v. vaste sleep —
-  // onder parallelle load is de herberekening soms trager dan 2s).
-  const prijs = await page.waitForFunction(() => {
-    const rows = [...document.querySelectorAll('.configurator__totals tr')];
-    const row = rows.find(tr => /Hordeur/i.test(tr.cells?.[0]?.textContent || ''));
-    if (!row) return null;
-    const cell = row.cells[row.cells.length - 1].cloneNode(true);
-    const struck = cell.querySelector('s'); if (struck) struck.remove();   // verwijder van-prijs
-    const m = (cell.textContent || '').match(/€\s*[\d.]+,\d{2}/);
-    return m ? m[0] : null;
+  // onder parallelle load is de herberekening soms trager dan 2s). We geven de
+  // hele tabel terug; welke bedragen meetellen beslist _eigenwinkel.js, zodat
+  // die regel te testen is zonder de live configurator.
+  const rows = await page.waitForFunction(() => {
+    const trs = [...document.querySelectorAll('.configurator__totals tr')];
+    const hordeur = trs.find(tr => /^\s*Hordeur\s*$/i.test(tr.cells?.[0]?.textContent || ''));
+    if (!hordeur) return null;
+
+    const cells = tr => [...tr.cells].map((cell, i) => {
+      // De van-prijs staat doorgestreept vóór de huidige prijs in dezelfde cel.
+      const clone = cell.cloneNode(true);
+      clone.querySelectorAll('s, del').forEach(el => el.remove());
+      return clone.textContent.replace(/\s+/g, ' ').trim();
+    });
+
+    const rows = trs.map(cells);
+    // Pas doorgeven als de Hordeur-regel echt een bedrag toont.
+    return /€/.test(rows.find(r => /^Hordeur$/i.test(r[0]))?.at(-1) || '') ? rows : null;
   }, { timeout: 15000 }).then(h => h.jsonValue()).catch(() => null);
-  return normalizePrice(prijs);
+
+  return euro(eigenWinkelPrijs(rows));
 }
 
 for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
