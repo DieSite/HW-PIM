@@ -90,11 +90,6 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
     /**
      * @var int
      */
-    public $backoff = 30;
-
-    /**
-     * @var int
-     */
     public $timeout = 300;
 
     /**

@@ -171,7 +171,7 @@ it('freezes a retry deadline into the payload the horizon queue dispatches', fun
     expect(Queue::connection(WORKER_DEATH_CONNECTION))->toBeInstanceOf(Laravel\Horizon\RedisQueue::class)
         ->and($payload['retryUntil'])->toBeGreaterThan(now()->getTimestamp())
         ->and($payload['maxTries'])->toBe(0)
-        ->and($payload['maxExceptions'])->toBe(3);
+        ->and($payload['maxExceptions'])->toBe(1);
 });
 
 it('never lets a deadline-bounded job be failed by silent worker deaths', function () {
@@ -251,8 +251,8 @@ it('caps genuinely failing competitor scrapes so a broken spec cannot retry fore
     for ($attempt = 1; $attempt <= $job->maxExceptions + 2; $attempt++) {
         $failures = [...$failures, ...runOneJobCapturingFailures($queue)];
 
-        /** Step past $backoff so the released job is available again. */
-        $this->travel($job->backoff + 30)->seconds();
+        /** Step well past any release delay so a retried job is available again. */
+        $this->travel(120)->seconds();
     }
 
     expect($failures)->toHaveCount(1)

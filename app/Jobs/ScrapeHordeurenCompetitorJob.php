@@ -15,11 +15,11 @@ use RuntimeException;
 
 /**
  * Scrape one competitor shop of the hordeuren analysis by running its single
- * Playwright spec. The suite's recorder is sticky (results-parts/ keeps every
- * scraped price), so a retry after a flaky run or a killed worker only
- * re-attempts the missing cells — retries replace the old whole-suite
- * "gap-filling passes". The suite's global teardown rebuilds the Excel after
- * every spec run, so the report is complete once the batch is.
+ * Playwright spec. A failing scrape is not retried ({@see $maxExceptions}); a
+ * scrape whose worker was killed is resumed, and because the suite's recorder
+ * is sticky (results-parts/ keeps every scraped price) that resume only
+ * re-attempts the cells still missing. The suite's global teardown rebuilds
+ * the Excel after every spec run, so the report is complete once the batch is.
  */
 class ScrapeHordeurenCompetitorJob implements ShouldQueue
 {
@@ -36,23 +36,23 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
      *
      * @var int
      */
-    public $tries = 0;
+    public $tries = 1;
 
     /**
-     * Genuine failures are what stays bounded: this counter only advances when
-     * handle() actually threw, so a permanently broken spec still gives up
-     * while a killed worker costs nothing. Requires a shared cache store
-     * (production runs the file driver), which the worker gets from
-     * WorkCommand::runWorker().
+     * One attempt at actually scraping: the first time handle() throws, the
+     * job fails and the competitor is left out of this run. Re-running a spec
+     * that just failed rarely turns a failure into a price — a changed
+     * configurator or a blocked request fails again — it only costs the batch
+     * another {@see $timeout} before the report can go out.
+     *
+     * This counter advances only in the worker's catch path, so it bounds real
+     * failures without touching the free retries a killed worker needs. It
+     * needs a shared cache store (production runs the file driver), which the
+     * worker gets from WorkCommand::runWorker().
      *
      * @var int
      */
-    public $maxExceptions = 3;
-
-    /**
-     * @var int
-     */
-    public $backoff = 60;
+    public $maxExceptions = 1;
 
     /**
      * One spec drives one competitor's configurator through all 34 door
