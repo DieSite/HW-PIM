@@ -11,7 +11,7 @@ return [
     | variant SKU and holds one scraped price + source URL per competitor shop.
     |
     */
-    'enabled' => false,
+    'enabled' => true,
 
     'db_path' => env(
         'COMPETITOR_PRICING_DB_PATH',
@@ -58,6 +58,45 @@ return [
         'browsers_path' => env('PLAYWRIGHT_BROWSERS_PATH', base_path('competitor-analysis/.pw-browsers')),
         'node_bin'      => env('HORDEUREN_NODE_BIN', '/usr/local/node-24/bin'),
         'install_deps'  => (bool) env('HORDEUREN_INSTALL_DEPS', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Daily report mail
+    |--------------------------------------------------------------------------
+    |
+    | After every run of `pricing:run-competitor-analysis` a report is mailed
+    | summarising which prices changed and why, plus the outliers that deserve
+    | a human look. The thresholds below decide what counts as an outlier:
+    |
+    | - drop_pct / rise_pct: a single-run price move of at least this many
+    |   percent. A normal competitor drift is a few percent; a double-digit
+    |   jump is either a real competitor move or a wrong coupling.
+    | - competitor_ratio: a cheapest competitor below this percentage of our
+    |   adviesverkoopprijs. The audit found healthy couplings sit at 75–110%,
+    |   so anything far below is more likely the wrong product than a bargain.
+    | - stale_days: a competitor price this old is still driving our price
+    |   even though the scraper has not confirmed it since.
+    | - max_rows: how many rows of each outlier group the mail body lists;
+    |   the attached CSV always holds every change.
+    |
+    */
+    'report' => [
+        'recipients' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'COMPETITOR_PRICING_REPORT_RECIPIENTS',
+                'luuk@diesite.nl,hans@huis-en-wonen.nl'
+            ))
+        ))),
+
+        'outliers' => [
+            'drop_pct'         => (float) env('COMPETITOR_PRICING_REPORT_DROP_PCT', 15),
+            'rise_pct'         => (float) env('COMPETITOR_PRICING_REPORT_RISE_PCT', 15),
+            'competitor_ratio' => (float) env('COMPETITOR_PRICING_REPORT_COMPETITOR_RATIO', 60),
+            'stale_days'       => (int) env('COMPETITOR_PRICING_REPORT_STALE_DAYS', 14),
+            'max_rows'         => (int) env('COMPETITOR_PRICING_REPORT_MAX_ROWS', 25),
+        ],
     ],
 
     /*

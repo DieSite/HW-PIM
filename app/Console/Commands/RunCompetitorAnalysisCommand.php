@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\CompetitorCatalogExporter;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
@@ -14,7 +15,8 @@ class RunCompetitorAnalysisCommand extends Command
      */
     protected $signature = 'pricing:run-competitor-analysis
                             {--skip-scrape : Skip the Node scraper and only (re)import the existing SQLite DB}
-                            {--no-recompute : Import competitor prices without recomputing/syncing our prices}';
+                            {--no-recompute : Import competitor prices without recomputing/syncing our prices}
+                            {--no-report : Skip the report mail at the end of the run}';
 
     /**
      * @var string
@@ -29,14 +31,53 @@ class RunCompetitorAnalysisCommand extends Command
             return self::SUCCESS;
         }
 
+        $startedAt = now();
+
         if (! $this->option('skip-scrape') && ! $this->runScraper()) {
             return self::FAILURE;
         }
 
-        return $this->call('pricing:import-competitor-prices', [
+        $exitCode = $this->call('pricing:import-competitor-prices', [
             '--no-recompute' => (bool) $this->option('no-recompute'),
             '--prune'        => true,
         ]);
+
+        if ($exitCode === self::SUCCESS) {
+            $this->mailReport($startedAt);
+        }
+
+        return $exitCode;
+    }
+
+    /**
+     * Mail the report covering everything this run changed.
+     *
+     * A failing report must not turn a successful price run into a failed one —
+     * the prices are already live and correct at this point, so the mail is
+     * reported and swallowed rather than re-raised.
+     */
+    private function mailReport(Carbon $startedAt): void
+    {
+        if ($this->option('no-report')) {
+            return;
+        }
+
+        // Zonder recompute is er per definitie niets gewijzigd om over te
+        // rapporteren: dan is dit alleen een import van concurrentprijzen.
+        if ($this->option('no-recompute')) {
+            $this->info('Rapportmail overgeslagen (--no-recompute: er zijn geen prijzen gewijzigd).');
+
+            return;
+        }
+
+        try {
+            $this->call('pricing:mail-competitor-report', [
+                '--since' => $startedAt->toDateTimeString(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->error('Rapportmail mislukt: '.$e->getMessage());
+            report($e);
+        }
     }
 
     /**
