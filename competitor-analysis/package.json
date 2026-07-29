@@ -11,6 +11,7 @@
     "volledig:browser": "playwright test -c playwright.volledig.config.js",
     "volledig:test": "node --test catalog-volledig/normalize.test.js",
     "test:eigenwinkel": "node --test eigenwinkel.test.js",
+    "test:korting": "node --test korting.test.js",
     "test": "playwright test",
     "test:karpetten": "playwright test -c playwright.karpetten.config.js",
     "test:eigen": "playwright test 01-plissehordeurenwebshop",

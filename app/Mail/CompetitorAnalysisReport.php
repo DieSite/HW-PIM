@@ -23,6 +23,8 @@ class CompetitorAnalysisReport extends Mailable
     {
         $changes = (int) $this->report['changes']['total'];
         $outliers = (int) $this->report['outlier_total'];
+        $alerts = (int) $this->report['alerts'];
+        $warnings = (int) $this->report['warnings'];
 
         $subject = 'Concurrentie-analyse vloerkleden – '
             .$this->report['until']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y')
@@ -32,7 +34,19 @@ class CompetitorAnalysisReport extends Mailable
             $subject .= ', '.$outliers.' '.($outliers === 1 ? 'uitschieter' : 'uitschieters');
         }
 
-        return new Envelope(subject: $subject.')');
+        $subject .= ')';
+
+        /**
+         * Een alarm hoort in de onderwerpregel: wie de mail alleen scant moet
+         * zien dat er iets stuk is zonder hem te openen.
+         */
+        if ($alerts > 0) {
+            $subject = '⚠ '.$subject.' – '.$alerts.' '.($alerts === 1 ? 'alarm' : 'alarmen');
+        } elseif ($warnings > 0) {
+            $subject .= ' – '.$warnings.' '.($warnings === 1 ? 'signaal' : 'signalen');
+        }
+
+        return new Envelope(subject: $subject);
     }
 
     public function content(): Content
@@ -52,16 +66,25 @@ class CompetitorAnalysisReport extends Mailable
      */
     public function attachments(): array
     {
-        if ($this->report['rows'] === []) {
-            return [];
+        $reporter = app(CompetitorAnalysisReporter::class);
+        $date = $this->report['until']->copy()->timezone('Europe/Amsterdam')->format('Y-m-d');
+
+        $attachments = [];
+
+        if ($this->report['rows'] !== []) {
+            $csv = $reporter->toCsv($this->report['rows']);
+
+            $attachments[] = Attachment::fromData(fn (): string => $csv, 'prijswijzigingen-'.$date.'.csv')
+                ->withMime('text/csv');
         }
 
-        $csv = app(CompetitorAnalysisReporter::class)->toCsv($this->report['rows']);
+        if ($this->report['flagged'] > 0) {
+            $checks = $reporter->checksToCsv($this->report['checks']);
 
-        return [
-            Attachment::fromData(fn (): string => $csv, 'prijswijzigingen-'
-                .$this->report['until']->copy()->timezone('Europe/Amsterdam')->format('Y-m-d').'.csv')
-                ->withMime('text/csv'),
-        ];
+            $attachments[] = Attachment::fromData(fn (): string => $checks, 'aandachtspunten-'.$date.'.csv')
+                ->withMime('text/csv');
+        }
+
+        return $attachments;
     }
 }

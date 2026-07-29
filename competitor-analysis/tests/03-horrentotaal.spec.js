@@ -20,6 +20,20 @@
  * stand 2026-07) en tellen hem bij de basisprijs op; ontbreekt de optie in
  * de config, dan n.v.t.
  *
+ * KORTING: net zomin als de opties zit een lopende winkelactie in
+ * `totaalPrijs`. De widget haalt die apart op bij
+ * `GET /active-discounts?productId=<id>` en trekt hem client-side van
+ * (basisprijs + opties) af; dát is de prijs die in de winkelwagen belandt.
+ * Sinds 2026-07-29 doen wij hetzelfde — zonder die stap stond horrentotaal
+ * 10% te duur in de vergelijking. De rekenregel staat in `_korting.js`
+ * (unit tests: `npm run test:korting`). Het product-id verschilt per pagina,
+ * dus we lezen het uit de DOM en hardcoden het nooit.
+ *
+ * Mislukt het ophalen van de kortingen, dan noteren we `n.v.t.` in plaats van
+ * de bruto prijs: we weten dan niet óf er een actie loopt, en een te hoge
+ * prijs stilletjes vastleggen is precies de fout die dit repareert. De
+ * recorder is sticky en de batch herkanst, dus een gat vult zich vanzelf.
+ *
  * URL enkel  : /products/plisse-hordeur
  * URL dubbel : /products/dubbele-plisse-hordeur
  */
@@ -28,14 +42,31 @@ const { test, expect } = require('@playwright/test');
 const { SIZES } = require('./sizes');
 const { recordPrice } = require('./priceRecorder');
 const { acceptCookies } = require('./helpers');
+const { priceAfterDiscount } = require('./_korting');
 
 const COMP = 'horrentotaal.nl';
+const API = 'https://configurator.horrentotaal.nl';
 const URLS = {
   enkel:  'https://horrentotaal.nl/products/plisse-hordeur',
   dubbel: 'https://horrentotaal.nl/products/dubbele-plisse-hordeur',
 };
 
 function fmt(n) { return `€ ${Number(n).toFixed(2).replace('.', ',')}`; }
+
+/**
+ * De lopende acties voor dit product, of null als we het niet konden ophalen.
+ * Een lege lijst betekent "geen actie" en is dus iets anders dan null.
+ */
+async function actieveKortingen(request, productId) {
+  if (!productId) return null;
+
+  const body = await request
+    .get(`${API}/active-discounts?productId=${encodeURIComponent(productId)}`, { timeout: 15000 })
+    .then(r => (r.ok() ? r.json() : null))
+    .catch(() => null);
+
+  return Array.isArray(body?.discounts) ? body.discounts : null;
+}
 
 /** Zoek recursief de optie met key `grijs_gaas` in de configurator-config. */
 function vindGrijsPrijs(obj) {
@@ -77,13 +108,27 @@ for (const [naam, { breedte, hoogte, type, gaas }] of Object.entries(SIZES)) {
       await page.keyboard.press('Tab');
       // poll tot de calculate-API voor onze exacte maat geantwoord heeft
       for (let i = 0; i < 30 && !state.totaal; i++) await page.waitForTimeout(500);
+
+      let bruto = null;
+
       if (state.totaal && gaas === 'grijs') {
-        const cfg = await request.get(`https://configurator.horrentotaal.nl/configurators/${state.slug}`, { timeout: 15000 })
+        const cfg = await request.get(`${API}/configurators/${state.slug}`, { timeout: 15000 })
           .then(r => r.json()).catch(() => null);
         const meerprijs = vindGrijsPrijs(cfg);
-        prijs = meerprijs != null ? fmt(Number(state.totaal) + meerprijs) : null;
+        bruto = meerprijs != null ? Number(state.totaal) + meerprijs : null;
       } else if (state.totaal) {
-        prijs = fmt(state.totaal);
+        bruto = Number(state.totaal);
+      }
+
+      if (bruto != null) {
+        const productId = await page.getAttribute('#ht-configurator', 'data-product-id').catch(() => null);
+        const kortingen = await actieveKortingen(request, productId);
+
+        if (kortingen === null) {
+          console.log(`${COMP} ${naam}: kortingen niet op te halen (product-id ${productId ?? 'onbekend'}) — n.v.t.`);
+        } else {
+          prijs = fmt(priceAfterDiscount(bruto, kortingen));
+        }
       }
     } catch (e) {
       console.log(`${COMP} ${naam}: ${e.message.split('\n')[0]}`);

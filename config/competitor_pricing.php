@@ -97,6 +97,44 @@ return [
             'stale_days'       => (int) env('COMPETITOR_PRICING_REPORT_STALE_DAYS', 14),
             'max_rows'         => (int) env('COMPETITOR_PRICING_REPORT_MAX_ROWS', 25),
         ],
+
+        /*
+        | The report also runs two sets of checks. The first asks whether the
+        | RUN itself was healthy; the second looks for indirect tells that a
+        | PRICE is wrong even when the run finished cleanly. None of the price
+        | tells is proof — they are the patterns that accompany a bad match:
+        |
+        | - dissent_pct: the cheapest competitor being this much cheaper than
+        |   the second cheapest. When several shops agree and one disagrees,
+        |   the odd one out is usually a different rug — and it is exactly the
+        |   one that sets our price.
+        | - psqm_deviation_pct: a variant whose price per m² deviates this much
+        |   from the median of its own model family. Within one model every
+        |   size costs roughly the same per m², so this catches a wrong price
+        |   that no competitor says anything about.
+        | - shop_ratio_low/high: the band a shop's MEDIAN price ratio versus
+        |   our adviesprijs must stay in. One row outside is a bargain; a whole
+        |   shop outside is a systematic coupling error.
+        | - min_refresh_pct / shop_partial_pct: how much of the stored data the
+        |   scrape must have confirmed, overall and per shop. Unrefreshed
+        |   prices keep driving our price, so a half-finished scrape is worse
+        |   than an empty one.
+        | - flapping_days: a price changing on this many of the last 7 days is
+        |   following an unstable match, not a market.
+        | - mass_change_pct: a share of the catalog changing in one night that
+        |   is too large to be competitor drift.
+        */
+        'checks' => [
+            'min_refresh_pct'    => (float) env('COMPETITOR_PRICING_REPORT_MIN_REFRESH_PCT', 80),
+            'shop_partial_pct'   => (float) env('COMPETITOR_PRICING_REPORT_SHOP_PARTIAL_PCT', 50),
+            'shop_ratio_low'     => (float) env('COMPETITOR_PRICING_REPORT_SHOP_RATIO_LOW', 70),
+            'shop_ratio_high'    => (float) env('COMPETITOR_PRICING_REPORT_SHOP_RATIO_HIGH', 120),
+            'dissent_pct'        => (float) env('COMPETITOR_PRICING_REPORT_DISSENT_PCT', 25),
+            'psqm_deviation_pct' => (float) env('COMPETITOR_PRICING_REPORT_PSQM_DEVIATION_PCT', 40),
+            'flapping_days'      => (int) env('COMPETITOR_PRICING_REPORT_FLAPPING_DAYS', 5),
+            'mass_change_pct'    => (float) env('COMPETITOR_PRICING_REPORT_MASS_CHANGE_PCT', 25),
+            'max_items'          => (int) env('COMPETITOR_PRICING_REPORT_MAX_ITEMS', 15),
+        ],
     ],
 
     /*

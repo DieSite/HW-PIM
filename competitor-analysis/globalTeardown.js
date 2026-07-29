@@ -234,7 +234,7 @@ module.exports = async function globalTeardown() {
     ['Horrengigant',      'ECHTE per-maat prijs: WebForms-configurator volledig doorlopen (let op: cm-invoer), incl. gaaskleur (Zwart/Grijs, geen meerprijs)'],
     ['Qniq',              'ECHTE configuratorprijs; qniq prijst per deurtype (enkel/dubbel), niet per exacte mm'],
     ['Horrenconcurrent',  'ECHTE per-maat prijs: WooCommerce/PEWC live totaal (prijs in maatbanden)'],
-    ['Horrentotaal',      'ECHTE per-maat prijs: configurator-API (configurator.horrentotaal.nl/calculate) opgevangen'],
+    ['Horrentotaal',      'ECHTE per-maat prijs: configurator-API (configurator.horrentotaal.nl/calculate) opgevangen, MIN de lopende winkelactie (active-discounts, bv. 10%), want die krijgt iedere klant zonder code — zoals bij de eigen winkel. Meerprijs grijs gaas telt mee in de korting; volumekorting (vanaf x stuks) niet'],
     ['Creon Kozijnen',    'ECHTE per-maat prijs: /product/price AJAX (keyup-invoer); enkel vast, dubbel in maatbanden'],
     ['Horrenstunter',     'ECHTE per-maat prijs: Gravity Forms .formattedTotalPrice (basis + maat-meerprijs), maatbanden. Dubbel: dekking door één enkele deur (max 1900 mm); breder -> n.v.t. (dubbel-formulier niet automatiseerbaar)'],
     ['Koopje-Horren',     'ECHTE vaste prijs (Bruynzeel Plissé Hordeur s900 op maat); geen breedte/hoogte-veld, prijs is maat-onafhankelijk'],

@@ -39,6 +39,42 @@ function makeReportVariant(array $common, string $sku): Product
     return $variant;
 }
 
+/**
+ * A whole model family: one parent with several sized variants, so the checks
+ * that compare a rug against its own siblings have something to compare.
+ *
+ * @param  list<array{sku: string, maat: string, prijs: float|null, advies?: float, onderkleed?: string}>  $variants
+ */
+function makeReportFamily(array $variants, string $prefix): void
+{
+    $familyId = DB::table('attribute_families')->value('id')
+        ?? DB::table('attribute_families')->insertGetId(['code' => 'fam_'.uniqid(), 'status' => 1]);
+
+    $parent = new Product();
+    $parent->attribute_family_id = $familyId;
+    $parent->sku = $prefix.'-PARENT';
+    $parent->type = 'configurable';
+    $parent->status = 1;
+    $parent->values = ['common' => []];
+    $parent->save();
+
+    foreach ($variants as $definition) {
+        $variant = new Product();
+        $variant->attribute_family_id = $familyId;
+        $variant->parent_id = $parent->id;
+        $variant->sku = $definition['sku'];
+        $variant->type = 'simple';
+        $variant->status = 1;
+        $variant->values = ['common' => array_filter([
+            'maat'               => $definition['maat'],
+            'onderkleed'         => $definition['onderkleed'] ?? 'Zonder onderkleed',
+            'prijs'              => $definition['prijs'] === null ? null : ['EUR' => (string) $definition['prijs']],
+            'adviesverkoopprijs' => isset($definition['advies']) ? ['EUR' => (string) $definition['advies']] : null,
+        ])];
+        $variant->save();
+    }
+}
+
 function logReportChange(string $sku, float $old, float $new, string $reason, ?string $shop = null, ?float $competitorPrice = null): ProductPriceHistory
 {
     return ProductPriceHistory::create([
@@ -62,7 +98,27 @@ beforeEach(function () {
         'stale_days'       => 14,
         'max_rows'         => 25,
     ]);
+    config()->set('competitor_pricing.report.checks', [
+        'min_refresh_pct'    => 80,
+        'shop_partial_pct'   => 50,
+        'shop_ratio_low'     => 70,
+        'shop_ratio_high'    => 120,
+        'dissent_pct'        => 25,
+        'psqm_deviation_pct' => 40,
+        'flapping_days'      => 5,
+        'mass_change_pct'    => 25,
+        'max_items'          => 15,
+    ]);
 });
+
+/**
+ * The single check with the given key, so a test can assert on it without
+ * depending on the order the checks are built in.
+ */
+function reportCheck(array $report, string $key): array
+{
+    return collect($report['checks'])->firstWhere('key', $key);
+}
 
 afterEach(function () {
     Product::where('sku', 'like', 'CARTEST-%')->delete();
@@ -307,6 +363,171 @@ it('skips the report mail when the run did not recompute any price', function ()
     }
 
     Mail::assertNothingSent();
+});
+
+it('parses the rug sizes it needs for the price-per-m² checks', function () {
+    $reporter = app(CompetitorAnalysisReporter::class);
+
+    expect($reporter->area('200 cm x 300 cm'))->toBe(6.0)
+        ->and($reporter->area('160x230'))->toBe(3.68)
+        ->and(round((float) $reporter->area('Rond 200 cm'), 2))->toBe(3.14)
+        ->and(round((float) $reporter->area('Ovaal 200 cm x 290 cm'), 2))->toBe(4.56)
+        ->and($reporter->area('Maatwerk'))->toBeNull()
+        ->and($reporter->area('Onbekend'))->toBeNull();
+});
+
+it('flags a competitor that disagrees sharply with all the others', function () {
+    CompetitorPrice::create(['sku' => 'CARTEST-D1', 'shop' => 'shopa.nl', 'price' => 300, 'url' => 'https://shopa.nl/a', 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D1', 'shop' => 'shopb.nl', 'price' => 900, 'url' => 'https://shopb.nl/a', 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D1', 'shop' => 'shopc.nl', 'price' => 920, 'url' => 'https://shopc.nl/a', 'scraped_at' => now()]);
+
+    CompetitorPrice::create(['sku' => 'CARTEST-D2', 'shop' => 'shopa.nl', 'price' => 880, 'url' => 'https://shopa.nl/b', 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D2', 'shop' => 'shopb.nl', 'price' => 900, 'url' => 'https://shopb.nl/b', 'scraped_at' => now()]);
+
+    $check = reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'lone_dissenter');
+
+    expect($check['status'])->toBe('warn')
+        ->and($check['items'])->toHaveCount(1)
+        ->and($check['items'][0])->toContain('CARTEST-D1')
+        ->and($check['items'][0])->toContain('shopa.nl');
+});
+
+it('flags one competitor page that priced several of our sizes identically', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-P1', 'maat' => '160 cm x 230 cm', 'prijs' => 500.0, 'advies' => 500.0],
+        ['sku' => 'CARTEST-P2', 'maat' => '200 cm x 300 cm', 'prijs' => 800.0, 'advies' => 800.0],
+    ], 'CARTEST-PAGE');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-P1', 'shop' => 'shopa.nl', 'price' => 450, 'url' => 'https://shopa.nl/kleed', 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-P2', 'shop' => 'shopa.nl', 'price' => 450, 'url' => 'https://shopa.nl/kleed', 'scraped_at' => now()]);
+
+    $check = reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'shared_price');
+
+    expect($check['status'])->toBe('warn')
+        ->and($check['items'])->toHaveCount(1)
+        ->and($check['items'][0])->toContain('2 maten');
+});
+
+it('does not flag a competitor page that prices each of our sizes differently', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-P1', 'maat' => '160 cm x 230 cm', 'prijs' => 500.0, 'advies' => 500.0],
+        ['sku' => 'CARTEST-P2', 'maat' => '200 cm x 300 cm', 'prijs' => 800.0, 'advies' => 800.0],
+    ], 'CARTEST-PAGE');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-P1', 'shop' => 'shopa.nl', 'price' => 450, 'url' => 'https://shopa.nl/kleed', 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-P2', 'shop' => 'shopa.nl', 'price' => 700, 'url' => 'https://shopa.nl/kleed', 'scraped_at' => now()]);
+
+    expect(reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'shared_price')['status'])
+        ->toBe('ok');
+});
+
+it('flags a variant whose price per m² falls outside its own model family', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-M1', 'maat' => '160 cm x 230 cm', 'prijs' => 368.0, 'advies' => 368.0],
+        ['sku' => 'CARTEST-M2', 'maat' => '200 cm x 300 cm', 'prijs' => 600.0, 'advies' => 600.0],
+        ['sku' => 'CARTEST-M3', 'maat' => '240 cm x 340 cm', 'prijs' => 816.0, 'advies' => 816.0],
+        ['sku' => 'CARTEST-M4', 'maat' => '300 cm x 400 cm', 'prijs' => 240.0, 'advies' => 1200.0],
+    ], 'CARTEST-FAM');
+
+    logReportChange('CARTEST-M4', 1200, 240, 'Concurrent shopa.nl verlaagde naar € 240,00 — nieuwe laagste prijs.', 'shopa.nl', 240);
+
+    $check = reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'price_per_m2');
+
+    expect($check['status'])->toBe('warn')
+        ->and($check['items'])->toHaveCount(1)
+        ->and($check['items'][0])->toContain('CARTEST-M4');
+});
+
+it('leaves a model family alone when every size costs the same per m²', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-M1', 'maat' => '160 cm x 230 cm', 'prijs' => 368.0, 'advies' => 368.0],
+        ['sku' => 'CARTEST-M2', 'maat' => '200 cm x 300 cm', 'prijs' => 600.0, 'advies' => 600.0],
+        ['sku' => 'CARTEST-M3', 'maat' => '240 cm x 340 cm', 'prijs' => 816.0, 'advies' => 816.0],
+    ], 'CARTEST-FAM');
+
+    logReportChange('CARTEST-M2', 620, 600, 'Concurrent shopa.nl verlaagde naar € 600,00 — nieuwe laagste prijs.', 'shopa.nl', 600);
+
+    expect(reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'price_per_m2')['status'])
+        ->toBe('ok');
+});
+
+it('flags a met-onderkleed variant that is not more expensive than the bare one', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-B1', 'maat' => '200 cm x 300 cm', 'prijs' => 600.0, 'advies' => 600.0],
+        ['sku' => 'CARTEST-B1.O', 'maat' => '200 cm x 300 cm', 'prijs' => 580.0, 'advies' => 630.0, 'onderkleed' => 'Met onderkleed'],
+    ], 'CARTEST-BUN');
+
+    logReportChange('CARTEST-B1', 620, 600, 'Concurrent shopa.nl verlaagde naar € 600,00 — nieuwe laagste prijs.', 'shopa.nl', 600);
+
+    $check = reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'bundle_price');
+
+    expect($check['status'])->toBe('warn')
+        ->and($check['items'])->toHaveCount(1)
+        ->and($check['items'][0])->toContain('CARTEST-B1.O');
+});
+
+it('raises an alert when a price sits above its adviesverkoopprijs', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-C1', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 800.0],
+    ], 'CARTEST-CEIL');
+
+    logReportChange('CARTEST-C1', 800, 900, 'Concurrent shopa.nl biedt € 900,00 — laagste concurrent.', 'shopa.nl', 900);
+
+    $check = reportCheck(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()), 'above_ceiling');
+
+    expect($check['status'])->toBe('alert')
+        ->and($check['items'][0])->toContain('CARTEST-C1');
+});
+
+it('raises an alert for a competitor that delivered nothing this run', function () {
+    CompetitorPrice::create(['sku' => 'CARTEST-F1', 'shop' => 'werkt.nl', 'price' => 500, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-F2', 'shop' => 'werkt.nl', 'price' => 600, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-F3', 'shop' => 'stil.nl', 'price' => 700, 'scraped_at' => now()->subDays(30)]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+    $check = reportCheck($report, 'silent_shops');
+
+    expect($check['status'])->toBe('alert')
+        ->and($check['items'])->toHaveCount(1)
+        ->and($check['items'][0])->toContain('stil.nl')
+        ->and($report['alerts'])->toBeGreaterThan(0);
+});
+
+it('reports every check as green when nothing is wrong', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-G1', 'maat' => '160 cm x 230 cm', 'prijs' => 368.0, 'advies' => 400.0],
+        ['sku' => 'CARTEST-G2', 'maat' => '200 cm x 300 cm', 'prijs' => 600.0, 'advies' => 650.0],
+        ['sku' => 'CARTEST-G3', 'maat' => '240 cm x 340 cm', 'prijs' => 816.0, 'advies' => 850.0],
+        ['sku' => 'CARTEST-G4', 'maat' => '240 cm x 240 cm', 'prijs' => 576.0, 'advies' => 600.0],
+        ['sku' => 'CARTEST-G5', 'maat' => '140 cm x 200 cm', 'prijs' => 280.0, 'advies' => 300.0],
+    ], 'CARTEST-GREEN');
+
+    foreach (['CARTEST-G1' => 340, 'CARTEST-G2' => 560, 'CARTEST-G3' => 780] as $sku => $price) {
+        CompetitorPrice::create(['sku' => $sku, 'shop' => 'shopa.nl', 'price' => $price, 'url' => 'https://shopa.nl/'.$sku, 'scraped_at' => now()]);
+    }
+
+    logReportChange('CARTEST-G2', 610, 600, 'Concurrent shopa.nl verlaagde naar € 560,00 — nieuwe laagste prijs.', 'shopa.nl', 560);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+
+    expect($report['alerts'])->toBe(0)
+        ->and($report['warnings'])->toBe(0)
+        ->and($report['flagged'])->toBe(0)
+        ->and(collect($report['checks'])->pluck('status')->unique()->all())->toBe(['ok'])
+        ->and((new CompetitorAnalysisReport($report))->render())->toContain('controles staan op groen');
+});
+
+it('attaches the findings of the checks as a second CSV', function () {
+    CompetitorPrice::create(['sku' => 'CARTEST-F1', 'shop' => 'werkt.nl', 'price' => 500, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-F3', 'shop' => 'stil.nl', 'price' => 700, 'scraped_at' => now()->subDays(30)]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+    $mail = new CompetitorAnalysisReport($report);
+
+    expect($report['flagged'])->toBeGreaterThan(0)
+        ->and($mail->attachments())->toHaveCount(1)
+        ->and(app(CompetitorAnalysisReporter::class)->checksToCsv($report['checks']))->toContain('stil.nl')
+        ->and($mail->envelope()->subject)->toContain('alarm');
 });
 
 it('writes every change to the CSV with its reason and source URL', function () {

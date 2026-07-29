@@ -9,6 +9,20 @@
 
     $shopsWithChanges = collect($report['shops'])->where('changes', '>', 0);
 
+    $checks = collect($report['checks']);
+    $flagged = $checks->where('status', '!=', 'ok');
+
+    $statusLabel = fn (string $status): string => match ($status) {
+        'alert' => '🚨 Alarm',
+        'warn'  => '⚠️ Let op',
+        default => '✅ OK',
+    };
+
+    $groupTitles = [
+        'prices'   => 'Aanwijzingen dat een prijs niet klopt',
+        'pipeline' => 'Signalen over de analyse zelf',
+    ];
+
     /** Outlier groups that describe one of our own price changes. */
     $changeGroups = [
         'drops' => [
@@ -34,6 +48,12 @@
 # Concurrentie-analyse vloerkleden
 
 Run van **{{ $report['since']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y H:i') }}** tot **{{ $report['until']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y H:i') }}**.
+
+@if ($report['alerts'] > 0)
+@component('mail::panel')
+**Let op: {{ $report['alerts'] }} {{ $report['alerts'] === 1 ? 'controle slaat' : 'controles slaan' }} alarm.** Er staan mogelijk verkeerde prijzen in de winkel. Zie "{{ $groupTitles['prices'] }}" en "{{ $groupTitles['pipeline'] }}" verderop in deze mail.
+@endcomponent
+@endif
 
 ## Wat er veranderd is
 
@@ -62,10 +82,10 @@ Er is deze run **geen enkele prijs gewijzigd**: alle prijzen stonden al gelijk a
 
 @if ($shopsWithChanges->isNotEmpty())
 @component('mail::table')
-| Concurrent | Prijzen | Wijzigingen | Gem. effect |
-|:-----------|--------:|------------:|------------:|
+| Concurrent | Prijzen | Ververst | Wijzigingen | Gem. effect | Mediaan vs. advies |
+|:-----------|--------:|---------:|------------:|------------:|-------------------:|
 @foreach ($shopsWithChanges->take(10) as $shop)
-| {{ $shop['shop'] }} | {{ number_format($shop['prices'], 0, ',', '.') }} | {{ $shop['changes'] }} | {{ $pct($shop['avg_pct']) }} |
+| {{ $shop['shop'] }} | {{ number_format($shop['prices'], 0, ',', '.') }} | {{ number_format($shop['fresh'], 0, ',', '.') }} | {{ $shop['changes'] }} | {{ $pct($shop['avg_pct']) }} | {{ $shop['median_ratio'] === null ? '—' : number_format($shop['median_ratio'], 0, ',', '.').'%' }} |
 @endforeach
 @endcomponent
 
@@ -74,6 +94,42 @@ Er is deze run **geen enkele prijs gewijzigd**: alle prijzen stonden al gelijk a
 
 @endif
 @endif
+
+## Klopt het?
+
+@if ($flagged->isEmpty())
+Alle {{ $checks->count() }} controles staan op groen: de scrape is compleet, elke winkel heeft geleverd en er is geen enkel signaal dat een prijs niet klopt.
+@else
+{{ $flagged->count() }} van de {{ $checks->count() }} controles vragen aandacht. Geen van de prijssignalen is een bewijs — het zijn de patronen die in de praktijk bij een verkeerde prijs horen.
+@endif
+
+@component('mail::table')
+| Controle | Status | Bevinding |
+|:---------|:-------|:----------|
+@foreach ($checks as $check)
+| {{ $check['label'] }} | {{ $statusLabel($check['status']) }} | {{ $check['value'] }} |
+@endforeach
+@endcomponent
+
+@foreach ($groupTitles as $group => $title)
+@php($groupChecks = $flagged->where('group', $group))
+@continue($groupChecks->isEmpty())
+### {{ $title }}
+
+@foreach ($groupChecks as $check)
+**{{ $statusLabel($check['status']) }} — {{ $check['label'] }} ({{ $check['value'] }})**
+
+{{ $check['detail'] }}
+
+@foreach (array_slice($check['items'], 0, $maxRows) as $item)
+- {{ $item }}
+@endforeach
+@if (count($check['items']) > $maxRows)
+- *En nog {{ count($check['items']) - $maxRows }} andere; zie de bijlage.*
+@endif
+
+@endforeach
+@endforeach
 
 ## Uitschieters
 
@@ -141,7 +197,10 @@ Deze prijzen bepalen nog steeds onze prijs, terwijl de scraper ze al een tijd ni
 @endif
 
 @if ($report['rows'] !== [])
-Alle {{ $changes['total'] }} wijzigingen staan met reden en bron-URL in het bijgevoegde CSV-bestand.
+Alle {{ $changes['total'] }} wijzigingen staan met reden en bron-URL in `prijswijzigingen.csv`.
+@endif
+@if ($report['flagged'] > 0)
+Alle {{ $report['flagged'] }} bevindingen van de controles staan in `aandachtspunten.csv`.
 @endif
 
 Groeten,<br>
