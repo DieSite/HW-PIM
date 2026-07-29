@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Redis;
 use RuntimeException;
 use Throwable;
 
@@ -126,6 +127,8 @@ class RunHordeurenAnalysisJob implements ShouldQueue
         $this->ensurePlaywrightInstalled($dir);
         $this->installChromium($dir);
 
+        $this->disconnectRedis();
+
         /**
          * Fresh start: the suite's recorder is sticky (results-parts/ survives
          * runs so retries only fill missing cells), so the previous analysis'
@@ -150,6 +153,27 @@ class RunHordeurenAnalysisJob implements ShouldQueue
             ->dispatch();
 
         Cache::put(self::BATCH_CACHE_KEY, $batch->id, now()->addDay());
+    }
+
+    /**
+     * The worker's Redis sockets — the queue's own connection plus Horizon's —
+     * sit idle for the whole toolchain preparation (npm install plus a Chromium
+     * download, up to {@see $timeout} seconds of pure subprocess time). Redis
+     * hangs up on a connection that idle, and Predis never reconnects, so the
+     * batch dispatch that follows died on a half-closed socket with "Error
+     * while writing bytes to the server".
+     *
+     * Closing them here costs nothing: Predis connects lazily, so the dispatch
+     * opens fresh sockets. Only connections this worker actually resolved are
+     * touched, which keeps this correct if Horizon's or the queue's connection
+     * names ever change.
+     */
+    private function disconnectRedis(): void
+    {
+        /** RedisManager keeps its resolved-connection map null until first use. */
+        foreach (Redis::connections() ?? [] as $connection) {
+            $connection->disconnect();
+        }
     }
 
     /**

@@ -208,9 +208,12 @@ it('still fails a deadline-bounded job once it genuinely throws maxExceptions ti
         ->and($failures[0]['message'])->toBe('probe failure');
 });
 
-it('runs the competitor scrape after twelve silent worker deaths instead of failing it', function () {
-    Process::fake();
-
+/**
+ * Queue one scrape and take $deaths workers down with it, leaving the job on
+ * the queue with that many attempts burnt.
+ */
+function scrapeSurvivingWorkerDeaths(int $deaths): string
+{
     $queue = bootWorkerDeathQueue();
     scraperDirForWorkerDeathTest();
 
@@ -220,18 +223,44 @@ it('runs the competitor scrape after twelve silent worker deaths instead of fail
             ->onQueue($queue)
     );
 
-    foreach (range(1, 12) as $ignored) {
+    foreach (range(1, $deaths) as $ignored) {
         killWorkerMidJob($queue);
     }
 
-    $failures = runOneJobCapturingFailures($queue);
+    return $queue;
+}
 
-    expect($failures)->toBe([]);
+it('runs the competitor scrape after a silent worker death instead of failing it', function () {
+    Process::fake();
+
+    /** The last attempt the ceiling still allows: deaths are free up to here. */
+    $queue = scrapeSurvivingWorkerDeaths(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS - 1);
+
+    expect(runOneJobCapturingFailures($queue))->toBe([]);
 
     Process::assertRan(fn ($process) => str_contains(
         implode(' ', (array) $process->command),
         'playwright test tests/01-a.spec.js'
     ));
+});
+
+it('gives up on a competitor scrape that has taken the ceiling in workers down with it', function () {
+    Process::fake();
+
+    $queue = scrapeSurvivingWorkerDeaths(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS);
+
+    $failures = runOneJobCapturingFailures($queue);
+
+    expect($failures)->toHaveCount(1)
+        ->and($failures[0]['class'])->toBe(RuntimeException::class)
+        ->and($failures[0]['message'])->toContain('01-a.spec.js')
+        ->and($failures[0]['message'])->toContain('opgegeven na 3 pogingen');
+
+    /**
+     * The batch gets its failed job now rather than a 24th pass over the
+     * configurator, so the report mail is not held for another retry_after.
+     */
+    Process::assertNothingRan();
 });
 
 it('caps genuinely failing competitor scrapes so a broken spec cannot retry forever', function () {

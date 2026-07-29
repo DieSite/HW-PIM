@@ -26,17 +26,37 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
     use Batchable, Dispatchable, HordeurenScraperEnvironment, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * Retries are bounded by a deadline, not by an attempt count — see
-     * retryUntil(). An attempt counter cannot tell "this scrape failed" from
-     * "the worker carrying this scrape was killed", and every silent death
-     * (deploy restart, OOM kill, container replacement) burns an attempt
-     * without ever running failed() or recording an exception. With $tries the
-     * lost attempts eventually surfaced as MaxAttemptsExceededException on a
-     * job that had never even started: attempt $tries + 1, ~0.01s runtime.
+     * A spec may be handed to a worker this many times before we stop resuming
+     * it. The ceiling has to be enforced here, in handle(), because $tries
+     * cannot do it: while retryUntil() is in the future,
+     * Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts returns before it ever
+     * looks at the attempt count, so $tries is inert on this queue whatever it
+     * is set to. Attempt 24 of a spec (Sentry HUIS-EN-WONEN-PIM-D, 24.7 hours
+     * after dispatch) is what that looks like: one silent death per
+     * retry_after, all the way to the deadline.
+     *
+     * Three is chosen against the failure it is meant to survive rather than
+     * against the failure it is meant to stop: a scrape that loses its worker
+     * to a deploy restart gets a second and a third go, while a spec that kills
+     * its worker every time gives up after ~3 hours instead of blocking the
+     * report for a day.
      *
      * @var int
      */
-    public $tries = 1;
+    public const MAX_ATTEMPTS = 2;
+
+    /**
+     * Retries are bounded by a deadline, not by an attempt count — see
+     * retryUntil() and {@see MAX_ATTEMPTS}. An attempt counter cannot tell
+     * "this scrape failed" from "the worker carrying this scrape was killed",
+     * and every silent death (deploy restart, OOM kill, container replacement)
+     * burns an attempt without ever running failed() or recording an exception.
+     * With $tries the lost attempts surfaced as MaxAttemptsExceededException on
+     * a job that had never even started: attempt $tries + 1, ~0.01s runtime.
+     *
+     * @var int
+     */
+    public $tries = 0;
 
     /**
      * One attempt at actually scraping: the first time handle() throws, the
@@ -94,6 +114,23 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
     public function handle(): void
     {
         if ($this->batch()?->cancelled()) {
+            return;
+        }
+
+        /**
+         * Every arrival here past the ceiling is a resumed attempt: a scrape
+         * that fails outright is stopped by $maxExceptions long before this,
+         * and one that succeeds never comes back. So the spec is taking its
+         * worker down with it, and re-running it only costs the batch another
+         * retry_after before the report can go out.
+         */
+        if ($this->attempts() > self::MAX_ATTEMPTS) {
+            $this->fail(new RuntimeException(sprintf(
+                'Scrape %s opgegeven na %d pogingen: de worker sneuvelde elke keer voordat de scrape af was.',
+                $this->spec,
+                self::MAX_ATTEMPTS,
+            )));
+
             return;
         }
 

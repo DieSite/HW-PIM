@@ -161,6 +161,43 @@ it('prepares the toolchain and dispatches one scrape job per competitor spec', f
     });
 });
 
+it('drops the idle redis sockets after the toolchain install so the batch dispatch reconnects', function () {
+    Bus::fake();
+
+    $sequence = [];
+
+    Process::fake(['*' => function () use (&$sequence) {
+        $sequence[] = 'install';
+
+        return Process::result();
+    }]);
+
+    $connections = [];
+
+    foreach (['default', 'horizon'] as $name) {
+        $connection = Mockery::mock();
+        $connection->shouldReceive('disconnect')->once()->andReturnUsing(function () use (&$sequence, $name) {
+            $sequence[] = 'disconnect:'.$name;
+        });
+
+        $connections[$name] = $connection;
+    }
+
+    $redis = Mockery::mock();
+    $redis->shouldReceive('connections')->andReturn($connections);
+
+    Redis::swap($redis);
+
+    fakeScraperDir(['01-a.spec.js']);
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    /** Every socket is closed after the long install and before the dispatch. */
+    expect($sequence)->toBe(['install', 'disconnect:default', 'disconnect:horizon']);
+
+    Bus::assertBatched(fn (PendingBatchFake $batch) => $batch->name === 'hordeuren-analyse');
+});
+
 it('does not queue a second batch or wipe live results when a killed attempt re-runs', function () {
     Bus::fake();
     Process::fake();
@@ -290,6 +327,52 @@ it('scrapes a single competitor spec', function () {
     fakeScraperDir();
 
     (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle();
+
+    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test tests/01-a.spec.js');
+});
+
+/**
+ * Drive the scrape job as a worker would, so $this->attempts() reports the
+ * attempt this run is on instead of the InteractsWithQueue default of 1.
+ */
+function scrapeJobOnAttempt(int $attempt, string $spec = '01-a.spec.js'): array
+{
+    $queueJob = Mockery::mock(Illuminate\Contracts\Queue\Job::class);
+    $queueJob->shouldReceive('attempts')->andReturn($attempt);
+
+    $job = new ScrapeHordeurenCompetitorJob($spec);
+    $job->setJob($queueJob);
+
+    return [$job, $queueJob];
+}
+
+it('gives up on a spec that keeps taking its worker down with it', function () {
+    Process::fake();
+
+    fakeScraperDir();
+
+    [$job, $queueJob] = scrapeJobOnAttempt(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS + 1);
+
+    $queueJob->shouldReceive('fail')->once()->with(Mockery::on(
+        fn ($e) => $e instanceof RuntimeException && str_contains($e->getMessage(), '01-a.spec.js')
+    ));
+
+    $job->handle();
+
+    /** No 24th pass over the configurator, and the batch is free to finish. */
+    Process::assertNothingRan();
+});
+
+it('still resumes a scrape while the attempt ceiling has not been passed', function () {
+    Process::fake();
+
+    fakeScraperDir();
+
+    [$job, $queueJob] = scrapeJobOnAttempt(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS);
+
+    $queueJob->shouldNotReceive('fail');
+
+    $job->handle();
 
     Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test tests/01-a.spec.js');
 });
