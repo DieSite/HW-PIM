@@ -109,6 +109,17 @@ function recordPrice(db, sku, shop, priceStr, url = null) {
   `).run(sku, shop, priceStr ?? 'n.v.t.', url ?? null);
 }
 
+/**
+ * Verwijder een eerder vastgelegde prijs. Bewust NIET sticky: `recordPrice`
+ * beschermt een echte prijs tegen een mislukte fetch, maar een matchguard die
+ * de pagina afkeurt is geen mislukking — het is de vaststelling dát deze
+ * koppeling fout is. Zonder deze deur blijft een fout gekoppelde prijs eeuwig
+ * staan, ook nadat een nieuwe guard hem zou tegenhouden.
+ */
+function deletePrice(db, sku, shop) {
+  return db.prepare(`DELETE FROM prices WHERE sku = ? AND shop = ?`).run(sku, shop).changes;
+}
+
 /** Alle gescrapete prijzen terug als { sku: { shop: { priceStr, url } } }. */
 function collectPrices(db) {
   const rows = db.prepare(`SELECT sku, shop, price_str, url FROM prices`).all();
@@ -143,5 +154,5 @@ function clearPrices(db, shop) {
 
 module.exports = {
   openDb, upsertIndex, clearIndex, getIndexForShop, findInIndex,
-  recordPrice, collectPrices, unpricedSkus, clearPrices,
+  recordPrice, deletePrice, collectPrices, unpricedSkus, clearPrices,
 };

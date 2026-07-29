@@ -178,6 +178,15 @@ class ImportCompetitorPricesCommand extends Command
             return null;
         }
 
+        // "Vanaf € 359,00" is the price of the competitor's SMALLEST size, not
+        // of the size we asked for (the scraper marks shops without per-size
+        // prices this way and the Excel leaves those cells uncoloured for the
+        // same reason). Importing it as a firm price would undercut us to a
+        // from-price for every size.
+        if (preg_match('/^\s*vanaf\b/i', $value) === 1) {
+            return null;
+        }
+
         $number = preg_replace('/[^0-9,.]/', '', $value);
         $number = str_replace('.', '', $number);   // thousands separator
         $number = str_replace(',', '.', $number);   // decimal separator

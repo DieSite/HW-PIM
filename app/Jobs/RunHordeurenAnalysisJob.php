@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Facades\Redis;
 use RuntimeException;
 use Throwable;
 
@@ -27,10 +26,9 @@ use Throwable;
  *
  * This job only prepares the toolchain (npm install + Chromium on first run)
  * and then dispatches one ScrapeHordeurenCompetitorJob per competitor spec as
- * a batch; MailHordeurenAnalysisReportJob mails the Excel when the batch
- * finishes. Splitting the former multi-hour monolith means a killed worker
- * (deploy restart, OOM) loses one competitor's scrape instead of the whole
- * run, and each competitor retries independently.
+ * a batch. The batch fails fast: the first competitor that fails cancels the
+ * rest and mails the failure immediately, and only a batch in which every
+ * competitor came back reaches MailHordeurenAnalysisReportJob.
  */
 class RunHordeurenAnalysisJob implements ShouldQueue
 {
@@ -139,41 +137,38 @@ class RunHordeurenAnalysisJob implements ShouldQueue
         $email = $this->email;
         $startedAt = now();
 
+        /**
+         * Fail fast, on purpose: no allowFailures(). The first competitor that
+         * fails cancels the batch — the remaining scrapes see the cancellation
+         * and return without touching their shop — and the catch callback mails
+         * the failure straight away. A half-scraped comparison is worse than no
+         * comparison: the Excel would still be rebuilt and still look complete,
+         * with the dropped competitor's column quietly reading "–".
+         *
+         * then() therefore carries the report: it only runs when every
+         * competitor came back.
+         */
         $batch = Bus::batch(array_map(
             fn (string $spec) => new ScrapeHordeurenCompetitorJob($spec),
             $specs,
         ))
-            ->allowFailures()
             ->name('hordeuren-analyse')
-            ->finally(function (Batch $batch) use ($email, $startedAt): void {
+            ->then(function (Batch $batch) use ($email, $startedAt): void {
                 MailHordeurenAnalysisReportJob::dispatch($email, $startedAt, $batch->failedJobs);
+            })
+            ->catch(function (Batch $batch, Throwable $e) use ($email): void {
+                Cache::forget(self::RUNNING_CACHE_KEY);
+                Cache::forget(self::BATCH_CACHE_KEY);
+
+                Mail::to($email)->send(new HordeurenAnalysisFailed(
+                    error: $e->getMessage(),
+                ));
             })
             ->onConnection('redis-hordeuren')
             ->onQueue('hordeuren')
             ->dispatch();
 
         Cache::put(self::BATCH_CACHE_KEY, $batch->id, now()->addDay());
-    }
-
-    /**
-     * The worker's Redis sockets — the queue's own connection plus Horizon's —
-     * sit idle for the whole toolchain preparation (npm install plus a Chromium
-     * download, up to {@see $timeout} seconds of pure subprocess time). Redis
-     * hangs up on a connection that idle, and Predis never reconnects, so the
-     * batch dispatch that follows died on a half-closed socket with "Error
-     * while writing bytes to the server".
-     *
-     * Closing them here costs nothing: Predis connects lazily, so the dispatch
-     * opens fresh sockets. Only connections this worker actually resolved are
-     * touched, which keeps this correct if Horizon's or the queue's connection
-     * names ever change.
-     */
-    private function disconnectRedis(): void
-    {
-        /** RedisManager keeps its resolved-connection map null until first use. */
-        foreach (Redis::connections() ?? [] as $connection) {
-            $connection->disconnect();
-        }
     }
 
     /**

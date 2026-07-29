@@ -42,5 +42,9 @@ const reset = args.includes('--reset') ? '--reset' : '';
 if (!onlyExcel) {
   run('index-shops.js',   [shopFilter, reset].filter(Boolean).join(' '));
   run('fetch-prices.js',  shopFilter);
+  // Hertoets de hele voorraad aan de huidige matchguards. Standaard alleen
+  // rapporteren; met --audit-fix worden afgekeurde koppelingen verwijderd
+  // (audit-prices.js weigert dat bij een onvolledige catalogus-CSV).
+  run('audit-prices.js',  [shopFilter, args.includes('--audit-fix') ? '--fix' : ''].filter(Boolean).join(' '));
 }
 run('excel.js');

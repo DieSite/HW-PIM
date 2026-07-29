@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Clients\DeMunkPortalClient;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,7 +12,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Redis;
 use RuntimeException;
 
 /**
@@ -43,13 +43,22 @@ class FetchDeMunkCollectionStockJob implements ShouldQueue
         $this->onQueue('demunk');
     }
 
+    /**
+     * The minutes-long portal crawl issues no Redis command of its own, so the
+     * worker's sockets would go stale before it retires this job.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
+
     public function handle(): void
     {
         if ($this->batch()?->cancelled()) {
             return;
         }
-
-        $this->disconnectRedis();
 
         $client = (new DeMunkPortalClient())->login();
 
@@ -99,16 +108,5 @@ class FetchDeMunkCollectionStockJob implements ShouldQueue
     public function tags(): array
     {
         return [self::class, $this->collection];
-    }
-
-    /**
-     * The worker's Redis sockets sit idle during the minutes-long portal
-     * crawl and have repeatedly gone stale (Predis "Error while reading/
-     * writing bytes"), so open fresh ones for the cache write afterwards.
-     */
-    private function disconnectRedis(): void
-    {
-        Redis::connection('default')->disconnect();
-        Redis::connection('cache')->disconnect();
     }
 }

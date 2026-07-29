@@ -126,14 +126,112 @@ function numbersCompatible(a, b) {
 }
 
 /**
- * De eigenlijke modelnaam (eerste niet-numerieke token, bv. "prosper" in
- * "prosper 69 vintage copper") moet in de competitor-titel/slug voorkomen.
- * Voorkomt dat losse sfeerwoorden ("vintage", "69") een ander model koppelen.
+ * Materiaal-, techniek- en productsoortwoorden. Ze staan in zowel onze
+ * modelnamen als in vrijwel elke concurrenttitel en onderscheiden dus géén
+ * model: "Sisal Gold 22" mag niet matchen op "Sisal vloerkleed Loop grijs 22"
+ * puur omdat beide "sisal" bevatten.
+ */
+const GENERIC_MODEL_WORDS = new Set([
+  'sisal', 'wollen', 'wol', 'hoogpolig', 'laagpolig', 'kortpolig', 'vloerkleed',
+  'vloerkleden', 'karpet', 'karpetten', 'tapijt', 'carpet', 'carpets', 'rug',
+  'berber', 'shaggy', 'katoen', 'buitenkleed', 'kleed', 'jute', 'vintage',
+]);
+
+/**
+ * De eigenlijke modelnaam (eerste onderscheidende, niet-numerieke token, bv.
+ * "prosper" in "prosper 69 vintage copper") moet in de competitor-titel/slug
+ * voorkomen. Generieke materiaalwoorden tellen niet mee als modelnaam;
+ * alleen als het model uitsluitend daaruit bestaat vallen we erop terug.
  */
 function hasModelNameToken(text, catModel) {
   const tokens = String(catModel ?? '').split(' ').filter(Boolean);
-  const first = tokens.find(t => t.length > 2 && !/^\d+$/.test(t)) ?? tokens[0];
+  const words = tokens.filter(t => t.length > 2 && !/^\d+$/.test(t));
+  const first = words.find(t => !GENERIC_MODEL_WORDS.has(t)) ?? words[0] ?? tokens[0];
   return !first || String(text ?? '').toLowerCase().includes(first);
+}
+
+/**
+ * Kleurnamen, NL en EN naar één noemer. Modellen die zich alléén door een
+ * kleurWOORD onderscheiden ("Love Shaggy Taupe" vs "Love Shaggy Beige",
+ * "Prosper 25 - Black" vs de witte Prosper) hebben geen kleurnummer waarop
+ * numbersCompatible kan aanslaan.
+ */
+const COLOR_ALIASES = {
+  // Mart Visser gebruikt Engelse én Duitse kleurnamen in zijn modelnamen
+  // ("Cendre 21 - Grau"), terwijl de shops Nederlands schrijven.
+  zwart: 'zwart', black: 'zwart', schwarz: 'zwart',
+  wit: 'wit', white: 'wit', weiss: 'wit',
+  grijs: 'grijs', grey: 'grijs', gray: 'grijs', grau: 'grijs',
+  antraciet: 'antraciet', anthracite: 'antraciet', anthrazit: 'antraciet',
+  bruin: 'bruin', brown: 'bruin', braun: 'bruin', lichtbruin: 'lichtbruin',
+  beige: 'beige', taupe: 'taupe', creme: 'creme', cream: 'creme',
+  zand: 'zand', sand: 'zand', naturel: 'naturel', natural: 'naturel', ivory: 'ivory',
+  blauw: 'blauw', blue: 'blauw', groen: 'groen', green: 'groen',
+  rood: 'rood', red: 'rood', roze: 'roze', pink: 'roze',
+  geel: 'geel', yellow: 'geel', oker: 'oker', ocker: 'oker', ochre: 'oker',
+  oranje: 'oranje', orange: 'oranje', paars: 'paars', purple: 'paars',
+  goud: 'goud', gold: 'goud', zilver: 'zilver', silver: 'zilver',
+  cognac: 'cognac', terra: 'terra', olive: 'olive', olijf: 'olive',
+};
+
+/** De genormaliseerde kleurnamen in een stuk tekst. */
+function colorWords(str) {
+  const out = new Set();
+  for (const t of String(str ?? '').toLowerCase().split(/[^a-z]+/)) {
+    if (COLOR_ALIASES[t]) out.add(COLOR_ALIASES[t]);
+  }
+  return [...out];
+}
+
+/**
+ * True als kleurNAMEN elkaar niet tegenspreken. Zonder kleurnaam aan één van
+ * beide kanten is er geen oordeel (true) — een concurrenttitel die de kleur
+ * niet noemt mag niet massaal afgekeurd worden.
+ */
+function colorsCompatible(a, b) {
+  const ca = colorWords(a), cb = colorWords(b);
+  return !ca.length || !cb.length || ca.some(c => cb.includes(c));
+}
+
+/**
+ * Is er POSITIEF bewijs dat dit dezelfde kleurvariant is — een gedeeld
+ * dessinnummer of een gedeelde kleurnaam?
+ *
+ * `numbersCompatible` en `colorsCompatible` vallen bewust open als één van
+ * beide kanten niets noemt: de meeste concurrenten noemen lang niet altijd een
+ * kleur, en massaal afkeuren zou de dekking slopen. Bij een shop die noch een
+ * dessinnummer in slug of titel zet (gigameubel: "…-prosper-200x290cm-wit")
+ * betekent dat echter dat élke kleur van een model op dezelfde pagina uitkomt.
+ * Zulke shops eisen daarom bewijs in plaats van de afwezigheid van tegenspraak.
+ */
+function hasDiscriminator(catModel, text, colour = '') {
+  const na = designNumbers(catModel), nb = designNumbers(text);
+  if (na.length && nb.length && na.some(n => nb.includes(n))) return true;
+
+  const ca = colorWords(catModel + ' ' + colour), cb = colorWords(text);
+  return ca.length > 0 && cb.length > 0 && ca.some(c => cb.includes(c));
+}
+
+/**
+ * Alle identiteitseisen voor het koppelen van één catalogusmodel aan één
+ * competitor-tekst (titel, variant-titel of slug), op één plek zodat de vijf
+ * aanroepplekken niet uit elkaar kunnen lopen.
+ *
+ * `requireDiscriminator` (per shop ingesteld in shops.js) maakt de koppeling
+ * bewijs-gedreven in plaats van tegenspraak-gedreven.
+ */
+function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator = false, colour = '' } = {}) {
+  return hasModelNameToken(text, catModel)
+    && numbersCompatible(catModel, text)
+    // LET OP: de PIM-kleur (`Kleuren` op de parent) gaat NIET in deze
+    // tegenspraak-check. Dat is een grove categorie ("Beige"), geen
+    // marketingnaam: "Oasis 15" staat in het PIM als Beige terwijl de shop hem
+    // "Oasis cloud grey 15" noemt. Meegeteld hier keurde dat vier terechte
+    // koppelingen af (Craft/Cavaro/Oasis/Suède Shades, dessinnummer gelijk).
+    // Als POSITIEF bewijs is hij wél bruikbaar — zie hasDiscriminator.
+    && colorsCompatible(catModel, text)
+    && containsAllTokens(text, mustHave)
+    && (! requireDiscriminator || hasDiscriminator(catModel, text, colour));
 }
 
 /** True als alle (verplichte) tokens in de tekst voorkomen. Lege lijst = altijd true. */
@@ -149,13 +247,11 @@ function containsAllTokens(text, tokens) {
  * de prijs van de "Pink Flash 8261"-pagina. HTML-entities worden gestript
  * zodat "&#9193;" geen nep-dessinnummer wordt.
  */
-function pageMatchesEntry(title, url, entry) {
+function pageMatchesEntry(title, url, entry, opts = {}) {
   const clean = String(title ?? '').replace(/&#\d+;/g, ' ').replace(/&[a-z]+;/gi, ' ');
   const text = normModel(clean) + ' ' + String(url ?? '').toLowerCase();
   const pageShape = detectShape(clean, url) ?? 'rechthoek';
-  return hasModelNameToken(text, entry.normModel)
-    && numbersCompatible(entry.normModel, text)
-    && containsAllTokens(text, entry.mustHave)
+  return modelIdentityMatches(entry.normModel, text, entry.mustHave, { colour: entry.colour ?? '', ...opts })
     && pageShape === (entry.shape ?? 'rechthoek');
 }
 
@@ -212,5 +308,5 @@ module.exports = {
   normBrand, normModel, parseSize, sizeKey, fmtEuro, euroNum,
   isRealPrice, isVanaf, matchScore, extractModel, slugMatchScore, BRAND_ALIASES,
   detectShape, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens,
-  pageMatchesEntry,
+  pageMatchesEntry, colorWords, colorsCompatible, modelIdentityMatches, hasDiscriminator, GENERIC_MODEL_WORDS,
 };

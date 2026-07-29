@@ -3,76 +3,43 @@
 namespace App\Jobs;
 
 use App\Jobs\Concerns\HordeurenScraperEnvironment;
-use DateTimeInterface;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
 
 /**
  * Scrape one competitor shop of the hordeuren analysis by running its single
- * Playwright spec. A failing scrape is not retried ({@see $maxExceptions}); a
- * scrape whose worker was killed is resumed, and because the suite's recorder
- * is sticky (results-parts/ keeps every scraped price) that resume only
- * re-attempts the cells still missing. The suite's global teardown rebuilds
- * the Excel after every spec run, so the report is complete once the batch is.
+ * Playwright spec.
+ *
+ * Fail fast: one attempt, no retries. The first spec that fails stops the whole
+ * batch and mails the failure (see RunHordeurenAnalysisJob's catch callback),
+ * because a run that silently dropped a competitor produces a price comparison
+ * that reads as complete but is not. The suite's global teardown rebuilds the
+ * Excel after every spec run, so the report is complete once the batch is.
  */
 class ScrapeHordeurenCompetitorJob implements ShouldQueue
 {
     use Batchable, Dispatchable, HordeurenScraperEnvironment, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * A spec may be handed to a worker this many times before we stop resuming
-     * it. The ceiling has to be enforced here, in handle(), because $tries
-     * cannot do it: while retryUntil() is in the future,
-     * Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts returns before it ever
-     * looks at the attempt count, so $tries is inert on this queue whatever it
-     * is set to. Attempt 24 of a spec (Sentry HUIS-EN-WONEN-PIM-D, 24.7 hours
-     * after dispatch) is what that looks like: one silent death per
-     * retry_after, all the way to the deadline.
-     *
-     * Three is chosen against the failure it is meant to survive rather than
-     * against the failure it is meant to stop: a scrape that loses its worker
-     * to a deploy restart gets a second and a third go, while a spec that kills
-     * its worker every time gives up after ~3 hours instead of blocking the
-     * report for a day.
+     * One attempt. Deliberately NOT bounded by retryUntil(): a deadline makes
+     * the worker skip the attempt check entirely
+     * (Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts returns while the
+     * deadline holds), which is exactly how a spec once reached attempt 24 over
+     * 24.7 hours. With $tries = 1 a second reservation — the fingerprint of a
+     * worker that was killed mid-scrape — fails the job instead of re-running
+     * it, so a lost worker surfaces as an alert rather than as another hour of
+     * silence.
      *
      * @var int
      */
-    public const MAX_ATTEMPTS = 2;
-
-    /**
-     * Retries are bounded by a deadline, not by an attempt count — see
-     * retryUntil() and {@see MAX_ATTEMPTS}. An attempt counter cannot tell
-     * "this scrape failed" from "the worker carrying this scrape was killed",
-     * and every silent death (deploy restart, OOM kill, container replacement)
-     * burns an attempt without ever running failed() or recording an exception.
-     * With $tries the lost attempts surfaced as MaxAttemptsExceededException on
-     * a job that had never even started: attempt $tries + 1, ~0.01s runtime.
-     *
-     * @var int
-     */
-    public $tries = 0;
-
-    /**
-     * One attempt at actually scraping: the first time handle() throws, the
-     * job fails and the competitor is left out of this run. Re-running a spec
-     * that just failed rarely turns a failure into a price — a changed
-     * configurator or a blocked request fails again — it only costs the batch
-     * another {@see $timeout} before the report can go out.
-     *
-     * This counter advances only in the worker's catch path, so it bounds real
-     * failures without touching the free retries a killed worker needs. It
-     * needs a shared cache store (production runs the file driver), which the
-     * worker gets from WorkCommand::runWorker().
-     *
-     * @var int
-     */
-    public $maxExceptions = 1;
+    public $tries = 1;
 
     /**
      * One spec drives one competitor's configurator through all 34 door
@@ -93,60 +60,81 @@ class ScrapeHordeurenCompetitorJob implements ShouldQueue
         $this->onQueue('hordeuren');
     }
 
-    /**
-     * While this deadline is in the future the worker skips the attempt-count
-     * check entirely (Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts), so
-     * no number of silent worker deaths can produce a
-     * MaxAttemptsExceededException.
-     *
-     * The deadline is frozen into the payload at dispatch time and every
-     * competitor of a run is dispatched at once, so it must cover a whole
-     * batch, not one scrape: the specs run sequentially on the single
-     * supervisor-hordeuren process, so a worst-case pass is
-     * (competitors × $timeout) ≈ 6 hours. A day leaves room for retries on top
-     * of that while still guaranteeing an abandoned run cannot linger forever.
-     */
-    public function retryUntil(): DateTimeInterface
-    {
-        return now()->addDay();
-    }
-
     public function handle(): void
     {
+        /** An earlier competitor already failed and stopped the run. */
         if ($this->batch()?->cancelled()) {
-            return;
-        }
-
-        /**
-         * Every arrival here past the ceiling is a resumed attempt: a scrape
-         * that fails outright is stopped by $maxExceptions long before this,
-         * and one that succeeds never comes back. So the spec is taking its
-         * worker down with it, and re-running it only costs the batch another
-         * retry_after before the report can go out.
-         */
-        if ($this->attempts() > self::MAX_ATTEMPTS) {
-            $this->fail(new RuntimeException(sprintf(
-                'Scrape %s opgegeven na %d pogingen: de worker sneuvelde elke keer voordat de scrape af was.',
-                $this->spec,
-                self::MAX_ATTEMPTS,
-            )));
-
             return;
         }
 
         $dir = (string) config('competitor_pricing.scraper_dir');
 
+        /**
+         * Playwright's output goes straight to the spec log rather than through
+         * a PHP buffer: it survives a worker that never returns from here,
+         * which is otherwise the one failure that leaves nothing to debug with.
+         */
+        $command = sprintf(
+            '%s playwright test %s >> %s 2>&1',
+            escapeshellarg($this->nodeBin().'/npx'),
+            escapeshellarg('tests/'.$this->spec),
+            escapeshellarg($this->logPath()),
+        );
+
+        $this->startLog();
+
+        /**
+         * The scrape is minutes of pure subprocess time. Left open, the
+         * worker's Redis sockets go idle long enough for Redis to hang up, and
+         * the delete() that retires this job on success then dies on the
+         * half-closed socket — taking the worker down with a scrape that had
+         * actually succeeded. {@see disconnectRedis()}
+         */
+        $this->disconnectRedis();
+
         $result = Process::path($dir)
             ->timeout($this->timeout - 60)
             ->env($this->processEnv())
-            ->run([$this->nodeBin().'/npx', 'playwright', 'test', 'tests/'.$this->spec]);
+            ->run($command);
 
         if (! $result->successful()) {
             throw new RuntimeException(
-                "Scrape {$this->spec} liet lege cellen achter: "
-                .mb_substr($result->errorOutput() ?: $result->output(), -1000)
+                "Scrape {$this->spec} liet lege cellen achter: ".($this->logTail() ?: '(geen uitvoer)')
             );
         }
+    }
+
+    /**
+     * One log per spec. Kept across runs so the run before the failing one is
+     * still there to compare against.
+     */
+    private function logPath(): string
+    {
+        return storage_path('logs/hordeuren/'.$this->spec.'.log');
+    }
+
+    private function startLog(): void
+    {
+        File::ensureDirectoryExists(dirname($this->logPath()));
+
+        File::append($this->logPath(), sprintf(
+            "\n=== %s — poging %d ===\n",
+            now()->toDateTimeString(),
+            $this->attempts(),
+        ));
+    }
+
+    /**
+     * The tail is what goes into the failure mail and Sentry, so it has to stay
+     * small enough to be a message rather than a payload.
+     */
+    private function logTail(int $characters = 1000): string
+    {
+        if (! File::exists($this->logPath())) {
+            return '';
+        }
+
+        return trim(mb_substr(File::get($this->logPath()), -$characters));
     }
 
     /**

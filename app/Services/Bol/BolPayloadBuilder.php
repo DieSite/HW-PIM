@@ -16,6 +16,8 @@ use Webkul\Product\Models\Product;
  */
 class BolPayloadBuilder
 {
+    use \App\Services\Concerns\SplitsMultiValueAttributes;
+
     private const STOCK_SOURCES = [
         'voorraad_eurogros',
         'voorraad_5_korting_handmatig',
@@ -315,27 +317,6 @@ class BolPayloadBuilder
         };
 
         return [$width, $length, $shape];
-    }
-
-    /**
-     * @return string[]
-     */
-    private function splitMultiValue(mixed $raw): array
-    {
-        if (is_array($raw)) {
-            return array_values(array_filter(array_map('strval', $raw), fn ($v) => trim($v) !== ''));
-        }
-
-        $raw = (string) $raw;
-        if ($raw === '') {
-            return [];
-        }
-
-        if (str_contains($raw, '|')) {
-            return array_values(array_filter(array_map('trim', explode('|', $raw))));
-        }
-
-        return array_values(array_filter(array_map('trim', explode(', ', $raw))));
     }
 
     private function assets(array $parentCommon): array

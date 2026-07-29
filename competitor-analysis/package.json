@@ -7,6 +7,7 @@
     "volledig:index": "node catalog-volledig/index-shops.js",
     "volledig:prijzen": "node catalog-volledig/fetch-prices.js",
     "volledig:excel": "node catalog-volledig/excel.js",
+    "volledig:audit": "node catalog-volledig/audit-prices.js",
     "volledig:browser": "playwright test -c playwright.volledig.config.js",
     "volledig:test": "node --test catalog-volledig/normalize.test.js",
     "test": "playwright test",

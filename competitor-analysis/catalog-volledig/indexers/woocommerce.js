@@ -14,7 +14,7 @@
  */
 
 const { getText, getJson, sleep } = require('../http');
-const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens } = require('../normalize');
+const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore, detectShape, modelIdentityMatches } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
 
 /**
@@ -46,7 +46,8 @@ async function wooSearch(base, search, page) {
   return [];
 }
 
-async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku }) {
+async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator }) {
+  const identityOpts = { requireDiscriminator };
   const normBrands  = brands.map(b => normBrand(b));
   let indexed = 0, priced = 0;
 
@@ -101,10 +102,10 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku }
                 const fwdHits   = catTokens.filter(t => model.includes(t)).length;
                 const revHits   = modTokens.filter(t => catModel.includes(t)).length;
                 if (fwdHits < Math.min(2, catTokens.length) && revHits < Math.min(2, modTokens.length)) continue;
-                if (!hasModelNameToken(model, catModel) || !numbersCompatible(catModel, model)) continue;
+                const idText = model + ' ' + url.toLowerCase();
                 for (const entry of entries) {
                   if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm && entry.shape === variantShape
-                      && containsAllTokens(model, entry.mustHave)) {
+                      && modelIdentityMatches(catModel, idText, entry.mustHave, { ...identityOpts, colour: entry.colour })) {
                     recordPrice(db, entry.sku, shop, priceStr, url);
                     priced++;
                   }

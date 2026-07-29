@@ -81,6 +81,7 @@ async function main() {
           brands:        shopCfg.brands,
           catalogModels: catalog.models,
           bySku:         catalog.bySku,
+          requireDiscriminator: shopCfg.requireDiscriminator,
         });
         console.log(`  ✅ ${result.indexed} producten geïndexeerd, ${result.priced} prijzen opgeslagen`);
 
@@ -92,6 +93,7 @@ async function main() {
           brands:        shopCfg.brands,
           catalogModels: catalog.models,
           bySku:         catalog.bySku,
+          requireDiscriminator: shopCfg.requireDiscriminator,
         });
         console.log(`  ✅ ${result.indexed} producten geïndexeerd, ${result.priced} prijzen opgeslagen`);
 

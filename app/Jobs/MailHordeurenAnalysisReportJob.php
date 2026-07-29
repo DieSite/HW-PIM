@@ -18,9 +18,9 @@ use Throwable;
 
 /**
  * Close out a hordeuren analysis batch: verify the Excel report was rebuilt,
- * summarize results.json and mail the report. Dispatched by the batch's
- * finally callback, so it runs whether or not individual competitor scrapes
- * failed — a partly filled report still goes out, flagged as such.
+ * summarize results.json and mail the report. Dispatched by the batch's then
+ * callback, so it only runs for a batch in which every competitor came back —
+ * a run that lost a competitor fails fast and mails that instead.
  */
 class MailHordeurenAnalysisReportJob implements ShouldQueue
 {

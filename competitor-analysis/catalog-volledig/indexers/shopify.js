@@ -10,7 +10,7 @@
  */
 
 const { getText, getJson, sleep } = require('../http');
-const { normBrand, normModel, parseSize, fmtEuro, extractModel, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens } = require('../normalize');
+const { normBrand, normModel, parseSize, fmtEuro, extractModel, detectShape, modelIdentityMatches } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
 
 /**
@@ -22,7 +22,8 @@ const { upsertIndex, recordPrice } = require('../storage');
  * @param {Map}      opts.catalogModels  - catalog.models map
  * @param {Map}      opts.bySku          - catalog.bySku map
  */
-async function indexShopify(db, { shop, base, brands, catalogModels, bySku }) {
+async function indexShopify(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator }) {
+  const identityOpts = { requireDiscriminator };
   const normBrands = brands.map(b => normBrand(b));
   let page = 1, indexed = 0, priced = 0;
 
@@ -78,11 +79,11 @@ async function indexShopify(db, { shop, base, brands, catalogModels, bySku }) {
           if (fwdHits < Math.min(2, catTokens.length) && revHits < Math.min(2, modTokens.length)) continue;
           // Modelnaam moet echt voorkomen en kleurnummers mogen niet botsen
           // ("Prosper 69" ≠ "Cendre vintage oker 69", "Brush 13" ≠ "Brush … 69")
-          if (!hasModelNameToken(model, catModel) || !numbersCompatible(catModel, model)) continue;
+          const idText = model + ' ' + url.toLowerCase();
 
           for (const entry of entries) {
             if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm && entry.shape === variantShape
-                && containsAllTokens(model, entry.mustHave)) {
+                && modelIdentityMatches(catModel, idText, entry.mustHave, { ...identityOpts, colour: entry.colour })) {
               recordPrice(db, entry.sku, shop, priceStr, url);
               priced++;
             }

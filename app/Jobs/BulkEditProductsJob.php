@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Models\BulkEditRun;
 use App\Models\Product;
 use App\Services\BulkEditService;
@@ -36,6 +37,21 @@ class BulkEditProductsJob implements ShouldQueue
     ) {
         $this->onConnection('redis-long');
         $this->onQueue('long');
+    }
+
+    /**
+     * The longest timeout in the application, and it can spend all of it
+     * without touching Redis: the scan only fires
+     * catalog.product.update.after — the one thing here that reaches the queue
+     * — for products it actually changes, so a find-replace that matches a
+     * handful of rows out of tens of thousands goes quiet for a long time, and
+     * $syncWoo can be off entirely. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
     }
 
     public function handle(BulkEditService $bulkEditService, ProductService $productService): void

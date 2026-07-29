@@ -8,7 +8,7 @@
  * De feitelijke prijsbepaling gebeurt elders (fetch-prices.js of de spec).
  */
 
-const { normBrand, slugMatchScore, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens } = require('./normalize');
+const { normBrand, slugMatchScore, detectShape, modelIdentityMatches } = require('./normalize');
 const { upsertIndex } = require('./storage');
 const { filterByKeywords } = require('./indexers/sitemap');
 
@@ -25,6 +25,7 @@ const { filterByKeywords } = require('./indexers/sitemap');
 function indexUrls(db, shopCfg, catalog, rawUrls) {
   const { key, brandKeys } = shopCfg;
   const productUrls = filterByKeywords(rawUrls, brandKeys ?? []);
+  const identityOpts = { requireDiscriminator: shopCfg.requireDiscriminator };
 
   let indexed = 0;
   const matched = new Map();
@@ -45,8 +46,7 @@ function indexUrls(db, shopCfg, catalog, rawUrls) {
     for (const [modelKey, keyEntries] of catalog.models) {
       if (!modelKey.startsWith(nb + '|')) continue;
       const catModel = modelKey.split('|')[1];
-      if (!hasModelNameToken(slugNorm, catModel) || !numbersCompatible(catModel, slugNorm)) continue;
-      if (!containsAllTokens(slugNorm, keyEntries[0]?.mustHave)) continue;
+      if (!modelIdentityMatches(catModel, slugNorm, keyEntries[0]?.mustHave, { ...identityOpts, colour: keyEntries[0]?.colour })) continue;
       const score = slugMatchScore(slugNorm, brand, catModel);
       if (score > bestScore && score >= 50) { bestScore = score; bestModel = catModel; }
     }

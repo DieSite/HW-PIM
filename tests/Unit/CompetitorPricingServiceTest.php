@@ -102,3 +102,23 @@ it('flags when the price is clamped at the floor', function () {
 
     expect($reason)->toContain('begrensd op adviesprijs −25%');
 });
+
+it('never returns a price above the advies price after rounding', function () {
+    // Rounding 100,60 up to 101 would sell above the advies price.
+    expect(pricingService()->computePrice(100.60, null, 25))->toBe(100.0);
+    expect(pricingService()->computePrice(100.40, null, 25))->toBe(100.0);
+    expect(pricingService()->computePrice(0.60, null, 25))->toBe(0.0);
+});
+
+it('never returns a price below the floor after rounding', function () {
+    // Floor is 299,25; rounding the competitor's 298,51 down to 299 would be a
+    // 25,06% discount, just past the configured maximum.
+    expect(pricingService()->computePrice(399.00, 298.51, 25))->toBe(300.0);
+    expect(pricingService()->computePrice(1000.00, 749.40, 25))->toBe(750.0);
+});
+
+it('keeps the advies ceiling when no whole euro fits between floor and advies', function () {
+    // pct 0 => floor equals advies (100,60); no integer satisfies both bounds,
+    // so the ceiling wins and we stay below rather than above.
+    expect(pricingService()->computePrice(100.60, null, 0))->toBe(100.0);
+});

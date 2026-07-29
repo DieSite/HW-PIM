@@ -3,7 +3,7 @@
  * catalogus terug.
  *
  * CSV-formaat (geen header, kommagescheiden):
- *   SKU, Merk, Model, Maat ("200 cm x 290 cm" of "Maatwerk"), Prijs
+ *   SKU, Merk, Model, Maat ("200 cm x 290 cm" of "Maatwerk"), Prijs[, Kleuren]
  *
  * Geeft terug:
  *   entries  – array met alle regels
@@ -33,6 +33,8 @@ function loadCatalog(csvPath) {
     const model    = parts[2].trim();
     const sizeStr  = parts[3].trim();
     const price    = parseFloat(parts[4]) || 0;
+    // 6e kolom (kleuren) is optioneel: oudere CSV's hebben hem niet.
+    const colour   = (parts[5] ?? '').trim();
 
     const size = parseSize(sizeStr);
     const isMaatwerk = !size;
@@ -47,6 +49,7 @@ function loadCatalog(csvPath) {
       widthCm:   size?.widthCm ?? null,
       heightCm:  size?.heightCm ?? null,
       price,
+      colour,
       isMaatwerk,
       shape,
       normBrand: normBrand(brand),

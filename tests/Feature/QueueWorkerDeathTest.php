@@ -13,21 +13,24 @@ use Tests\Fixtures\Queue\AttemptCappedProbeJob;
 use Tests\Fixtures\Queue\DeadlineBoundedProbeJob;
 
 /**
- * These tests drive Laravel's real Worker against a real Redis queue to
- * reproduce — and then disprove — the production incident: a
- * ScrapeHordeurenCompetitorJob that fails with "has been attempted too many
- * times" at attempt $tries + 1, after a runtime of ~0.01s, without its
- * handle() ever having run.
+ * These tests drive Laravel's real Worker against a real Redis queue to pin the
+ * two ways a job can come back with a burnt attempt, and what each of them
+ * should do.
  *
- * The cause is not the timing invariant (retry_after 3600 already exceeds the
- * job timeout 1200); it is that attempt counting cannot distinguish "this
- * scrape failed" from "the worker carrying this scrape was killed". A deploy
- * restart, an OOM kill or a container replacement reserves the job, bumps its
- * attempt counter and then vanishes without running failed(), releasing the
- * job or recording an exception. Once retry_after elapses the job returns to
- * the queue with a burnt attempt, and the attempt after the last one dies
- * instantly on the max-attempts check in
- * Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts().
+ * Attempt counting cannot distinguish "this job failed" from "the worker
+ * carrying it was killed": a deploy restart, an OOM kill or a container
+ * replacement reserves the job, bumps its attempt counter and then vanishes
+ * without running failed(), releasing the job or recording an exception. Once
+ * retry_after elapses the job returns to the queue with that attempt spent, and
+ * eventually dies on the max-attempts check in
+ * Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts() — the "attempted too
+ * many times" failure at ~0.01s runtime whose handle() never ran.
+ *
+ * A retryUntil() deadline switches that check off entirely and buys the job
+ * free re-runs, which is what DeadlineBoundedProbeJob covers. The hordeuren
+ * scrape deliberately does NOT take that trade: a competitor scrape that lost
+ * its worker must alert, not quietly start over, so it runs on a hard
+ * $tries = 1 and every second reservation is a failure.
  */
 const WORKER_DEATH_CONNECTION = 'worker-death-test';
 
@@ -156,7 +159,7 @@ it('reproduces the production failure: attempt-capped jobs die of MaxAttemptsExc
     expect(AttemptCappedProbeJob::$handled)->toBe(0);
 });
 
-it('freezes a retry deadline into the payload the horizon queue dispatches', function () {
+it('dispatches the scrape with a hard one-attempt cap and no retry deadline', function () {
     $queue = bootWorkerDeathQueue();
 
     dispatch(
@@ -167,11 +170,15 @@ it('freezes a retry deadline into the payload the horizon queue dispatches', fun
 
     $payload = json_decode((string) Redis::connection()->lindex('queues:'.$queue, 0), true);
 
-    /** Production dispatches through Horizon's queue, so the payload the worker reads is this one. */
+    /**
+     * Production dispatches through Horizon's queue, so the payload the worker
+     * reads is this one. A retryUntil here would switch the attempt check off
+     * entirely (Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts returns
+     * while the deadline holds) and hand every killed worker a free re-run.
+     */
     expect(Queue::connection(WORKER_DEATH_CONNECTION))->toBeInstanceOf(Laravel\Horizon\RedisQueue::class)
-        ->and($payload['retryUntil'])->toBeGreaterThan(now()->getTimestamp())
-        ->and($payload['maxTries'])->toBe(0)
-        ->and($payload['maxExceptions'])->toBe(1);
+        ->and($payload['retryUntil'])->toBeNull()
+        ->and($payload['maxTries'])->toBe(1);
 });
 
 it('never lets a deadline-bounded job be failed by silent worker deaths', function () {
@@ -223,47 +230,47 @@ function scrapeSurvivingWorkerDeaths(int $deaths): string
             ->onQueue($queue)
     );
 
-    foreach (range(1, $deaths) as $ignored) {
+    for ($death = 0; $death < $deaths; $death++) {
         killWorkerMidJob($queue);
     }
 
     return $queue;
 }
 
-it('runs the competitor scrape after a silent worker death instead of failing it', function () {
+it('runs a competitor scrape that has not been attempted yet', function () {
     Process::fake();
 
-    /** The last attempt the ceiling still allows: deaths are free up to here. */
-    $queue = scrapeSurvivingWorkerDeaths(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS - 1);
+    $queue = scrapeSurvivingWorkerDeaths(0);
 
     expect(runOneJobCapturingFailures($queue))->toBe([]);
 
     Process::assertRan(fn ($process) => str_contains(
         implode(' ', (array) $process->command),
-        'playwright test tests/01-a.spec.js'
+        "playwright test 'tests/01-a.spec.js'"
     ));
 });
 
-it('gives up on a competitor scrape that has taken the ceiling in workers down with it', function () {
+/**
+ * Fail fast also covers the failure this test file was originally written
+ * about. A worker killed mid-scrape used to buy the spec a free re-run, which
+ * is how one spec reached attempt 24 over 24.7 hours while the run sat there
+ * looking alive. With $tries = 1 the second reservation is the alert.
+ */
+it('fails a competitor scrape whose worker was killed instead of re-running it', function () {
     Process::fake();
 
-    $queue = scrapeSurvivingWorkerDeaths(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS);
+    $queue = scrapeSurvivingWorkerDeaths(1);
 
     $failures = runOneJobCapturingFailures($queue);
 
     expect($failures)->toHaveCount(1)
-        ->and($failures[0]['class'])->toBe(RuntimeException::class)
-        ->and($failures[0]['message'])->toContain('01-a.spec.js')
-        ->and($failures[0]['message'])->toContain('opgegeven na 3 pogingen');
+        ->and($failures[0]['class'])->toBe(MaxAttemptsExceededException::class);
 
-    /**
-     * The batch gets its failed job now rather than a 24th pass over the
-     * configurator, so the report mail is not held for another retry_after.
-     */
+    /** No second pass over the configurator: the run is over, the alert is out. */
     Process::assertNothingRan();
 });
 
-it('caps genuinely failing competitor scrapes so a broken spec cannot retry forever', function () {
+it('gives a genuinely failing spec exactly one attempt', function () {
     Process::fake([
         '*playwright*' => Process::result(output: '', errorOutput: 'boom', exitCode: 1),
     ]);
@@ -271,20 +278,25 @@ it('caps genuinely failing competitor scrapes so a broken spec cannot retry fore
     $queue = bootWorkerDeathQueue();
     scraperDirForWorkerDeathTest();
 
-    $job = new ScrapeHordeurenCompetitorJob('01-a.spec.js');
-
-    dispatch($job->onConnection(WORKER_DEATH_CONNECTION)->onQueue($queue));
+    dispatch(
+        (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))
+            ->onConnection(WORKER_DEATH_CONNECTION)
+            ->onQueue($queue)
+    );
 
     $failures = [];
 
-    for ($attempt = 1; $attempt <= $job->maxExceptions + 2; $attempt++) {
+    foreach (range(1, 3) as $ignored) {
         $failures = [...$failures, ...runOneJobCapturingFailures($queue)];
 
-        /** Step well past any release delay so a retried job is available again. */
+        /** Step well past any release delay so a retried job would be available. */
         $this->travel(120)->seconds();
     }
 
+    /** One failure, carrying the spec's own error — never a retry, never a MaxAttempts. */
     expect($failures)->toHaveCount(1)
-        ->and($failures[0]['class'])->not->toBe(MaxAttemptsExceededException::class)
+        ->and($failures[0]['class'])->toBe(RuntimeException::class)
         ->and($failures[0]['message'])->toContain('01-a.spec.js');
+
+    Process::assertRanTimes(fn ($process) => str_contains((string) $process->command, 'playwright'), 1);
 });

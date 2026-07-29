@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Testing\Fakes\PendingBatchFake;
 use Webkul\User\Models\Admin;
 
@@ -43,13 +44,25 @@ function fakeScraperDir(array $specs = ['01-voorbeeld.spec.js', '02-ander.spec.j
 /**
  * The jobs invoke node/npx/npm through an absolute, pinned toolchain path, so
  * compare commands by the binary's basename to stay independent of node_bin.
+ * The scrape job passes a shell string (it redirects Playwright's output into
+ * the spec log); the toolchain jobs pass an argument list.
  */
 function fakedCommand($process): string
 {
+    if (is_string($process->command)) {
+        return preg_replace("#'?[\w/.-]*/(npx|npm|node)'?#", '$1', $process->command);
+    }
+
     $parts = (array) $process->command;
     $parts[0] = basename((string) ($parts[0] ?? ''));
 
     return implode(' ', $parts);
+}
+
+/** Where the scrape job appends the Playwright output for one spec. */
+function scrapeLogPath(string $spec = '01-a.spec.js'): string
+{
+    return storage_path('logs/hordeuren/'.$spec.'.log');
 }
 
 beforeEach(function () {
@@ -62,6 +75,8 @@ afterEach(function () {
     }
 
     $GLOBALS['hordeuren_test_dirs'] = [];
+
+    File::deleteDirectory(dirname(scrapeLogPath()));
 });
 
 it('shows the analysis form with the admin email prefilled', function () {
@@ -159,6 +174,80 @@ it('prepares the toolchain and dispatches one scrape job per competitor spec', f
             && $batch->jobs->count() === 3
             && $batch->jobs->every(fn ($job) => $job instanceof ScrapeHordeurenCompetitorJob);
     });
+});
+
+/**
+ * The whole point of failing fast: a run that quietly dropped a competitor
+ * still rebuilds the Excel, and that Excel reads as a complete comparison with
+ * one column silently full of "–".
+ */
+it('stops the run at the first failing competitor instead of allowing failures', function () {
+    Bus::fake();
+    Process::fake();
+
+    fakeScraperDir();
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    Bus::assertBatched(fn (PendingBatchFake $batch) => $batch->allowsFailures() === false);
+});
+
+it('mails the failure as soon as the first competitor fails', function () {
+    Bus::fake();
+    Mail::fake();
+    Process::fake();
+
+    Cache::put(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY, now()->toIso8601String(), 600);
+    Cache::put(RunHordeurenAnalysisJob::BATCH_CACHE_KEY, 'batch-id', 600);
+
+    fakeScraperDir();
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    $batch = null;
+    Bus::assertBatched(function (PendingBatchFake $pending) use (&$batch) {
+        $batch = $pending;
+
+        return true;
+    });
+
+    /** Drive the catch callback the way a failing scrape job would. */
+    foreach ($batch->catchCallbacks() as $callback) {
+        $callback(
+            (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->withFakeBatch()[1],
+            new RuntimeException('Scrape 18-horrenstunter.spec.js liet lege cellen achter: timeout'),
+        );
+    }
+
+    Mail::assertSent(
+        HordeurenAnalysisFailed::class,
+        fn (HordeurenAnalysisFailed $mail) => $mail->hasTo('rapport@voorbeeld.nl')
+            && str_contains($mail->error, '18-horrenstunter.spec.js')
+    );
+
+    /** The admin notice clears too, so the UI does not keep claiming a run is live. */
+    expect(Cache::get(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY))->toBeNull()
+        ->and(Cache::get(RunHordeurenAnalysisJob::BATCH_CACHE_KEY))->toBeNull();
+});
+
+it('only mails the report when every competitor came back', function () {
+    Bus::fake();
+    Process::fake();
+
+    fakeScraperDir();
+
+    (new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->handle();
+
+    $batch = null;
+    Bus::assertBatched(function (PendingBatchFake $pending) use (&$batch) {
+        $batch = $pending;
+
+        return true;
+    });
+
+    /** The report hangs off then(), which a cancelled batch never reaches. */
+    expect($batch->thenCallbacks())->toHaveCount(1)
+        ->and($batch->finallyCallbacks())->toBeEmpty();
 });
 
 it('drops the idle redis sockets after the toolchain install so the batch dispatch reconnects', function () {
@@ -328,56 +417,78 @@ it('scrapes a single competitor spec', function () {
 
     (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle();
 
-    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test tests/01-a.spec.js');
+    Process::assertRan(fn ($process) => fakedCommand($process)
+        === "npx playwright test 'tests/01-a.spec.js' >> '".scrapeLogPath()."' 2>&1");
 });
 
 /**
- * Drive the scrape job as a worker would, so $this->attempts() reports the
- * attempt this run is on instead of the InteractsWithQueue default of 1.
+ * The failure this whole job is shaped around: the scrape is minutes of pure
+ * subprocess time, and the worker's Redis sockets do not survive being idle
+ * that long. Whatever the worker does next — for a scrape that SUCCEEDED that
+ * is the delete() retiring it from the reserved set — dies on the half-closed
+ * socket, the worker is torn down as a lost connection, and the job comes back
+ * retry_after later as an attempt no failure record explains. That is what put
+ * every long (browser-driven) spec on attempt 3 while the fast API-only specs
+ * sailed through.
  */
-function scrapeJobOnAttempt(int $attempt, string $spec = '01-a.spec.js'): array
-{
-    $queueJob = Mockery::mock(Illuminate\Contracts\Queue\Job::class);
-    $queueJob->shouldReceive('attempts')->andReturn($attempt);
-
-    $job = new ScrapeHordeurenCompetitorJob($spec);
-    $job->setJob($queueJob);
-
-    return [$job, $queueJob];
-}
-
-it('gives up on a spec that keeps taking its worker down with it', function () {
+it('drops the idle-prone Redis sockets before handing over to the scrape', function () {
     Process::fake();
 
     fakeScraperDir();
 
-    [$job, $queueJob] = scrapeJobOnAttempt(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS + 1);
+    $order = [];
 
-    $queueJob->shouldReceive('fail')->once()->with(Mockery::on(
-        fn ($e) => $e instanceof RuntimeException && str_contains($e->getMessage(), '01-a.spec.js')
-    ));
+    $connection = Mockery::mock();
+    $connection->shouldReceive('disconnect')->once()->andReturnUsing(function () use (&$order) {
+        $order[] = 'disconnect';
+    });
+
+    Redis::shouldReceive('connections')->andReturn([$connection]);
+
+    Process::fake(['*' => function () use (&$order) {
+        $order[] = 'scrape';
+
+        return Process::result();
+    }]);
+
+    (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle();
+
+    expect($order)->toBe(['disconnect', 'scrape']);
+});
+
+it('sends Playwright output to the spec log so it outlives a lost worker', function () {
+    Process::fake();
+
+    fakeScraperDir();
+
+    (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->handle();
+
+    expect(File::get(scrapeLogPath()))->toContain('poging 1');
+});
+
+/** One attempt per competitor: a failure alerts, it never gets a second go. */
+it('allows the scrape exactly one attempt', function () {
+    expect((new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->tries)->toBe(1)
+        ->and(method_exists(ScrapeHordeurenCompetitorJob::class, 'retryUntil'))->toBeFalse();
+});
+
+it('skips a competitor once an earlier one has stopped the run', function () {
+    Process::fake();
+
+    fakeScraperDir();
+
+    [$job, $batch] = (new ScrapeHordeurenCompetitorJob('01-a.spec.js'))->withFakeBatch();
+
+    $batch->cancel();
 
     $job->handle();
 
-    /** No 24th pass over the configurator, and the batch is free to finish. */
+    /** No shop is touched, and no spec log is opened for a scrape that never ran. */
     Process::assertNothingRan();
+    expect(File::exists(scrapeLogPath()))->toBeFalse();
 });
 
-it('still resumes a scrape while the attempt ceiling has not been passed', function () {
-    Process::fake();
-
-    fakeScraperDir();
-
-    [$job, $queueJob] = scrapeJobOnAttempt(ScrapeHordeurenCompetitorJob::MAX_ATTEMPTS);
-
-    $queueJob->shouldNotReceive('fail');
-
-    $job->handle();
-
-    Process::assertRan(fn ($process) => fakedCommand($process) === 'npx playwright test tests/01-a.spec.js');
-});
-
-it('throws so the scrape is retried when the spec leaves empty cells', function () {
+it('throws so the run stops when the spec leaves empty cells', function () {
     Process::fake([
         '*playwright*test*' => Process::result(output: '', errorOutput: '2 failed', exitCode: 1),
     ]);

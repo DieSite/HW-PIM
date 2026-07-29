@@ -16,9 +16,9 @@
  */
 
 const path = require('path');
-const { openDb, getIndexForShop, recordPrice, unpricedSkus, findInIndex } = require('./storage');
+const { openDb, getIndexForShop, recordPrice, deletePrice, unpricedSkus, findInIndex } = require('./storage');
 const { loadCatalog }  = require('./catalog');
-const { normBrand, normModel, isRealPrice, fmtEuro, detectShape, numbersCompatible, hasModelNameToken, containsAllTokens, pageMatchesEntry } = require('./normalize');
+const { normBrand, normModel, isRealPrice, fmtEuro, detectShape, modelIdentityMatches, pageMatchesEntry } = require('./normalize');
 const { getText, createQueue, sleep } = require('./http');
 const { extractJsonLdPrice, parsePriceStr } = require('./indexers/sitemap');
 const { CUSTOM_SHOPS } = require('./shops');
@@ -34,7 +34,7 @@ function rowShape(row) {
 }
 
 /** Geef het beste index-record voor (shop, entry) terug, of null. Vorm moet overeenkomen. */
-function findUrl(db, shop, entry) {
+function findUrl(db, shop, entry, requireDiscriminator = false) {
   // Exacte match op normBrand + normModel
   const rows = findInIndex(db, shop, entry.normBrand, entry.normModel)
     .filter(r => rowShape(r) === entry.shape);
@@ -49,8 +49,8 @@ function findUrl(db, shop, entry) {
   const entryTokens = entry.normModel.split(' ').filter(Boolean);
   for (const row of brandRows) {
     if (rowShape(row) !== entry.shape) continue;
-    if (!hasModelNameToken(row.norm_model, entry.normModel) || !numbersCompatible(entry.normModel, row.norm_model)) continue;
-    if (!containsAllTokens(row.norm_model + ' ' + row.url, entry.mustHave)) continue;
+    if (!modelIdentityMatches(entry.normModel, row.norm_model + ' ' + row.url, entry.mustHave,
+        { colour: entry.colour, requireDiscriminator })) continue;
     const rowTokens = row.norm_model.split(' ').filter(Boolean);
     const hits = entryTokens.filter(t => rowTokens.includes(t)).length;
     if (hits >= Math.min(2, entryTokens.length) && hits / entryTokens.length >= 0.7) {
@@ -71,7 +71,10 @@ async function fetchOne(db, entry, shopCfg, url) {
   // Titel-guard: de slug waarop geïndexeerd is mist soms het dessinnummer dat
   // de paginatitel wél toont — dan is dit tóch de verkeerde productpagina.
   const pageTitle = html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? '';
-  if (!pageMatchesEntry(pageTitle, url, entry)) {
+  if (!pageMatchesEntry(pageTitle, url, entry, { requireDiscriminator: shopCfg.requireDiscriminator })) {
+    // Positieve afkeuring: gooi een eerder (fout) vastgelegde prijs weg i.p.v.
+    // 'n.v.t.' te schrijven, dat de sticky recordPrice zou negeren.
+    deletePrice(db, entry.sku, shopCfg.key);
     recordPrice(db, entry.sku, shopCfg.key, 'n.v.t.', null);
     return;
   }
@@ -119,7 +122,7 @@ async function main() {
       if (!entry) continue;
 
       // Zoek URL op in index
-      const url = findUrl(db, shopCfg.key, entry);
+      const url = findUrl(db, shopCfg.key, entry, shopCfg.requireDiscriminator);
       if (!url) {
         // Niet in index = shop verkoopt dit model waarschijnlijk niet
         recordPrice(db, sku, shopCfg.key, 'n.v.t.', null);

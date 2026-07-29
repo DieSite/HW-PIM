@@ -86,10 +86,14 @@ const CUSTOM_SHOPS = [
     sitemapUrl: 'https://www.karpettenkelder.nl/sitemap.xml',
     brandKeys:  ['eurogros', 'de-munk-carpets', 'core-by-dersimo', 'desso', 'de-poortere'],
     // Prijs zit in data-prijs attribuut bij de maat-radio; de data-title
-    // benoemt de vorm ("200 x 290 rechthoek" / "… ovaal"), dus match die mee
+    // benoemt de vorm ("200 x 290 rechthoek" / "… ovaal"), dus match die mee.
+    // De vorm ONTBREEKT alleen bij rechthoeken (data-title="250 x 300"): die
+    // kale variant telt als rechthoek, maar een onbekend achtervoegsel
+    // ("200 x 290 core speciale vorm") nadrukkelijk niet.
     getPrijs(html, w, h, shape = 'rechthoek') {
       const maat = `${w} x ${h}`;
-      const m = html.match(new RegExp(`data-title="${maat} ${shape}"[\\s\\S]{0,600}?data-prijs="([\\d.,]+)"`, 'i'));
+      const vorm = shape === 'rechthoek' ? `(?: ${shape})?` : ` ${shape}`;
+      const m = html.match(new RegExp(`data-title="${maat}${vorm}"[\\s\\S]{0,600}?data-prijs="([\\d.,]+)"`, 'i'));
       if (!m) return null;
       return fmt(parsePriceStr(m[1]));
     },
@@ -280,6 +284,10 @@ const CUSTOM_SHOPS = [
   {
     key:        'gigameubel.nl',
     base:       'https://www.gigameubel.nl',
+    // Slug noch titel draagt een dessinnummer ("…-prosper-200x290cm-wit"), dus
+    // zonder positief kleurbewijs komt elke kleur van een model op dezelfde
+    // pagina uit. Eis bewijs i.p.v. de afwezigheid van tegenspraak.
+    requireDiscriminator: true,
     brands:     ['Mart Visser', 'Karpi'],
     sitemapUrl: 'https://www.gigameubel.nl/sitemap.xml',
     brandKeys:  ['mart-visser', 'karpi', 'cendre', 'vernon', 'cavaro', 'prosper'],

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Clients\DeMunkPortalClient;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Services\DeMunkMatcher;
 use App\Services\DeMunkStockWriter;
 use Illuminate\Bus\Queueable;
@@ -45,6 +46,20 @@ class ApplyDeMunkStockJob implements ShouldQueue
     {
         $this->onConnection('redis-demunk');
         $this->onQueue('demunk');
+    }
+
+    /**
+     * Merging the parts and writing stock onto every linked size variant is a
+     * large, purely database-and-file-cache pass: it issues no Redis command
+     * of its own, so the worker's sockets would go stale before it retires
+     * this job. The sibling that fetches the parts already had this; the half
+     * that writes them is idle just as long. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
     }
 
     public function handle(DeMunkMatcher $matcher, DeMunkStockWriter $writer): void

@@ -235,6 +235,120 @@ datafout, maar de échte paginaprijs). gigameubel (32 rijen) blijft
 onverifieerbaar: slugs/titels dragen geen kleurnummer ("prosper …-wit"),
 kleuren kosten daar vermoedelijk hetzelfde.
 
+**Volledige hercontrole (2026-07-29) — alle 9.768 rijen, niet steekproefsgewijs.**
+Grondwaarheid kwam deze keer van búiten de pipeline: de modelnaam per SKU uit
+de Store API van onze eigen winkel
+(`huis-en-wonen.nl/wp-json/wc/store/v1/products?sku=…`, 610/667 producten), en
+de maat/prijs per concurrent uit hun eigen live pagina's. Uitkomst: **maat en
+vorm 100% correct** (9.516 controleerbare rijen, 0 fouten), prijzen 97%/100%
+nog exact live bij de Shopify-/custom-shops; de 1.773 karpettenkelder-drifts
+zijn állemaal De Munk en állemaal omhoog (mediaan +7%) — een echte
+prijsverhoging, geen scraperfout. Vier echte bevindingen, alle vier gefixt:
+
+1. **karpettenkelder-maten zonder vormwoord werden overgeslagen.** De regex
+   eiste `data-title="200 x 250 rechthoek"`, maar 512 van de 3.079
+   maatopties staan er kaal als `data-title="250 x 300"` (o.a. 250x300 op 204
+   pagina's). `getPrijs` accepteert het vormwoord nu als optioneel — maar
+   alleen voor rechthoek, zodat `"160 x 230 core speciale vorm"` (259 opties)
+   terecht ongeprijsd blijft. Levert ~409 gemiste concurrentprijzen op.
+2. **Geen kleurNAAM-check.** `numbersCompatible` vangt alleen kleurNUMMERS, dus
+   modellen die zich door een woord onderscheiden vielen samen: alle vier de
+   "Love Shaggy"-kleuren kregen de prijs van de beige pagina, en "Prosper 25 –
+   Black"/"Vernon 23 – Wolf Grey" die van de witte/zand-pagina bij gigameubel.
+   Nieuw: `colorsCompatible` (NL/EN op één noemer, zwart≡black).
+3. **`hasModelNameToken` liet zich foppen door een materiaalwoord.** "Sisal Gold
+   22" matchte op "Sisal vloerkleed Loop grijs 22" omdat beide met "sisal"
+   beginnen. Generieke materiaal-/soortwoorden tellen niet meer als modelnaam.
+4. **Foute koppelingen bleven eeuwig staan.** `prices` is sticky en de
+   indexers slaan een afgekeurde koppeling gewoon over, dus 16 rijen die de
+   guards van juli allang afkeuren (Montgomery 2787 ← de 3372-pagina, Maine
+   6747 ← 6362, Lennox 2383 ← 6191, Malaga 5151 ← 4343, Ace 7299 ← 6979) stonden
+   er nog steeds. Twee sloten: `deletePrice` in `storage.js` (een guard die de
+   pagina afkeurt is géén mislukte fetch en mag de sticky-regel dus doorbreken)
+   en het nieuwe `catalog-volledig/audit-prices.js`, dat de guards van vandaag
+   op de voorraad van gisteren toepast.
+
+Samen keuren de nieuwe guards 42 van de 9.348 gecontroleerde koppelingen extra
+af — precies 9 product×shop-paren, allemaal handmatig geverifieerd als echt
+fout, **nul terechte koppelingen geraakt**.
+
+**De catalogus-CSV heeft een 6e kolom: `Kleuren`** (van de parent; de kolom is
+optioneel, oudere CSV's blijven werken). Modellen als "Oasis 11" dragen geen
+kleurwoord in hun naam, dus zonder die kolom is een concurrentpagina die alléén
+een kleur noemt niet te beslissen.
+
+**De PIM-kleur telt alleen als POSITIEF bewijs, nooit als tegenspraak.** Hij is
+een grove categorie, geen marketingnaam: "Oasis 15" staat in het PIM als *Beige*
+terwijl vloerkledenloods hem "Oasis **cloud grey** 15" noemt — zelfde
+dessinnummer, terechte koppeling. Meegeteld in `colorsCompatible` keurde dat
+vier goede koppelingen af (Craft 15, Cavaro 12, Oasis 15, Suède Shades 11, bij
+drie verschillende shops). Hij gaat daarom alléén in `hasDiscriminator`.
+
+**gigameubel eist positief kleurbewijs** (`requireDiscriminator: true` in
+`shops.js`). Slug noch titel draagt daar een dessinnummer
+("…-vloerkleed-oasis-200x290cm-wit"), dus `numbersCompatible` én
+`colorsCompatible` vallen open zodra ónze modelnaam geen kleurwoord heeft — en
+dan komt élke kleur van een model op dezelfde pagina uit. Voor die shop eisen we
+bewijs (gedeeld dessinnummer óf gedeelde kleurnaam) in plaats van de afwezigheid
+van tegenspraak. Met de `Kleuren`-kolom erbij vallen 20 van de 32
+gigameubel-rijen af (0,2% van de voorraad): 14 daarvan zijn aantoonbare
+tegenspraak (o.a. "Oasis 15" = Beige op de wít-pagina — een échte foute
+koppeling), 6 zijn bijna-synoniemen (Taupe vs lichtbruin, Beige vs naturel/zand)
+die we bewust laten vallen. Zonder die kolom zouden ook Oasis 11, Brush Ovale 13
+en Cendre 21 sneuvelen, die aantoonbaar kloppen. Wil je de dekking liever terug,
+zet dan die ene vlag uit. `COLOR_ALIASES` kent NL/EN/DE door elkaar (Mart Visser
+noemt kleuren "Grau"/"Wolf Grey" terwijl de shops Nederlands schrijven).
+
+**Onderkleed-varianten horen niet in deze vergelijking** (gevonden bij de
+onafhankelijke review van dezelfde dag). De `.O`-SKU's zijn "Met onderkleed" en
+kosten op onze eigen winkel `config('rugs.underrugs_cost')` méér (€30–€42 per
+maat). Geen enkele concurrent verkoopt die combinatie, dus de scraper koppelde
+ze aan de kále kleedpagina: **4.878 van de 9.768 rijen (49,9%) waren `.O`-SKU's
+en 4.860 daarvan droegen exact de prijs van hun basisvariant** — de toeslag
+verdween zodra een concurrent onder de adviesprijs zat. Vanaf nu:
+
+- `CompetitorCatalogExporter` exporteert alleen "Zonder onderkleed"-varianten,
+  dus er wordt nooit meer een prijs voor een `.O`-SKU gescrapet.
+- `CompetitorPricingService::recompute()` weigert een "Met onderkleed"-variant
+  botweg. Er is dus precies één schrijver voor dat prijsveld; oude `.O`-rijen in
+  `competitor_prices` zijn inert (opruimen mag, hoeft niet).
+- `CompetitorPricingService::applyUnderlayPrice()` leidt de met-onderkleed-prijs
+  af als *basisprijs + maat-toeslag*, schrijft price history en laat de variant
+  meesyncen. Zo bereikt de korting de klant én blijft de toeslag staan. Hij
+  draait bij **elke** verwerkte basisvariant, niet alleen bij een prijswijziging
+  — dat is wat varianten repareert die nog op een oude of ooit fout gekoppelde
+  prijs staan. **Gevolg: de met-onderkleed-prijs is een AFGELEID veld; een
+  handmatige aanpassing daarop wordt de volgende run overschreven.** Pas de
+  basisvariant aan, of de toeslag in `config/rugs.php`. Zonder bruikbare
+  basisprijs (0 of ontbrekend) doet hij niets — anders zou de kale toeslag
+  (€30) als verkoopprijs in de winkel belanden.
+
+**Eenmalig bij het uitrollen:** de ~4.878 bestaande `.O`-rijen staan nog in de
+SQLite en in `competitor_prices`. Ze verdwijnen via
+`audit-prices.js --fix` (ze zijn dan `unknown-sku`) gevolgd door
+`pricing:import-competitor-prices --prune` — maar dat is ~50% van de voorraad,
+dus de veiligheidsrem blokkeert het. Draai die ene keer bewust met
+`AUDIT_MAX_UNKNOWN_PCT=60`, en controleer eerst in de rapportagemodus dat de
+afgekeurde rijen inderdaad alleen `.O`-SKU's zijn.
+
+```bash
+npm run volledig:audit                    # rapporteer foute koppelingen
+node catalog-volledig/audit-prices.js --fix   # en verwijder ze
+node catalog-volledig/run.js --audit-fix      # idem, als stap in de pipeline
+```
+
+`audit-prices.js` draait standaard alleen-rapporteren en **weigert `--fix`** als
+meer dan 10% van de rijen structurele gegevens mist — `unknown-sku` (niet in de
+catalogus-CSV) of `no-index-row` (geen indexrij) — in het totaal **of bij één
+enkele shop** (`AUDIT_MAX_UNKNOWN_PCT`). Zonder die rem zou één half mislukte
+PIM-export of één kapotte crawl (429-storm, `--reset` met onbereikbare sitemap)
+de prijsvoorraad wissen; de per-shop-check bestaat omdat één stukke shop anders
+in het totaal over zeven shops verdrinkt. Identity- en shape-afkeuringen tellen
+níét mee: dat zijn echte vondsten. Een terechte weigering eindigt bewust met
+exitcode 0, zodat `run.js` (die `execSync` gebruikt) de nachtelijke pipeline
+niet afbreekt. Let op: `unknown-sku` is net zo betrouwbaar als de CSV die je
+meegeeft.
+
 **Per-shop config staat in `catalog-volledig/shops.js`** (platform, merkfilter,
 `getPrijs`, `detectBrand`, `sizeFromUrl`). Een nieuwe concurrent = één entry
 toevoegen. De recipes zijn dezelfde als in de karpetten-suite, hergebruikt en
