@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ProductService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\Services\WooCommerceService;
@@ -30,6 +31,16 @@ class ProductHelperController extends Controller
         }
 
         abort(418, 'External product not found.');
+    }
+
+    /**
+     * Open the admin edit screen of the product with the given SKU.
+     */
+    public function redirectToEditBySku(string $sku): RedirectResponse
+    {
+        $product = Product::query()->where('sku', $sku)->firstOrFail();
+
+        return redirect()->route('admin.catalog.products.edit', ['id' => $product->id]);
     }
 
     public function metaFields(Request $request)

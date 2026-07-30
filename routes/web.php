@@ -21,6 +21,10 @@ Route::post('/product/generateSku', [ProductHelperController::class, 'sku']);
 
 Route::get('/product/frontend/{product}', [ProductHelperController::class, 'redirectToFrontend'])->name('product.frontend');
 
+Route::get('/product-by-sku/{sku}', [ProductHelperController::class, 'redirectToEditBySku'])
+    ->middleware('admin')
+    ->name('product.by-sku');
+
 /*
  * Dev-gemak: log in één klik in als de eerste admin. Bestaat alleen in de
  * lokale omgeving — overal anders een 404 (runtime-check, zodat een gecachte
