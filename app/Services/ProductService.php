@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Enums\WooCommerceSyncEventStatus;
 use App\Jobs\SyncProductWithBolComJob;
 use App\Models\BolComCredential;
+use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
@@ -11,6 +13,8 @@ use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 class ProductService
 {
+    public function __construct(private WooCommerceSyncEventRecorder $syncEventRecorder) {}
+
     public function copyStockValuesOnderkleed(Product $product, bool $withUpdatedEvent = true): void
     {
         if (is_null($product->parent)) {
@@ -103,19 +107,31 @@ class ProductService
     public function triggerWCSyncForParent(Product $product): void
     {
         if ($product->variants->isEmpty()) {
+            $message = "Product '{$product->sku}' has no variants. Add at least one variant before syncing to WooCommerce.";
+
             $additional = $product->additional ?? [];
-            $additional['product_sync_error'] = "Product '{$product->sku}' has no variants. Add at least one variant before syncing to WooCommerce.";
+            $additional['product_sync_error'] = $message;
             $product->additional = $additional;
             $product->saveQuietly();
+
+            $this->syncEventRecorder->record(
+                $product,
+                WooCommerceSyncEventStatus::Failed,
+                'sync',
+                $message,
+                'Dit product heeft nog geen varianten. Voeg minstens één variant toe voordat je naar WooCommerce synchroniseert.'
+            );
 
             return;
         }
 
         $parentJob = new SerializedProcessProductsToWooCommerce($product);
+        $this->syncEventRecorder->queued($product);
 
         $childJobs = [];
         foreach ($product->variants as $variant) {
             $childJobs[] = new SerializedProcessProductsToWooCommerce($variant);
+            $this->syncEventRecorder->queued($variant);
         }
 
         \Bus::chain([

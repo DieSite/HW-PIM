@@ -2,17 +2,24 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
 use Webkul\WooCommerce\DTO\ProductBatch;
 
 class ProductSync
 {
-    public function __construct(protected ProductRepository $productRepository) {}
+    public function __construct(
+        protected ProductRepository $productRepository,
+        protected WooCommerceSyncEventRecorder $syncEventRecorder,
+    ) {}
 
     public function syncProductToWooCommerce(Product $product)
     {
         $product->load(['parent', 'variants']);
+
+        $this->syncEventRecorder->queued($product);
+
         ProcessProductsToWooCommerce::dispatch(ProductBatch::fromProductArray($product->toArray()));
     }
 

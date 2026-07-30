@@ -8,6 +8,7 @@ use App\Exceptions\WoocommerceBadGatewayException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
 use App\Exceptions\WoocommerceTimeoutException;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Models\Product;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Bus\Queueable;
@@ -24,7 +25,6 @@ use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
 use Webkul\WooCommerce\Services\WooCommerceService;
 use Webkul\WooCommerce\Traits\DataTransferMappingTrait;
-use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class ProcessProductsToWooCommerce implements ShouldQueue
 {
@@ -86,11 +86,24 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->dataTransferMappingRepository = $dataTransferMappingRepository;
         $this->eventRecorder = $eventRecorder;
 
+        // Fetched before the guards below so a skipped sync can still be
+        // reported on the product timeline, which otherwise keeps showing the
+        // "In wachtrij" event written at dispatch time.
+        $product = Product::whereSku($this->batch->sku)->first();
+
+        if (! $product) {
+            Log::warning('Product no longer exists for WooCommerce sync.', ['sku' => $this->batch->sku]);
+
+            return;
+        }
+
         // Retrieve credential — cached to avoid a DB hit on every job during bulk syncs.
         // Invalidated by the Credential model observer when credentials are saved.
         $this->credential = Cache::remember('wc_default_credential', 300, fn () => $this->connectorService->getCredentialForQuickExport());
         if (! $this->credential) {
             Log::error('No default credentials set for quick export.');
+
+            $this->recordSkipped($product, 'No default credentials set for quick export.', 'Overgeslagen: er zijn geen standaard WooCommerce-inloggegevens ingesteld.');
 
             return;
         }
@@ -100,11 +113,15 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         if (empty($quickSettings['auto_sync'])) {
             Log::warning('Auto-sync setting is disabled. Product cannot be synced.');
 
+            $this->recordSkipped($product, 'Auto-sync setting is disabled. Product cannot be synced.', 'Overgeslagen: automatische synchronisatie staat uit in de WooCommerce-instellingen.');
+
             return;
         }
 
         if (! isset($quickSettings['quick_channel'], $quickSettings['quick_locale'], $quickSettings['quick_currency'])) {
             Log::error('Quick export settings are incomplete in the default credentials.');
+
+            $this->recordSkipped($product, 'Quick export settings are incomplete in the default credentials.', 'Overgeslagen: de WooCommerce quick-export instellingen zijn niet compleet.');
 
             return;
         }
@@ -118,7 +135,6 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->exporter->setMediaExport(true);
 
         $productData = null;
-        $product = Product::whereSku($this->batch->sku)->first();
         $additional = $product->additional;
         unset($additional['product_sync_error']);
         if (is_array($additional) && count($additional) === 0) {
@@ -210,6 +226,21 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             WooCommerceSyncEventStatus::Failed,
             'sync',
             $message ?? $customerMessage,
+            $customerMessage
+        );
+    }
+
+    /**
+     * Records a skipped WooCommerce sync event, so a configuration problem
+     * supersedes the "In wachtrij" event instead of stranding the panel on it.
+     */
+    private function recordSkipped(Product $product, string $message, string $customerMessage): void
+    {
+        $this->eventRecorder->record(
+            $product,
+            WooCommerceSyncEventStatus::Skipped,
+            'sync',
+            $message,
             $customerMessage
         );
     }

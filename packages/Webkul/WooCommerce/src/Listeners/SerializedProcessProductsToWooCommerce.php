@@ -2,6 +2,9 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Enums\WooCommerceSyncEventStatus;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
+use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -13,7 +16,6 @@ use Sentry\Laravel\Facade as Sentry;
 use Throwable;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\DTO\ProductBatch;
-use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class SerializedProcessProductsToWooCommerce implements ShouldQueue
 {
@@ -87,6 +89,18 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
             'product_sync_error' => $syncError,
             'exception'          => $exception->getMessage(),
         ]);
+
+        // Without this the timeline is stranded on the "In wachtrij" or "Bezig"
+        // event when the job dies for good (worker killed, tries exhausted).
+        if ($product) {
+            app(WooCommerceSyncEventRecorder::class)->record(
+                $product,
+                WooCommerceSyncEventStatus::Failed,
+                'sync',
+                $exception->getMessage(),
+                'Synchronisatie definitief mislukt. Probeer het opnieuw.'
+            );
+        }
 
         Sentry::captureException($exception);
     }

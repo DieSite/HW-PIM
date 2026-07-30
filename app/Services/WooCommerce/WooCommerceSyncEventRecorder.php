@@ -9,6 +9,21 @@ use Webkul\Product\Models\Product;
 
 class WooCommerceSyncEventRecorder
 {
+    /**
+     * Recorded at dispatch time so the timeline shows the sync the moment it is
+     * queued, instead of staying on the previous run until a worker picks it up.
+     */
+    public function queued(Product $product, string $action = 'sync'): WooCommerceSyncEvent
+    {
+        return $this->record(
+            $product,
+            WooCommerceSyncEventStatus::Queued,
+            $action,
+            'In wachtrij geplaatst voor synchronisatie met WooCommerce.',
+            'In wachtrij geplaatst voor synchronisatie met WooCommerce.'
+        );
+    }
+
     public function record(
         Product $product,
         WooCommerceSyncEventStatus $status,

@@ -71,5 +71,7 @@ Route::group(['middleware' => ['web', 'admin']], function () {
 
         Route::post('wooCommerce/products/{productId}/retry', [WooCommerceSyncController::class, 'retry'])
             ->name('admin.custom.wooCommerce.product.retry');
+        Route::get('wooCommerce/products/{productId}/timeline', [WooCommerceSyncController::class, 'timeline'])
+            ->name('admin.custom.wooCommerce.product.timeline');
     });
 });

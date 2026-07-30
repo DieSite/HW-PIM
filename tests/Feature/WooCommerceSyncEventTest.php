@@ -7,22 +7,37 @@ use App\Services\ProductService;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Webkul\User\Tests\Concerns\UserAssertions;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
-function makeWcSyncProduct(string $sku = 'WCSYNC-V1'): Product
+uses(UserAssertions::class);
+
+function makeWcSyncProduct(string $sku = 'WCSYNC-V1', string $type = 'simple', ?int $parentId = null): Product
 {
     $familyId = DB::table('attribute_families')->value('id')
         ?? DB::table('attribute_families')->insertGetId(['code' => 'fam_'.uniqid(), 'status' => 1]);
 
     $product = new Product();
     $product->attribute_family_id = $familyId;
+    $product->parent_id = $parentId;
     $product->sku = $sku;
-    $product->type = 'simple';
+    $product->type = $type;
     $product->status = 1;
     $product->values = ['common' => []];
     $product->save();
 
     return $product;
+}
+
+/**
+ * @return array{0: Product, 1: Product}
+ */
+function makeWcSyncParentWithVariant(): array
+{
+    $parent = makeWcSyncProduct('WCSYNC-PARENT', 'configurable');
+    $variant = makeWcSyncProduct('WCSYNC-CHILD', 'simple', $parent->id);
+
+    return [$parent->fresh(), $variant];
 }
 
 afterEach(function () {
@@ -65,27 +80,76 @@ it('records a WooCommerce sync event and exposes it through the product relation
 it('re-dispatches a WooCommerce sync chain when retrying a parent product', function () {
     Queue::fake();
 
-    $familyId = DB::table('attribute_families')->value('id')
-        ?? DB::table('attribute_families')->insertGetId(['code' => 'fam_'.uniqid(), 'status' => 1]);
+    [$parent] = makeWcSyncParentWithVariant();
 
-    $parent = new Product();
-    $parent->attribute_family_id = $familyId;
-    $parent->sku = 'WCSYNC-PARENT';
-    $parent->type = 'configurable';
-    $parent->status = 1;
-    $parent->values = ['common' => []];
-    $parent->save();
-
-    $variant = new Product();
-    $variant->attribute_family_id = $familyId;
-    $variant->parent_id = $parent->id;
-    $variant->sku = 'WCSYNC-CHILD';
-    $variant->type = 'simple';
-    $variant->status = 1;
-    $variant->values = ['common' => []];
-    $variant->save();
-
-    app(ProductService::class)->triggerWCSyncForParent($parent->fresh());
+    app(ProductService::class)->triggerWCSyncForParent($parent);
 
     Queue::assertPushed(SerializedProcessProductsToWooCommerce::class);
+});
+
+it('records a queued event for the parent and every variant at dispatch time', function () {
+    Queue::fake();
+
+    [$parent, $variant] = makeWcSyncParentWithVariant();
+
+    app(ProductService::class)->triggerWCSyncForParent($parent);
+
+    foreach ([$parent, $variant] as $product) {
+        $events = $product->fresh()->wooCommerceSyncEvents;
+
+        expect($events)->toHaveCount(1)
+            ->and($events->first()->status)->toBe(WooCommerceSyncEventStatus::Queued)
+            ->and($events->first()->customer_message)->toBe('In wachtrij geplaatst voor synchronisatie met WooCommerce.');
+    }
+});
+
+it('records a failed event instead of a queued one when a parent has no variants', function () {
+    Queue::fake();
+
+    $parent = makeWcSyncProduct('WCSYNC-LONELY', 'configurable');
+
+    app(ProductService::class)->triggerWCSyncForParent($parent);
+
+    $events = $parent->fresh()->wooCommerceSyncEvents;
+
+    expect($events)->toHaveCount(1)
+        ->and($events->first()->status)->toBe(WooCommerceSyncEventStatus::Failed)
+        ->and($events->first()->message)->toContain('has no variants');
+
+    Queue::assertNothingPushed();
+});
+
+it('serves the timeline fragment showing the queued state', function () {
+    $this->loginAsAdmin();
+
+    $product = makeWcSyncProduct('WCSYNC-FRAGMENT');
+    app(WooCommerceSyncEventRecorder::class)->queued($product);
+
+    $response = $this->get(route('admin.custom.wooCommerce.product.timeline', $product->id));
+
+    $response->assertOk();
+
+    $body = $response->getContent();
+
+    expect($body)->toContain('WooCommerce synchronisatiestatus')
+        ->and($body)->toContain('In wachtrij')
+        ->and($body)->toContain('data-state="queued"')
+        ->and($body)->not->toContain('__hwWcTimelinePollerBooted');
+});
+
+it('ships the poller with the panel on the product edit page', function () {
+    $this->loginAsAdmin();
+
+    $product = makeWcSyncProduct('WCSYNC-PANEL');
+    app(WooCommerceSyncEventRecorder::class)->queued($product);
+
+    $response = $this->get(route('admin.catalog.products.edit', $product->id));
+
+    $response->assertOk();
+
+    $body = $response->getContent();
+
+    expect($body)->toContain('WooCommerce synchronisatiestatus')
+        ->and($body)->toContain('In wachtrij')
+        ->and($body)->toContain('__hwWcTimelinePollerBooted');
 });

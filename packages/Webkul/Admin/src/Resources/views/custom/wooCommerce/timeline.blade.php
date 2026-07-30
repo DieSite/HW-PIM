@@ -8,11 +8,17 @@
         'success' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
         'danger'  => 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
         'warning' => 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
+        'info'    => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
         default   => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
     };
 @endphp
 
-<div class="relative p-4 bg-white dark:bg-cherry-900 rounded box-shadow mt-4" id="woocommerce-timeline">
+<div
+    class="relative p-4 bg-white dark:bg-cherry-900 rounded box-shadow mt-4"
+    id="woocommerce-timeline"
+    data-state="{{ $state?->value }}"
+    data-poll-url="{{ route('admin.custom.wooCommerce.product.timeline', $product->id) }}"
+>
     <div class="flex items-center justify-between mb-4">
         <div>
             <p class="text-base text-gray-800 dark:text-white font-semibold">
@@ -32,7 +38,7 @@
 
             @if ($latest)
                 <span class="text-xs text-gray-400">
-                    bijgewerkt {{ $latest->created_at->diffForHumans() }}
+                    bijgewerkt {{ $latest->created_at->diffForHumans() }}@if ($state?->isInFlight()) · deze status ververst zichzelf @endif
                 </span>
             @endif
 
@@ -74,6 +80,7 @@
                         WooCommerceSyncEventStatus::Success => 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200',
                         WooCommerceSyncEventStatus::Failed  => 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200',
                         WooCommerceSyncEventStatus::Started => 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+                        WooCommerceSyncEventStatus::Queued  => 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200',
                         WooCommerceSyncEventStatus::Skipped => 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
                         default                             => 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200',
                     };
@@ -119,3 +126,67 @@
         </ol>
     @endif
 </div>
+
+@if (! ($fragment ?? false))
+    <script>
+    (function () {
+        if (window.__hwWcTimelinePollerBooted) { return; }
+        window.__hwWcTimelinePollerBooted = true;
+
+        var POLL_MS = 5000;
+        var MAX_TICKS = 24;
+        var IN_FLIGHT = ['queued', 'started'];
+        var ticks = 0;
+
+        // The admin mounts Vue on #app with the runtime compiler, which recompiles
+        // the server-rendered DOM (dropping <script> tags and replacing nodes), so
+        // the panel is looked up again on every tick instead of being held onto.
+        function panel() {
+            return document.getElementById('woocommerce-timeline');
+        }
+
+        function shouldPoll(el) {
+            return !! el && IN_FLIGHT.indexOf(el.dataset.state || '') !== -1;
+        }
+
+        function schedule() {
+            if (shouldPoll(panel()) && ticks < MAX_TICKS) {
+                window.setTimeout(tick, POLL_MS);
+            }
+        }
+
+        function tick() {
+            var el = panel();
+
+            if (! shouldPoll(el)) { return; }
+
+            ticks++;
+
+            fetch(el.dataset.pollUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            })
+                .then(function (response) {
+                    if (! response.ok) { throw new Error('WooCommerce timeline poll failed: ' + response.status); }
+
+                    return response.text();
+                })
+                .then(function (html) {
+                    var fresh = new DOMParser()
+                        .parseFromString(html, 'text/html')
+                        .getElementById('woocommerce-timeline');
+                    var current = panel();
+
+                    if (fresh && current) { current.replaceWith(fresh); }
+
+                    schedule();
+                })
+                .catch(function (error) {
+                    console.warn(error);
+                });
+        }
+
+        schedule();
+    })();
+    </script>
+@endif
