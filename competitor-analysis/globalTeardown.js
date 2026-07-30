@@ -8,21 +8,22 @@ const path    = require('path');
 const ExcelJS = require('exceljs');
 const { collectResults } = require('./tests/priceRecorder');
 
+// Kolomvolgorde van de Excel (Prijsvergelijking + Bronnen), vastgesteld door de
+// klant op 2026-07-30. "Eigen winkel" blijft bewust vooraan: dat is de
+// referentiekolom waartegen de rest gekleurd wordt.
 const COMPETITORS = [
   { key: 'plissehordeurenwebshop.nl',   label: 'Eigen winkel' },
-  { key: 'horrentotaal.nl',             label: 'Horrentotaal' },
   { key: 'horrengigant.nl',             label: 'Horrengigant' },
   { key: 'horren.com',                  label: 'Horren.com' },
-  { key: 'praxis.nl',                   label: 'Praxis' },
-  { key: 'creon-kozijnen.nl',           label: 'Creon Kozijnen' },
-  // --- extra concurrenten (toegevoegd) ---
-  { key: 'qniq.nl',                     label: 'Qniq' },
-  { key: 'handigehorren.nl',            label: 'Handige Horren' },
-  { key: 'luxehorren.nl',               label: 'Luxehorren' },
   { key: 'koopje-horren.com',           label: 'Koopje-Horren' },
-  { key: 'horrenstunter.nl',            label: 'Horrenstunter' },
+  { key: 'qniq.nl',                     label: 'Qniq' },
+  { key: 'luxehorren.nl',               label: 'Luxehorren' },
+  { key: 'horrentotaal.nl',             label: 'Horrentotaal' },
+  { key: 'creon-kozijnen.nl',           label: 'Creon Kozijnen' },
   { key: 'horrenconcurrent.nl',         label: 'Horrenconcurrent' },
+  { key: 'horrenstunter.nl',            label: 'Horrenstunter' },
   { key: 'decozijn.nl',                 label: 'Decozijn' },
+  { key: 'handigehorren.nl',            label: 'Handige Horren' },
   { key: 'solanowonen.nl',              label: 'Solano Wonen' },
   { key: 'raamdecoratie.com',           label: 'Raamdecoratie' },
 ];
@@ -53,7 +54,6 @@ const SOURCES = {
     enkel:  'https://horren.com/hordeuren/plisse/se100',
     dubbel: 'https://horren.com/hordeuren/plisse/dubbel-se200',
   },
-  'praxis.nl': 'https://www.praxis.nl/hout-ramen-trappen-deuren/horren/hordeuren/plisse-hordeuren',
   'creon-kozijnen.nl': 'https://www.creon-kozijnen.nl/horren/plisse-hordeur',
   'qniq.nl': {
     enkel:  'https://qniq.nl/plisse-hordeur/',
@@ -82,7 +82,7 @@ const SOURCES = {
   // Decozijn heeft geen dubbele-deurvariant; dezelfde pagina voor enkel en dubbel
   // ("Bronnen"-tab toont hem dan ook bij dubbele rijen, ook al is de rij zelf n.v.t.)
   'decozijn.nl': 'https://www.decozijn.nl/hordeur-op-maat/plisse/',
-  'solanowonen.nl': 'https://www.solanowonen.nl/horren/hordeuren/plissehordeuren/luxaflex-plisse-hordeur-volare',
+  'solanowonen.nl': 'https://www.solanowonen.nl/horren/hordeuren/plissehordeuren/keje-plissehordeur',
   'raamdecoratie.com': 'https://www.raamdecoratie.com/plissehordeur-enkel.html',
 };
 
@@ -220,7 +220,7 @@ module.exports = async function globalTeardown() {
     ['Maten zijn',        'Tussen het kozijn (mm)'],
     ['Standaard opties',  'RAL 9010 wit frame, geen handgreep, geen powertape; gaaskleur per regel (kolom Gaas)'],
     ['Gaas grijs',        'n.v.t. bij concurrenten die geen grijze gaaskleur aanbieden (eerlijke lege cel)'],
-    ['Grijs leverbaar bij', 'Eigen winkel, Horren.com, Qniq, Luxehorren, Koopje-Horren, Horrentotaal (+€39) en Horrengigant (geen meerprijs); de rest levert alleen zwart gaas'],
+    ['Grijs leverbaar bij', 'Eigen winkel, Horren.com, Qniq, Luxehorren, Koopje-Horren (t/m 2600 mm hoog), Horrentotaal (+€39 enkel / +€78 dubbel) en Horrengigant (geen meerprijs); de rest levert alleen zwart gaas'],
     ['Typecodes',         '96E t/m 190N = eigen assortiment (enkele deur); "Dubbel <type>" = dubbele deur op 2× de breedte'],
     ['', ''],
     ['KLEURLEGENDA',      'T.o.v. de eigen winkel per maat'],
@@ -229,24 +229,23 @@ module.exports = async function globalTeardown() {
     ['Geel',              'Exact dezelfde prijs'],
     ['Geen kleur',        'Geen vergelijkbare prijs (label zoals Op aanvraag / n.v.t.)'],
     ['', ''],
-    ['METHODE PER BRON',  ''],
+    ['METHODE PER BRON',  '(zelfde volgorde als de kolommen)'],
     ['Eigen winkel',      'ECHTE per-maat prijs uit de configurator: Hordeur-regel MIN de lopende promokorting (bv. "Zomerkorting 2026"), want die geldt voor iedere klant. Excl. de afhaalkorting uit het Totaal — die geldt alleen bij ophalen in Gorinchem'],
     ['Horrengigant',      'ECHTE per-maat prijs: WebForms-configurator volledig doorlopen (let op: cm-invoer), incl. gaaskleur (Zwart/Grijs, geen meerprijs)'],
-    ['Qniq',              'ECHTE configuratorprijs; qniq prijst per deurtype (enkel/dubbel), niet per exacte mm'],
-    ['Horrenconcurrent',  'ECHTE per-maat prijs: WooCommerce/PEWC live totaal (prijs in maatbanden)'],
-    ['Horrentotaal',      'ECHTE per-maat prijs: configurator-API (configurator.horrentotaal.nl/calculate) opgevangen, MIN de lopende winkelactie (active-discounts, bv. 10%), want die krijgt iedere klant zonder code — zoals bij de eigen winkel. Meerprijs grijs gaas telt mee in de korting; volumekorting (vanaf x stuks) niet'],
-    ['Creon Kozijnen',    'ECHTE per-maat prijs: /product/price AJAX (keyup-invoer); enkel vast, dubbel in maatbanden'],
-    ['Horrenstunter',     'ECHTE per-maat prijs: Gravity Forms .formattedTotalPrice (basis + maat-meerprijs), maatbanden. Dubbel: dekking door één enkele deur (max 1900 mm); breder -> n.v.t. (dubbel-formulier niet automatiseerbaar)'],
-    ['Koopje-Horren',     'ECHTE vaste prijs (Bruynzeel Plissé Hordeur s900 op maat); geen breedte/hoogte-veld, prijs is maat-onafhankelijk'],
-    ['Luxehorren',        'ECHTE per-maat prijs: TM Extra Product Options (Samenstellen) via JS gevuld, "Totaal prijs €…". Product is "Standaard Plissé hordeur" (niet Royal — geverifieerd 2026-07-22, geen model-keuze op deze pagina)'],
-    ['Handige Horren',    'ECHTE per-maat prijs: Easify-maattoeslag live uit productpagina + Shopify basisprijs (maatbanden), + €20 optie "Op maat zagen: Ja" (kant-en-klare deur, vergelijkbaar met de andere bronnen)'],
     ['Horren.com',        'ECHTE per-maat prijs: validate-state API (SE-100/SE-200, cm-invoer, incl. btw)'],
-    ['Praxis',            'Live prijs standaardmaten (Algolia-API): goedkoopste WITTE "Plisséhordeur Premium" die de doelmaat dekt (inkortbaar); maten > aanbod of geen Premium-maat -> n.v.t.'],
+    ['Koopje-Horren',     'ECHTE per-maat prijs (Bruynzeel Plissé Hordeur s900 op maat): de prijstabel van hun configurator staat in de productpagina; per maat de eerste band die de opening dekt. Grijs gaas gratis t/m 2600 mm hoog; "x"-combinaties maken ze niet -> n.v.t.'],
+    ['Qniq',              'ECHTE configuratorprijs; qniq prijst per deurtype (enkel/dubbel), niet per exacte mm'],
+    ['Luxehorren',        'ECHTE per-maat prijs: TM Extra Product Options (Samenstellen) via JS gevuld, "Totaal prijs €…". Product is "Standaard Plissé hordeur" (niet Royal — geverifieerd 2026-07-22, geen model-keuze op deze pagina)'],
+    ['Horrentotaal',      'ECHTE per-maat prijs: configurator-API (configurator.horrentotaal.nl/calculate) rechtstreeks bevraagd, MIN de lopende winkelactie (active-discounts, bv. 10%), want die krijgt iedere klant zonder code — zoals bij de eigen winkel. Meerprijs grijs gaas telt mee in de korting; volumekorting (vanaf x stuks) niet'],
+    ['Creon Kozijnen',    'ECHTE per-maat prijs: /product/price AJAX (keyup-invoer); enkel vast, dubbel in maatbanden'],
+    ['Horrenconcurrent',  'ECHTE per-maat prijs: WooCommerce/PEWC live totaal (prijs in maatbanden)'],
+    ['Horrenstunter',     'ECHTE per-maat prijs: Gravity Forms .formattedTotalPrice (basis + maat-meerprijs), maatbanden. Enkel én dubbel: deurkeuze in het formulier, breedte t/m 1900 mm (enkel) resp. 3800 mm (dubbel)'],
     ['Decozijn',          'ECHTE prijs: vaste breedtebanden (960/1300/1600/1900mm) uit de Gravity Forms product-select, hoogte is prijsneutraal binnen 1800–2700mm. Alleen enkele deur, geen gaaskleur-optie -> dubbel/grijs = n.v.t.'],
-    ['Solano Wonen',      'ECHTE per-maat prijs (Luxaflex Volare): JSON-API getProductConfiguration, incl. enkel/dubbel en gaaskleur (geen meerprijs voor grijs). API keurt sommige combinaties af op een niet-triviale breedte×hoogte-matrix (bv. 190×2350mm te groot voor enkele deur) -> n.v.t.'],
+    ['Handige Horren',    'ECHTE per-maat prijs: Easify-maattoeslag live uit productpagina + Shopify basisprijs (maatbanden), + €20 optie "Op maat zagen: Ja" (kant-en-klare deur, vergelijkbaar met de andere bronnen)'],
+    ['Solano Wonen',      'ECHTE per-maat prijs (Keje plissehordeur, incl. hun 20% winkelkorting): JSON-API getProductConfiguration, incl. enkel/dubbel en de optie "Op maat zagen: Ja" (+€24,95) — zonder die optie is het een zelf in te korten bouwpakket. Geen gaaskleur-optie -> grijs = n.v.t.; te grote maten keurt de API zelf af'],
     ['Raamdecoratie',     'Geblokkeerd door Cloudflare (bot-uitdaging valt headless niet weg, zelfs niet na 30s wachten); bewust niet omzeild — geen prijs opgehaald, geen "verkoopt dit niet"'],
     ['', ''],
-    ['Let op',            'ECHTE prijzen uit de configurators: Eigen winkel, Horrengigant, Horrentotaal, Horrenconcurrent, Horrenstunter, Creon, Luxehorren, Solano Wonen (per-maat) + Qniq, Koopje, Decozijn (vaste prijs per type/band). Overige tekstlabels zijn geen prijs.'],
+    ['Let op',            'ECHTE prijzen uit de configurators: Eigen winkel, Horrengigant, Horren.com, Horrentotaal, Horrenconcurrent, Horrenstunter, Creon, Luxehorren, Handige Horren, Koopje-Horren, Solano Wonen (per-maat) + Qniq, Decozijn (prijs per type/band). Overige tekstlabels zijn geen prijs.'],
   ].forEach(row => info.addRow(row));
   info.getColumn(1).width = 20;
   info.getColumn(2).width = 55;
