@@ -147,11 +147,20 @@ return [
     /**
      * Black outline drawn along the shape edge (matches the reference images).
      * "enabled" is the default for the per-upload toggle; width/color are fixed.
+     * Disabled by default since 2026-07: shaped rugs are rendered without the
+     * black border (see products:remove-image-outline for the catalog cleanup).
      */
     'outline' => [
-        'enabled' => true,
+        'enabled' => false,
         'width'   => 4,
         'color'   => '#1a1a1a',
+
+        /**
+         * Mean-luminance ceiling (0..1) below which the outermost outline-width
+         * band of a shape counts as carrying the black outline (used by
+         * products:remove-image-outline to find composites to strip).
+         */
+        'detect_threshold' => 0.3,
     ],
 
     /**

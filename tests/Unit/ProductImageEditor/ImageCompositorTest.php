@@ -231,6 +231,99 @@ it('pivots zoom and rotation on the frame centre regardless of pan', function ()
     }
 });
 
+/**
+ * A finished "rond" composite (as stored in the DAM), with or without the
+ * black outline, round-tripped through JPEG like the real assets.
+ */
+function compositorRondComposite(ImageCompositor $compositor, bool $outline, string $color = 'cc8844'): string
+{
+    $rondRect = config('product_image_editor.shapes.rond.rect');
+
+    return (string) $compositor->render(
+        compositorPng(800, 800, $color),
+        compositorTransform(['shape' => 'rond', 'rect' => $rondRect, 'outline' => $outline]),
+        null,
+        false,
+    )->toJpeg(90);
+}
+
+/**
+ * Whether a pixel is within a tolerance of an expected hex colour (JPEG
+ * round-trips shift channels a little).
+ */
+function compositorColorNear(ImageInterface $image, int $x, int $y, string $hex, int $tolerance = 12): bool
+{
+    $actual = sscanf(compositorHexAt($image, $x, $y), '%02x%02x%02x');
+    $expected = sscanf($hex, '%02x%02x%02x');
+
+    foreach ([0, 1, 2] as $i) {
+        if (abs($actual[$i] - $expected[$i]) > $tolerance) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+it('detects the black outline on a masked composite', function () {
+    $with = compositorRondComposite($this->compositor, true);
+    $without = compositorRondComposite($this->compositor, false);
+
+    expect($this->compositor->detectShapeOutline($with, 'rond'))->toBeTrue()
+        ->and($this->compositor->detectShapeOutline($without, 'rond'))->toBeFalse();
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
+it('returns null when outline detection cannot run', function () {
+    // Not the composite frame geometry.
+    expect($this->compositor->detectShapeOutline(compositorPng(400, 600, 'cc8844'), 'rond'))->toBeNull()
+        // Shape without a silhouette mask.
+        ->and($this->compositor->detectShapeOutline(compositorPng(917, 1094, 'cc8844'), 'rechthoek'))->toBeNull();
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
+it('removes the outline from a composite, leaving the rug and white padding intact', function () {
+    $with = compositorRondComposite($this->compositor, true);
+
+    $out = $this->compositor->removeShapeOutline($with, 'rond');
+
+    // The outline is gone, while the circle centre keeps the rug colour and
+    // the padding corner stays white.
+    expect($out->width())->toBe(917)
+        ->and($out->height())->toBe(1094)
+        ->and(compositorColorNear($out, 5, 5, 'ffffff'))->toBeTrue()
+        ->and(compositorColorNear($out, 458, 547, 'cc8844'))->toBeTrue()
+        ->and($this->compositor->detectShapeOutline((string) $out->toJpeg(90), 'rond'))->toBeFalse();
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
+it('removes a thicker legacy outline than the configured width', function () {
+    // Legacy manual composites carry rings up to ~10px; simulate one by
+    // rendering with a 10px outline while the config still says 4px.
+    config()->set('product_image_editor.outline.width', 10);
+    $with = compositorRondComposite($this->compositor, true);
+    config()->set('product_image_editor.outline.width', 4);
+
+    $out = $this->compositor->removeShapeOutline($with, 'rond');
+
+    expect(compositorColorNear($out, 458, 547, 'cc8844'))->toBeTrue()
+        ->and($this->compositor->detectShapeOutline((string) $out->toJpeg(90), 'rond'))->toBeFalse();
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
+it('keeps the HW icon outside the shape when stripping the outline', function () {
+    $rondRect = config('product_image_editor.shapes.rond.rect');
+
+    $with = (string) $this->compositor->render(
+        compositorPng(800, 800, 'cc8844'),
+        compositorTransform(['shape' => 'rond', 'rect' => $rondRect, 'outline' => true]),
+        $this->icon,
+        true,
+    )->toJpeg(90);
+
+    $out = $this->compositor->removeShapeOutline($with, 'rond');
+
+    // The bottom-left icon survives; the outline is still gone.
+    expect(compositorColorNear($out, 60, 1000, '0000ff'))->toBeTrue()
+        ->and($this->compositor->detectShapeOutline((string) $out->toJpeg(90), 'rond'))->toBeFalse();
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
 it('keeps the rug clipped inside the rectangle when scaled up', function () {
     $out = $this->compositor->render($this->source, compositorTransform(['scale' => 2.0]), null, false);
 

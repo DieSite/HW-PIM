@@ -14,6 +14,36 @@ use Intervention\Image\Interfaces\ImageInterface;
  */
 class ImageCompositor
 {
+    /**
+     * Extra pixels stripped past the measured ring depth (and painted outside
+     * the mask edge) to swallow anti-aliased outline remnants. Deliberately
+     * generous: cutting slightly into the rug is invisible at these sizes,
+     * while a leftover dark fringe is not.
+     */
+    private const STRIP_MARGIN = 6;
+
+    /**
+     * Minimum total strip depth in pixels. Legacy rings fade into the rug over
+     * several anti-aliased pixels, so never strip shallower than this.
+     */
+    private const MIN_STRIP_DEPTH = 12;
+
+    /**
+     * Ceiling for the measured ring depth in pixels; keeps a genuinely dark rug
+     * from being eroded band after band.
+     */
+    private const MAX_STRIP_DEPTH = 16;
+
+    /**
+     * Luminance (0..1) below which a pixel counts as outline-dark, and the
+     * band-share of such pixels above which the band still counts as ring.
+     * Fraction-based on purpose: an anti-aliased fringe row averages bright
+     * but still holds plenty of near-black pixels.
+     */
+    private const DARK_PIXEL_CUTOFF = 0.25;
+
+    private const DARK_FRACTION_LIMIT = 0.05;
+
     public function __construct(private ImageManager $imageManager) {}
 
     /**
@@ -75,6 +105,217 @@ class ImageCompositor
         ]);
 
         return $canvas;
+    }
+
+    /**
+     * Whether a composited image carries the black outline along the given
+     * shape's silhouette edge. Samples the outermost outline-width band of the
+     * shape and compares its mean luminance against a darkness threshold, so a
+     * genuine outline (near #1a1a1a) reads dark while a borderless rug edge
+     * reads as the rug's own colours.
+     *
+     * Returns null when the check cannot run (no mask for the shape, image not
+     * in the composite geometry); true/false otherwise.
+     */
+    public function detectShapeOutline(string $contents, string $shape): ?bool
+    {
+        $maskPath = $this->maskPath($shape);
+
+        if ($maskPath === null) {
+            return null;
+        }
+
+        $image = new \Imagick();
+        $image->readImageBlob($contents);
+
+        $mask = $this->shapeMask($maskPath, $image->getImageWidth(), $image->getImageHeight());
+
+        if ($mask === null) {
+            return null;
+        }
+
+        $outlineWidth = $this->scaledOutlineWidth($image->getImageWidth());
+
+        $ring = clone $mask;
+        $inner = clone $mask;
+        $inner->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) $outlineWidth));
+        $inner->negateImage(false);
+        $ring->compositeImage($inner, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+
+        $luminance = $this->bandMeanLuminance($image, $ring);
+
+        if ($luminance === null) {
+            return null;
+        }
+
+        return $luminance < (float) config('product_image_editor.outline.detect_threshold', 0.3);
+    }
+
+    /**
+     * Strip the outline from an already-composited image by painting white over
+     * the ring along the shape edge. The ring depth is measured per image
+     * (legacy manual composites carry thicker borders than the configured
+     * width, sometimes spilling slightly outside the mask), and only the band
+     * is touched so the rest of the frame — including a stamped HW icon
+     * outside the shape — survives unchanged. The rug shrinks by the measured
+     * depth, which is imperceptible at the shape sizes involved.
+     */
+    public function removeShapeOutline(string $contents, string $shape): ImageInterface
+    {
+        $maskPath = $this->maskPath($shape);
+
+        if ($maskPath === null) {
+            throw new \RuntimeException("No silhouette mask available for shape [$shape].");
+        }
+
+        $image = new \Imagick();
+        $image->readImageBlob($contents);
+        $image->setImageFormat('png');
+
+        $mask = $this->shapeMask($maskPath, $image->getImageWidth(), $image->getImageHeight());
+
+        if ($mask === null) {
+            throw new \RuntimeException("Image geometry does not match the composite frame for shape [$shape].");
+        }
+
+        $stripDepth = max(
+            $this->measureOutlineDepth($image, $mask) + self::STRIP_MARGIN,
+            $this->scaledOutlineWidth($image->getImageWidth()) + self::STRIP_MARGIN,
+            self::MIN_STRIP_DEPTH,
+        );
+
+        // White band from slightly outside the mask edge (anti-aliased spill)
+        // down to the measured ring depth: band = dilate(mask) AND NOT erode(mask).
+        $outer = clone $mask;
+        $outer->morphology(\Imagick::MORPHOLOGY_DILATE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) self::STRIP_MARGIN));
+
+        $keep = clone $mask;
+        $keep->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) $stripDepth));
+        $keep->negateImage(false);
+        $outer->compositeImage($keep, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+
+        $white = new \Imagick();
+        $white->newImage($image->getImageWidth(), $image->getImageHeight(), 'white');
+        $white->setImageFormat('png');
+        $white->compositeImage($outer, \Imagick::COMPOSITE_COPYOPACITY, 0, 0);
+
+        $image->compositeImage($white, \Imagick::COMPOSITE_OVER, 0, 0);
+        $image->setImageBackgroundColor('white');
+        $image->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+
+        return $this->imageManager->read($image->getImageBlob());
+    }
+
+    /**
+     * Depth (in pixels from the mask edge inward) up to which the shape edge is
+     * outline-dark, probed in 2px bands. Legacy manual composites carry rings
+     * up to ~10px, so the strip must adapt instead of assuming the configured
+     * width. Capped so a genuinely near-black rug cannot erode indefinitely.
+     */
+    private function measureOutlineDepth(\Imagick $image, \Imagick $mask): int
+    {
+        $depth = 0;
+        $current = clone $mask;
+
+        while ($depth < self::MAX_STRIP_DEPTH) {
+            $next = clone $current;
+            $next->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, '2'));
+
+            $band = clone $current;
+            $inner = clone $next;
+            $inner->negateImage(false);
+            $band->compositeImage($inner, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+
+            $fraction = $this->bandDarkFraction($image, $band);
+
+            if ($fraction === null || $fraction < self::DARK_FRACTION_LIMIT) {
+                break;
+            }
+
+            $depth += 2;
+            $current = $next;
+        }
+
+        return $depth;
+    }
+
+    /**
+     * Share (0..1) of pixels within a grayscale band mask that are darker than
+     * DARK_PIXEL_CUTOFF, or null when the band is empty. Unlike a mean, this
+     * still flags a band whose anti-aliased outline remnants are diluted by
+     * bright rug pixels.
+     */
+    private function bandDarkFraction(\Imagick $image, \Imagick $band): ?float
+    {
+        $dark = clone $image;
+        $dark->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+        $dark->transformImageColorspace(\Imagick::COLORSPACE_GRAY);
+        $dark->thresholdImage(self::DARK_PIXEL_CUTOFF * \Imagick::getQuantum());
+        $dark->negateImage(false);
+        $dark->compositeImage($band, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+
+        $bandMean = $band->getImageChannelMean(\Imagick::CHANNEL_GRAY)['mean'];
+
+        if ($bandMean <= 0.0) {
+            return null;
+        }
+
+        return $dark->getImageChannelMean(\Imagick::CHANNEL_GRAY)['mean'] / $bandMean;
+    }
+
+    /**
+     * Mean luminance (0..1) of the image within a grayscale band mask, or null
+     * when the band is empty.
+     */
+    private function bandMeanLuminance(\Imagick $image, \Imagick $band): ?float
+    {
+        $gray = clone $image;
+        $gray->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+        $gray->transformImageColorspace(\Imagick::COLORSPACE_GRAY);
+        $gray->compositeImage($band, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+
+        $bandMean = $band->getImageChannelMean(\Imagick::CHANNEL_GRAY)['mean'];
+
+        if ($bandMean <= 0.0) {
+            return null;
+        }
+
+        return $gray->getImageChannelMean(\Imagick::CHANNEL_GRAY)['mean'] / $bandMean;
+    }
+
+    /**
+     * Load a shape mask as a grayscale silhouette (white shape on black) sized
+     * to the target image. Returns null when the target does not share the
+     * composite frame's aspect ratio (within 1%), i.e. it is not a standard
+     * composite this mask applies to.
+     */
+    private function shapeMask(string $maskPath, int $width, int $height): ?\Imagick
+    {
+        $output = config('product_image_editor.output');
+        $expectedRatio = (int) $output['width'] / max(1, (int) $output['height']);
+
+        if ($height < 1 || abs($width / $height - $expectedRatio) / $expectedRatio > 0.01) {
+            return null;
+        }
+
+        $mask = new \Imagick($maskPath);
+        $mask->resizeImage($width, $height, \Imagick::FILTER_BOX, 1);
+        $mask->setImageAlphaChannel(\Imagick::ALPHACHANNEL_EXTRACT);
+
+        return $mask;
+    }
+
+    /**
+     * Outline width in pixels of the given image, scaling the configured width
+     * (defined at the 917px output size) for smaller or larger copies.
+     */
+    private function scaledOutlineWidth(int $imageWidth): int
+    {
+        $config = config('product_image_editor');
+
+        $ratio = $imageWidth / max(1, (int) $config['output']['width']);
+
+        return max(1, (int) round((int) $config['outline']['width'] * $ratio));
     }
 
     /**
@@ -152,9 +393,7 @@ class ImageCompositor
         // The mask PNGs are alpha-based (shape opaque / bg transparent) so CSS
         // masking works in the editor. Extract the alpha back to a grayscale
         // (white shape on black) so COPYOPACITY and ERODE operate on intensity.
-        $mask = new \Imagick($maskPath);
-        $mask->resizeImage($outputWidth, $outputHeight, \Imagick::FILTER_BOX, 1);
-        $mask->setImageAlphaChannel(\Imagick::ALPHACHANNEL_EXTRACT);
+        $mask = $this->shapeMask($maskPath, $outputWidth, $outputHeight);
 
         $canvas = new \Imagick();
         $canvas->newImage($outputWidth, $outputHeight, 'white');
