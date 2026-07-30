@@ -109,5 +109,6 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(base_path('config/image_editor_settings.php'), 'core');
         $this->mergeConfigFrom(base_path('config/competitor_pricing_settings.php'), 'core');
+        $this->mergeConfigFrom(base_path('config/afwerkingen_settings.php'), 'core');
     }
 }
