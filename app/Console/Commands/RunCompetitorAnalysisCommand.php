@@ -125,13 +125,13 @@ class RunCompetitorAnalysisCommand extends Command
                 // --omit=dev skips the Playwright devDependency (and its Chromium
                 // download): the `volledig` pipeline is plain Node HTTP.
                 if (! $this->process(['npm', 'install', '--omit=dev'], $dir, 600)) {
-                    return false;
+                    throw new \Exception('Scraper dependencies failed to install');
                 }
             }
 
             $this->info('Running competitor scraper (this can take several minutes)…');
 
-            return $this->process(
+            $success = $this->process(
                 ['node', 'catalog-volledig/run.js'],
                 $dir,
                 (int) config('competitor_pricing.scraper_timeout'),
@@ -140,6 +140,12 @@ class RunCompetitorAnalysisCommand extends Command
                     'CONCURRENCY' => (string) config('competitor_pricing.concurrency'),
                 ],
             );
+
+            if (! $success) {
+                throw new \Exception('Scraper failed');
+            }
+
+            return $success;
         } finally {
             @unlink($csv);
         }

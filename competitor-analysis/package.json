@@ -9,7 +9,7 @@
     "volledig:excel": "node catalog-volledig/excel.js",
     "volledig:audit": "node catalog-volledig/audit-prices.js",
     "volledig:browser": "playwright test -c playwright.volledig.config.js",
-    "volledig:test": "node --test catalog-volledig/normalize.test.js",
+    "volledig:test": "node --test catalog-volledig/normalize.test.js catalog-volledig/storage.test.js",
     "test:eigenwinkel": "node --test eigenwinkel.test.js",
     "test:korting": "node --test korting.test.js",
     "test:koopje": "node --test koopje.test.js",
@@ -30,7 +30,7 @@
     "@playwright/test": "^1.44.0"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "exceljs": "^4.4.0"
   }
 }
