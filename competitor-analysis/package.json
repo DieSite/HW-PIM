@@ -13,6 +13,7 @@
     "test:eigenwinkel": "node --test eigenwinkel.test.js",
     "test:korting": "node --test korting.test.js",
     "test:koopje": "node --test koopje.test.js",
+    "test:kolommen": "node --test kolommen.test.js",
     "test": "playwright test",
     "test:karpetten": "playwright test -c playwright.karpetten.config.js",
     "test:eigen": "playwright test 01-plissehordeurenwebshop",

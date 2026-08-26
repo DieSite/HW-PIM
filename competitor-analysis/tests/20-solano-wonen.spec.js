@@ -28,10 +28,22 @@
  *  - 3937 (enkel) / 4840 (dubbel) Montage: 31399 resp. 40241 = In het kozijn.
  *  - 4842 (Op maat zagen): 40245 = Nee, 40246 = Ja (+ € 24,95).
  *
- * KORTING: de 20% winkelkorting zit al in `total` (advies € 302,50 →
- * € 242,00), net zoals hun productpagina hem toont. Er is dus niets extra af
- * te trekken — anders dan bij horrentotaal, waar de actie buiten de API om
- * gaat.
+ * KORTING: de 20% winkelkorting zit al in `total`, net zoals hun productpagina
+ * hem toont. Er is dus niets extra af te trekken — anders dan bij horrentotaal,
+ * waar de actie buiten de API om gaat.
+ *
+ * Die korting geldt óók over de "op maat zagen"-optie; de € 24,95 die de pagina
+ * bij die optie toont is dus al de GEKORTE meerprijs, niet de adviesprijs.
+ * Bewezen op 04-08-2026 met twee identieke calls voor 730×1970 enkel, alleen
+ * `options[4842]` verschillend:
+ *
+ *   40245 (Nee):  total € 242,00   suggestedRetailPrice € 302,50
+ *   40246 (Ja):   total € 266,95   suggestedRetailPrice € 333,69
+ *
+ * 302,50 × 0,8 = 242,00 en 333,69 × 0,8 = 266,95 — beide totalen zijn dus al
+ * gekort, en het verschil is exact € 24,95. Zelf nog eens 20% van de optie
+ * aftrekken (→ € 261,96) zou de korting dubbel toepassen. Neem daarom `total`
+ * over zoals hij is en tel er niets bij op.
  *
  * Gaaskleur: dit product heeft GEEN gaaskleur-optie (alleen zwart), dus alle
  * grijs-rijen zijn eerlijk n.v.t.

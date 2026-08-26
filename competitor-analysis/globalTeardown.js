@@ -242,10 +242,20 @@ module.exports = async function globalTeardown() {
     ['Horrenstunter',     'ECHTE per-maat prijs: Gravity Forms .formattedTotalPrice (basis + maat-meerprijs), maatbanden. Enkel én dubbel: deurkeuze in het formulier, breedte t/m 1900 mm (enkel) resp. 3800 mm (dubbel)'],
     ['Decozijn',          'ECHTE prijs: vaste breedtebanden (960/1300/1600/1900mm) uit de Gravity Forms product-select, hoogte is prijsneutraal binnen 1800–2700mm. Alleen enkele deur, geen gaaskleur-optie -> dubbel/grijs = n.v.t.'],
     ['Handige Horren',    'ECHTE per-maat prijs: Easify-maattoeslag live uit productpagina + Shopify basisprijs (maatbanden), + €20 optie "Op maat zagen: Ja" (kant-en-klare deur, vergelijkbaar met de andere bronnen)'],
-    ['Solano Wonen',      'ECHTE per-maat prijs (Keje plissehordeur, incl. hun 20% winkelkorting): JSON-API getProductConfiguration, incl. enkel/dubbel en de optie "Op maat zagen: Ja" (+€24,95) — zonder die optie is het een zelf in te korten bouwpakket. Geen gaaskleur-optie -> grijs = n.v.t.; te grote maten keurt de API zelf af'],
+    ['Solano Wonen',      'ECHTE per-maat prijs (Keje plissehordeur): JSON-API getProductConfiguration, incl. enkel/dubbel en de optie "Op maat zagen: Ja" — zonder die optie is het een zelf in te korten bouwpakket. Hun 20% winkelkorting zit al in het teruggegeven totaal en geldt óók over die optie (730×1970: adviesprijs €333,69 -> €266,95). Geen gaaskleur-optie -> grijs = n.v.t.; te grote maten keurt de API zelf af'],
     ['Raamdecoratie',     'Geblokkeerd door Cloudflare (bot-uitdaging valt headless niet weg, zelfs niet na 30s wachten); bewust niet omzeild — geen prijs opgehaald, geen "verkoopt dit niet"'],
     ['', ''],
     ['Let op',            'ECHTE prijzen uit de configurators: Eigen winkel, Horrengigant, Horren.com, Horrentotaal, Horrenconcurrent, Horrenstunter, Creon, Luxehorren, Handige Horren, Koopje-Horren, Solano Wonen (per-maat) + Qniq, Decozijn (prijs per type/band). Overige tekstlabels zijn geen prijs.'],
+    ['', ''],
+    ['WIJZIGINGEN',       'Doorgevoerde correcties op de bronnen, met het effect op de prijs van 730×1970 enkel'],
+    ['30-07-2026',        'Koopje-Horren: prijstabel i.p.v. de getoonde vanaf-prijs. De €179 op hun pagina is de goedkoopste cel (580×1791), geen vaste prijs — ze stonden dus jarenlang te goedkoop in de vergelijking. Nu €233,00 (dubbel 1430×1970: €457,00). Product = Bruynzeel Plissé Hordeur s900, enkel én dubbel'],
+    ['30-07-2026',        'Solano Wonen: van Luxaflex Volare naar de Keje plissehordeur, mét "Op maat zagen". De Volare was de enige zonder die optie (dus een bouwpakket) en een dealerproduct in een andere prijsklasse. €448 -> €266,95'],
+    ['30-07-2026',        'Horrenstunter: dubbele deuren zijn wél te configureren (apart breedteveld t/m 3800 mm). Stonden eerst op de prijs van één enkele deur, of op n.v.t. boven 1900 mm'],
+    ['30-07-2026',        'Horrentotaal: configurator-API rechtstreeks bevraagd i.p.v. via hun winkelpagina, die na ±10 laadbeurten met een rate limit antwoordde — de kolom vulde daardoor 0 van de 34 cellen'],
+    ['30-07-2026',        'Praxis verwijderd als bron (klantverzoek); kolomvolgorde vastgesteld'],
+    ['29-07-2026',        'Horrentotaal: lopende winkelactie (10%) wordt afgetrokken. Die zit niet in hun prijs-API maar wordt client-side verrekend en belandt wél in de winkelwagen; zonder deze stap stonden ze 10% te duur. €324,00 -> €291,60'],
+    ['29-07-2026',        'Eigen winkel: onze eigen promokorting (10%) wordt afgetrokken, want die krijgt iedere klant. Daarvoor vergeleken we onze adviesprijs met de échte prijs van de concurrent — systematisch in ons nadeel. €289,00 -> €260,00'],
+    ['04-08-2026',        'Alle bovenstaande punten opnieuw live gecontroleerd tegen de winkels; alle bedragen ongewijzigd. Raamdecoratie geeft nog steeds Cloudflare-403 (ook op hun sitemap), dus daar blijft de kolom leeg'],
   ].forEach(row => info.addRow(row));
   info.getColumn(1).width = 20;
   info.getColumn(2).width = 55;
@@ -255,3 +265,9 @@ module.exports = async function globalTeardown() {
   await wb.xlsx.writeFile(outFile);
   console.log(`\n✅ Excel opgeslagen: prijsvergelijking-plisse-hordeuren.xlsx`);
 };
+
+// Playwright verwacht één functie als export; de tabellen hangen we ernaast zodat
+// `kolommen.test.js` de kolomvolgorde en de spec-koppeling kan controleren zonder
+// ze te kopiëren. Deze blijven dus de enige bron.
+module.exports.COMPETITORS = COMPETITORS;
+module.exports.SOURCES     = SOURCES;

@@ -76,7 +76,7 @@ class RunCompetitorAnalysisCommand extends Command
             ]);
         } catch (\Throwable $e) {
             $this->error('Rapportmail mislukt: '.$e->getMessage());
-            report($e);
+            throw $e;
         }
     }
 
