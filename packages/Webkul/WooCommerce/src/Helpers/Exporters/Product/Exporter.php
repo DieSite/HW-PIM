@@ -153,6 +153,21 @@ class Exporter extends AbstractExporter
     ];
 
     /**
+     * Wrapped fields whose value must reach WooCommerce as plain text.
+     *
+     * The SEO title and meta description are maintained in a rich-text editor,
+     * so the PIM stores them wrapped in markup. A search engine shows them as
+     * plain text, so the markup has to go before the value is sent rather than
+     * after it is stored.
+     *
+     * @var array<int, string>
+     */
+    protected array $plainTextMetaFields = [
+        '_yoast_wpseo_title',
+        '_yoast_wpseo_metadesc',
+    ];
+
+    /**
      * Create a new instance of the exporter.
      */
     public function __construct(
@@ -260,10 +275,11 @@ class Exporter extends AbstractExporter
             if (is_array($duplicateAttributes) && array_key_exists($field, $duplicateAttributes)) {
                 if (! empty($this->wrapper[$name])) {
                     $value = is_array($duplicateAttributes[$field]) ? Arr::first($duplicateAttributes[$field]) : $duplicateAttributes[$field];
+                    $value = $this->prepareMetaValue($name, $value);
                     if ($this->wrapper[$name] === 'meta_data') {
-                        $formatted[$this->wrapper[$name]][] = ['key' => strtolower($name), 'value' => (string) $value];
+                        $formatted[$this->wrapper[$name]][] = ['key' => strtolower($name), 'value' => $value];
                     } else {
-                        $formatted[$this->wrapper[$name]][strtolower($name)] = (string) $value;
+                        $formatted[$this->wrapper[$name]][strtolower($name)] = $value;
                     }
 
                 } else {
@@ -1018,6 +1034,25 @@ class Exporter extends AbstractExporter
         }
 
         return $attributeData;
+    }
+
+    /**
+     * Casts a wrapped field's value to the string WooCommerce receives,
+     * flattening it to plain text for the fields that need it.
+     */
+    protected function prepareMetaValue(string $name, mixed $value): string
+    {
+        $value = (string) $value;
+
+        if (! in_array($name, $this->plainTextMetaFields, true)) {
+            return $value;
+        }
+
+        $value = strip_tags($value);
+        $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = preg_replace('/\s+/u', ' ', $value);
+
+        return trim((string) $value);
     }
 
     protected function getAttributeCodesFromType(string $type): array
