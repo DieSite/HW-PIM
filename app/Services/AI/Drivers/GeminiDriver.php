@@ -21,6 +21,25 @@ use RuntimeException;
 class GeminiDriver implements AiTextClient
 {
     /**
+     * Fields Gemini's responseSchema accepts. It speaks an OpenAPI 3.0 subset,
+     * not JSON Schema: anything outside this list (notably the
+     * `additionalProperties: false` that OpenAI's strict mode requires) makes
+     * the API reject the whole request with "Unknown name ... Cannot find
+     * field". Callers therefore hand over one JSON Schema and each driver
+     * translates it.
+     *
+     * @var list<string>
+     */
+    private const SUPPORTED_SCHEMA_KEYS = [
+        'type', 'format', 'title', 'description', 'nullable', 'enum', 'default', 'example',
+        'properties', 'required', 'propertyOrdering', 'minProperties', 'maxProperties',
+        'items', 'minItems', 'maxItems',
+        'minLength', 'maxLength', 'pattern',
+        'minimum', 'maximum',
+        'anyOf',
+    ];
+
+    /**
      * @param  Config  $config
      * @param  array{timeout:int, max_tokens:int, temperature:float, retries:int}  $request
      */
@@ -83,7 +102,7 @@ class GeminiDriver implements AiTextClient
 
         if ($aiRequest->jsonSchema !== null) {
             $generationConfig['responseMimeType'] = 'application/json';
-            $generationConfig['responseSchema'] = $aiRequest->jsonSchema;
+            $generationConfig['responseSchema'] = $this->toGeminiSchema($aiRequest->jsonSchema);
         }
 
         return [
@@ -91,6 +110,34 @@ class GeminiDriver implements AiTextClient
             'contents'          => [['role' => 'user', 'parts' => $parts]],
             'generationConfig'  => $generationConfig,
         ];
+    }
+
+    /**
+     * Strips every JSON Schema keyword Gemini does not know, recursively.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    private function toGeminiSchema(array $schema): array
+    {
+        $translated = [];
+
+        foreach ($schema as $key => $value) {
+            if (! in_array($key, self::SUPPORTED_SCHEMA_KEYS, true)) {
+                continue;
+            }
+
+            $translated[$key] = match (true) {
+                $key === 'items' && is_array($value)                              => $this->toGeminiSchema($value),
+                in_array($key, ['properties', 'anyOf'], true) && is_array($value) => array_map(
+                    fn ($sub) => is_array($sub) ? $this->toGeminiSchema($sub) : $sub,
+                    $value
+                ),
+                default => $value,
+            };
+        }
+
+        return $translated;
     }
 
     /**

@@ -65,6 +65,45 @@ it('asks for structured json when a schema is given', function () {
     });
 });
 
+it('drops json schema keywords gemini rejects, at every nesting level', function () {
+    geminiReply(['candidates' => [['content' => ['parts' => [['text' => '{}']]]]]]);
+
+    geminiDriver()->complete(new AiRequest('Huisstijl', 'Brief', [], [
+        '$schema'              => 'https://json-schema.org/draft/2020-12/schema',
+        'type'                 => 'object',
+        'additionalProperties' => false,
+        'required'             => ['beschrijving_l', 'blokken'],
+        'properties'           => [
+            'beschrijving_l' => ['type' => 'string', 'additionalProperties' => false],
+            'blokken'        => [
+                'type'  => 'array',
+                'items' => [
+                    'type'                 => 'object',
+                    'additionalProperties' => false,
+                    'properties'           => ['tekst' => ['type' => 'string', 'const' => 'x']],
+                ],
+            ],
+        ],
+    ]));
+
+    Http::assertSent(function (Request $request): bool {
+        return $request->data()['generationConfig']['responseSchema'] === [
+            'type'       => 'object',
+            'required'   => ['beschrijving_l', 'blokken'],
+            'properties' => [
+                'beschrijving_l' => ['type' => 'string'],
+                'blokken'        => [
+                    'type'  => 'array',
+                    'items' => [
+                        'type'       => 'object',
+                        'properties' => ['tekst' => ['type' => 'string']],
+                    ],
+                ],
+            ],
+        ];
+    });
+});
+
 it('reports token usage back', function () {
     geminiReply([
         'candidates'    => [['content' => ['parts' => [['text' => 'antwoord']]]]],
