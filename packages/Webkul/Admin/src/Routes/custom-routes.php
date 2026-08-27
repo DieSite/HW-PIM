@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AiDescriptionController;
 use App\Http\Controllers\BolSyncController;
+use App\Http\Controllers\CrossSellController;
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
 use App\Http\Controllers\PhotoroomController;
@@ -24,6 +25,12 @@ Route::group(['middleware' => ['web', 'admin']], function () {
 
     Route::post('catalog/products/ai-description', [AiDescriptionController::class, 'generate'])
         ->name('admin.catalog.products.ai-description.generate');
+
+    Route::get('catalog/products/{productId}/cross-sells/candidates', [CrossSellController::class, 'candidates'])
+        ->name('admin.catalog.products.cross-sells.candidates');
+
+    Route::post('catalog/products/cross-sells', [CrossSellController::class, 'connect'])
+        ->name('admin.catalog.products.cross-sells.connect');
 });
 
 Route::group(['middleware' => ['web', 'admin']], function () {

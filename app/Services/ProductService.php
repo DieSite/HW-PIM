@@ -161,13 +161,26 @@ class ProductService
      */
     public function commonValues(Product $product): array
     {
+        $values = $this->productValues($product);
+
+        return is_array($values['common'] ?? null) ? $values['common'] : [];
+    }
+
+    /**
+     * De volledige `values` van een product, met dezelfde tolerantie voor een
+     * dubbel gecodeerde kolom.
+     *
+     * @return array<string, mixed>
+     */
+    public function productValues(Product $product): array
+    {
         $values = $product->values;
 
         for ($depth = 0; is_string($values) && $depth < 5; $depth++) {
             $values = json_decode($values, true);
         }
 
-        return is_array($values) && is_array($values['common'] ?? null) ? $values['common'] : [];
+        return is_array($values) ? $values : [];
     }
 
     /**

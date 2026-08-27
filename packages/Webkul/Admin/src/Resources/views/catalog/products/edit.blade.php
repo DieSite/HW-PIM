@@ -53,6 +53,12 @@
                             Meta velden genereren
                         </button>
 
+                        @if($product->type !== 'simple')
+                            <button type="button" onclick="openCrossSellModal(this)" class="secondary-button">
+                                Kleurvarianten koppelen
+                            </button>
+                        @endif
+
                         @if (app(\App\Services\AI\AiSettings::class)->enabled())
                             <button type="button" onclick="generateAiTexts(this)" class="secondary-button flex items-center gap-1">
                                 <span class="icon-magic-wand text-sm"></span>
@@ -530,6 +536,51 @@
             </div>
         </div>
     @endif
+
+    @if (is_null($product->parent_id) && $product->type !== 'simple')
+        {{--
+            Het koppelvenster voor kleurvarianten. Net als hierboven staat alle
+            opmaak in de markup: Tailwind compileert geen klassennamen die
+            alleen in JavaScript voorkomen.
+        --}}
+        <div id="cross-sell-modal" class="hidden">
+            <div
+                class="fixed inset-0 bg-gray-500 bg-opacity-50 z-[10001]"
+                onclick="hideCrossSellModal()"
+            ></div>
+
+            <div class="fixed inset-0 z-[10002] overflow-y-auto">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="w-full max-w-[700px] max-h-[96%] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 box-shadow p-6">
+                        <p class="text-lg font-bold text-gray-800 dark:text-slate-50">Kleurvarianten koppelen</p>
+                        <p
+                            class="text-sm text-gray-500 dark:text-slate-300 mb-4"
+                            data-cross-sell-subtitle
+                        >
+                            Deze producten zijn hetzelfde kleed in een andere kleur. Vink uit wat er niet bij hoort;
+                            de koppeling wordt over en weer vastgelegd en daarna naar WooCommerce gestuurd.
+                        </p>
+
+                        <div
+                            class="hidden rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-4"
+                            data-cross-sell-error
+                        ></div>
+
+                        <div class="grid gap-1 mb-4" data-cross-sell-body></div>
+
+                        <div class="flex items-center gap-2.5 pt-2">
+                            <button type="button" class="primary-button" data-cross-sell-accept>
+                                Koppelen
+                            </button>
+                            <button type="button" class="secondary-button" onclick="hideCrossSellModal()" data-cross-sell-cancel>
+                                Annuleren
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </x-admin::layouts.with-history>
 
 <script>
@@ -706,6 +757,148 @@
 
     function hideAiTextsModal() {
         document.getElementById('ai-texts-modal').classList.add('hidden');
+    }
+
+    /**
+     * Zoekt de kleurvarianten van dit product op en toont ze ter bevestiging.
+     *
+     * Twee stappen, want koppelen schrijft op meerdere producten tegelijk: het
+     * voorstel komt eerst in beeld en pas de bevestiging legt vast wat er nog
+     * aangevinkt staat.
+     */
+    function openCrossSellModal(button) {
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = 'Zoeken…';
+
+        fetch('{{ route('admin.catalog.products.cross-sells.candidates', ['productId' => $product->id]) }}', {
+            headers: {'Accept': 'application/json'},
+        })
+            .then(async (response) => {
+                const json = await response.json();
+                if (!response.ok) {
+                    throw new Error(json.message || 'De kleurvarianten konden niet worden opgehaald.');
+                }
+                return json;
+            })
+            .then((json) => showCrossSellModal(json))
+            .catch((error) => {
+                showCrossSellModal({error: error.message});
+                console.error('Kleurvarianten:', error);
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = original;
+            });
+    }
+
+    function showCrossSellModal(result) {
+        const modal = document.getElementById('cross-sell-modal');
+        const body = modal.querySelector('[data-cross-sell-body]');
+        const failure = modal.querySelector('[data-cross-sell-error]');
+        const subtitle = modal.querySelector('[data-cross-sell-subtitle]');
+        const accept = modal.querySelector('[data-cross-sell-accept]');
+        const cancel = modal.querySelector('[data-cross-sell-cancel]');
+
+        const candidates = result.candidates || [];
+        // Het product zelf hoort altijd in de lijst: de koppeling is
+        // symmetrisch en draagt zichzelf, net als de bestaande cross-sells.
+        const rows = result.product ? [result.product, ...candidates] : [];
+        const connectable = candidates.length > 0;
+
+        body.replaceChildren();
+
+        failure.textContent = result.error || '';
+        failure.classList.toggle('hidden', !result.error);
+        subtitle.classList.toggle('hidden', !connectable);
+        accept.classList.toggle('hidden', !connectable);
+        cancel.textContent = connectable ? 'Annuleren' : 'Sluiten';
+
+        if (!result.error && !connectable) {
+            failure.textContent = 'Geen andere kleuren van dit kleed gevonden.';
+            failure.classList.remove('hidden');
+        }
+
+        rows.forEach((row, index) => {
+            const label = document.createElement('label');
+            label.className = 'flex items-center gap-2 text-sm text-gray-800 dark:text-slate-50 border rounded-md p-2 dark:border-gray-800';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = row.selected;
+            checkbox.value = row.sku;
+            checkbox.dataset.crossSellSku = row.sku;
+            // Het product waar je vandaan komt hoort er per definitie bij.
+            checkbox.disabled = index === 0;
+
+            const text = document.createElement('span');
+            text.textContent = row.naam + ' — ' + row.sku
+                + (index === 0 ? ' (dit product)' : '')
+                + (row.already_linked ? ' · al gekoppeld' : '');
+
+            label.appendChild(checkbox);
+            label.appendChild(text);
+            body.appendChild(label);
+        });
+
+        accept.onclick = () => connectCrossSells(accept);
+
+        modal.classList.remove('hidden');
+    }
+
+    function connectCrossSells(accept) {
+        const modal = document.getElementById('cross-sell-modal');
+        const failure = modal.querySelector('[data-cross-sell-error]');
+
+        const skus = [...modal.querySelectorAll('[data-cross-sell-sku]')]
+            .filter((checkbox) => checkbox.checked || checkbox.disabled)
+            .map((checkbox) => checkbox.value);
+
+        if (skus.length < 2) {
+            failure.textContent = 'Vink minstens één ander product aan om aan te koppelen.';
+            failure.classList.remove('hidden');
+
+            return;
+        }
+
+        const original = accept.innerHTML;
+        accept.disabled = true;
+        accept.innerHTML = 'Bezig…';
+
+        fetch('{{ route('admin.catalog.products.cross-sells.connect') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value,
+            },
+            body: JSON.stringify({skus: skus}),
+        })
+            .then(async (response) => {
+                const json = await response.json();
+                if (!response.ok) {
+                    throw new Error(json.message || 'Koppelen is niet gelukt.');
+                }
+                return json;
+            })
+            .then((json) => {
+                alert(json.message);
+                // Herladen, zodat het blok "Cross Sells" de nieuwe koppeling toont.
+                window.location.reload();
+            })
+            .catch((error) => {
+                failure.textContent = error.message;
+                failure.classList.remove('hidden');
+                console.error('Kleurvarianten koppelen:', error);
+            })
+            .finally(() => {
+                accept.disabled = false;
+                accept.innerHTML = original;
+            });
+    }
+
+    function hideCrossSellModal() {
+        document.getElementById('cross-sell-modal').classList.add('hidden');
     }
 
     /**
