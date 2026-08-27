@@ -177,7 +177,7 @@ class CompetitorPricingService
         }
 
         $size = trim((string) ($common['maat'] ?? ''));
-        $surcharge = config('rugs.underrugs_cost')[$size] ?? null;
+        $surcharge = $this->productService->underrugSurcharge($variant);
 
         if ($surcharge === null) {
             Log::warning('Geen onderkleed-toeslag voor maat; met-onderkleed-variant niet bijgewerkt', [

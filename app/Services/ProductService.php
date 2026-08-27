@@ -67,7 +67,7 @@ class ProductService
             return '0';
         }
 
-        $price = (float) ($withoutOnderkleed->values['common']['prijs']['EUR'] ?? 0);
+        $price = (float) ($this->commonValues($withoutOnderkleed)['prijs']['EUR'] ?? 0);
 
         $surcharge = $this->underrugSurcharge($product);
 
@@ -95,7 +95,7 @@ class ProductService
             return null;
         }
 
-        $advies = $withoutOnderkleed->values['common']['adviesverkoopprijs']['EUR'] ?? null;
+        $advies = $this->commonValues($withoutOnderkleed)['adviesverkoopprijs']['EUR'] ?? null;
 
         if (is_null($advies) || $advies === '') {
             return null;
@@ -106,26 +106,78 @@ class ProductService
         return (string) ((float) $advies + $surcharge);
     }
 
+    /**
+     * De variant van hetzelfde hoofdproduct in dezelfde maat, maar met het
+     * andere onderkleed.
+     *
+     * De vergelijking loopt door PHP en niet meer door een `values->common->…`
+     * SQL-match: die miste elke tegenvariant met een andere schrijfwijze van de
+     * maat ('Rond 240 cm' naast '240 cm Rond') en elke rij waarvan de
+     * `values`-kolom dubbel gecodeerd in de database staat.
+     */
     public function getUnderrugAlternative(Product $product): ?Product
     {
         if (is_null($product->parent)) {
             return null;
         }
 
-        $underrug = $product->values['common']['onderkleed'] ?? null;
+        $common = $this->commonValues($product);
+
+        $underrug = $common['onderkleed'] ?? null;
         if (is_null($underrug)) {
             return null;
         }
 
-        $otherUnderrug = match ($underrug) {
-            'Zonder onderkleed' => 'Met onderkleed',
-            default             => 'Zonder onderkleed',
-        };
-        $size = $product->values['common']['maat'] ?? null;
+        $otherUnderrug = $this->normaliseLabel($underrug) === 'zonder onderkleed'
+            ? 'met onderkleed'
+            : 'zonder onderkleed';
 
-        // Get other inverse of onderkleed
+        $size = $this->normaliseSizeKey((string) ($common['maat'] ?? ''));
 
-        return $product->parent->variants()->where('values->common->maat', $size)->where('values->common->onderkleed', $otherUnderrug)->first();
+        // Zonder maat valt niet vast te stellen wélke tegenvariant het is; dan
+        // liever niets dan de verkeerde prijs koppelen.
+        if ($size === '') {
+            return null;
+        }
+
+        return $product->parent->variants->first(function (Product $variant) use ($product, $otherUnderrug, $size): bool {
+            if ($variant->id === $product->id) {
+                return false;
+            }
+
+            $values = $this->commonValues($variant);
+
+            return $this->normaliseLabel($values['onderkleed'] ?? null) === $otherUnderrug
+                && $this->normaliseSizeKey((string) ($values['maat'] ?? '')) === $size;
+        });
+    }
+
+    /**
+     * De `values.common` van een product, ook wanneer de kolom dubbel gecodeerd
+     * is opgeslagen — de cast levert dan een JSON-string op waar array-toegang
+     * stilzwijgend niets uit haalt.
+     *
+     * @return array<string, mixed>
+     */
+    public function commonValues(Product $product): array
+    {
+        $values = $product->values;
+
+        for ($depth = 0; is_string($values) && $depth < 5; $depth++) {
+            $values = json_decode($values, true);
+        }
+
+        return is_array($values) && is_array($values['common'] ?? null) ? $values['common'] : [];
+    }
+
+    /**
+     * Een tekstwaarde uit values.common op vergelijkbare vorm.
+     */
+    private function normaliseLabel(mixed $label): string
+    {
+        return is_string($label)
+            ? mb_strtolower(trim((string) preg_replace('/\s+/', ' ', $label)))
+            : '';
     }
 
     public function triggerWCSyncForParent(Product $product): void
@@ -270,7 +322,7 @@ class ProductService
      */
     private function assertMetOnderkleed(Product $product): ?Product
     {
-        if (($product->values['common']['onderkleed'] ?? null) !== 'Met onderkleed') {
+        if ($this->normaliseLabel($this->commonValues($product)['onderkleed'] ?? null) !== 'met onderkleed') {
             throw new \Exception('Moet zonder onderkleed zijn');
         }
 
@@ -280,20 +332,67 @@ class ProductService
     /**
      * De onderkleedtoeslag voor de maat van dit product, of null wanneer die
      * maat niet in de tarieventabel staat.
+     *
+     * De maat wordt genormaliseerd opgezocht: de catalogus schrijft dezelfde
+     * ronde maat als 'Rond 240 cm', '240 cm Rond' en '240 cm rond', terwijl de
+     * tarieventabel er maar één spelling van kent. Staat de maat er alsnog niet
+     * in, dan telt de maatgroep — die is per definitie wel een tabelmaat.
      */
-    private function underrugSurcharge(Product $product): ?float
+    public function underrugSurcharge(Product $product): ?float
     {
-        $size = $product->values['common']['maat'] ?? null;
-        $size = ! is_null($size) ? trim($size) : null;
+        $costs = $this->underrugCosts();
+        $common = $this->commonValues($product);
 
-        $plusPrice = config('rugs.underrugs_cost')[$size] ?? null;
+        foreach (['maat', 'maatgroep'] as $attribute) {
+            $size = $common[$attribute] ?? null;
 
-        if (is_null($plusPrice)) {
-            Log::warning('Underrugs cost not found for size', ['size' => $size, 'costs' => config('rugs.underrugs_cost')]);
+            if (! is_string($size) || trim($size) === '') {
+                continue;
+            }
 
-            return null;
+            $plusPrice = $costs[$this->normaliseSizeKey($size)] ?? null;
+
+            if (! is_null($plusPrice)) {
+                return (float) $plusPrice;
+            }
         }
 
-        return (float) $plusPrice;
+        Log::warning('Underrugs cost not found for size', [
+            'maat'      => $common['maat'] ?? null,
+            'maatgroep' => $common['maatgroep'] ?? null,
+        ]);
+
+        return null;
+    }
+
+    /**
+     * De tarieventabel op genormaliseerde sleutel.
+     *
+     * @return array<string, int|null>
+     */
+    private function underrugCosts(): array
+    {
+        $costs = [];
+
+        foreach ((array) config('rugs.underrugs_cost') as $size => $plusPrice) {
+            $costs[$this->normaliseSizeKey((string) $size)] = $plusPrice;
+        }
+
+        return $costs;
+    }
+
+    /**
+     * Eén schrijfwijze per maat: kleine letters, enkele spaties, en ronde maten
+     * altijd als 'rond <n> cm', ongeacht waar het woord 'rond' stond.
+     */
+    private function normaliseSizeKey(string $size): string
+    {
+        $key = mb_strtolower(trim((string) preg_replace('/\s+/', ' ', $size)));
+
+        if (str_contains($key, 'rond') && preg_match('/^(?:rond )?(\d+)(?: cm)?(?: rond)?$/', $key, $matches) === 1) {
+            return "rond {$matches[1]} cm";
+        }
+
+        return $key;
     }
 }

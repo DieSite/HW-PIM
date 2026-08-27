@@ -384,6 +384,25 @@ it('carries a discount over to the met-onderkleed sibling with the surcharge int
         ->and($history->reason)->toContain('onderkleedtoeslag');
 });
 
+it('carries the discount over for a round size however the maat is spelled', function () {
+    Queue::fake();
+
+    // De catalogus schrijft dezelfde ronde maat op meerdere manieren; de
+    // tarieventabel kent er maar één. Zonder normalisatie bleef de bundel op
+    // zijn oude prijs staan.
+    $surcharge = config('rugs.underrugs_cost')['Rond 240 cm'];
+    [$zonder, $met] = makeOnderkleedPair('240 cm Rond', 1299, 1299 + $surcharge);
+
+    CompetitorPrice::create([
+        'sku' => $zonder->sku, 'shop' => 'kleed.nl', 'price' => 1100.00,
+        'url' => 'https://www.kleed.nl/diamante-01.html', 'scraped_at' => now(),
+    ]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$zonder->sku]);
+
+    expect((float) $met->fresh()->values['common']['prijs']['EUR'])->toBe(1100.0 + $surcharge);
+});
+
 it('does not touch the met-onderkleed sibling when the size has no known surcharge', function () {
     Queue::fake();
 

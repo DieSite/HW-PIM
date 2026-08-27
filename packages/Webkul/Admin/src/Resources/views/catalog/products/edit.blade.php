@@ -779,18 +779,23 @@
     /**
      * Een prijsveld vullen. De inputs zitten in een VeeValidate <v-field>, die
      * een losse .value niet ziet — vandaar beide events.
+     *
+     * Geeft terug of het veld er was: staat het niet op dit scherm, dan moet de
+     * knop dat zeggen in plaats van stilletjes niets te doen.
      */
     function setPriceField(code, value) {
         const input = document.querySelector('input[name="values[common][' + code + '][EUR]"]');
 
         if (!input) {
-            return;
+            return false;
         }
 
         input.value = value;
 
         input.dispatchEvent(new Event('input', {bubbles: true}));
         input.dispatchEvent(new Event('change', {bubbles: true}));
+
+        return true;
     }
 
     function calcMetOnderkleed() {
@@ -807,7 +812,21 @@
         })
             .then(response => response.json())
             .then(data => {
-                let message = 'De zonder onderkleed prijs is: €' + data.original_price
+                // Niets te berekenen: zeg waarom, in plaats van een bevestiging
+                // met een prijs die nergens op slaat.
+                if (data.error) {
+                    alert(data.error);
+
+                    return;
+                }
+
+                let message = '';
+
+                if (data.warning) {
+                    message += data.warning + '\n\n';
+                }
+
+                message += 'De zonder onderkleed prijs is: €' + data.original_price
                     + '\nBerekende prijs is: €' + data.price;
 
                 if (data.advies_price) {
@@ -818,7 +837,11 @@
                 message += '\n\n(Vergeet niet op te slaan na het bevestigen van de prijs)';
 
                 if (confirm(message)) {
-                    setPriceField('prijs', data.price);
+                    if (!setPriceField('prijs', data.price)) {
+                        alert('Het prijsveld staat niet op dit scherm, dus de prijs is niet ingevuld.');
+
+                        return;
+                    }
 
                     // De adviesverkoopprijs is het plafond waar de dynamische
                     // prijsbepaling de bundelprijs tegenaan legt; die moet dus
