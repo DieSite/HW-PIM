@@ -124,7 +124,7 @@ class RunCompetitorAnalysisCommand extends Command
 
                 // --omit=dev skips the Playwright devDependency (and its Chromium
                 // download): the `volledig` pipeline is plain Node HTTP.
-                if (! $this->process(['npm', 'install', '--omit=dev'], $dir, 600)) {
+                if (! $this->process([$this->nodeBin().'/npm', 'install', '--omit=dev'], $dir, 600)) {
                     throw new \Exception('Scraper dependencies failed to install');
                 }
             }
@@ -132,7 +132,7 @@ class RunCompetitorAnalysisCommand extends Command
             $this->info('Running competitor scraper (this can take several minutes)…');
 
             $success = $this->process(
-                ['node', 'catalog-volledig/run.js'],
+                [$this->nodeBin().'/node', 'catalog-volledig/run.js'],
                 $dir,
                 (int) config('competitor_pricing.scraper_timeout'),
                 [
@@ -176,12 +176,31 @@ class RunCompetitorAnalysisCommand extends Command
     }
 
     /**
+     * Directory holding the node/npm toolchain this pipeline must run on.
+     *
+     * The scraper depends on better-sqlite3, a native addon compiled against a
+     * single Node major, and the schedule invokes this command from cron —
+     * where PATH is whatever crond hands us and may lead with an ancient Node
+     * whose bundled npm cannot even parse modern npm's source. Resolving `node`
+     * and `npm` against that PATH is what silently broke the nightly run, so
+     * the toolchain is pinned here exactly as the hordeuren jobs pin it.
+     *
+     * @see \App\Jobs\Concerns\HordeurenScraperEnvironment
+     */
+    private function nodeBin(): string
+    {
+        return rtrim((string) config('competitor_pricing.node_bin'), '/');
+    }
+
+    /**
      * @param  array<int, string>  $command
      * @param  array<string, string>  $env
      */
     private function process(array $command, string $cwd, int $timeout, array $env = []): bool
     {
-        $process = new Process($command, $cwd, $env + ['PATH' => getenv('PATH')], null, $timeout);
+        $path = $this->nodeBin().':'.(getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin');
+
+        $process = new Process($command, $cwd, $env + ['PATH' => $path], null, $timeout);
 
         try {
             $process->mustRun(function (string $type, string $buffer): void {

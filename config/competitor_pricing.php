@@ -29,8 +29,14 @@ return [
     | from the product database at runtime by App\Services\CompetitorCatalogExporter
     | into a temporary CSV pointed at via CATALOG_CSV — no manual export needed.
     |
+    | node_bin pins the toolchain the scraper runs on. The nightly run comes in
+    | from cron, whose PATH is not the shell's and may lead with an ancient Node
+    | that neither better-sqlite3 (a native addon) nor modern npm survives, so
+    | `node` and `npm` are always invoked from here rather than resolved.
+    |
     */
     'scraper_dir'     => base_path('competitor-analysis'),
+    'node_bin'        => env('COMPETITOR_PRICING_NODE_BIN', '/usr/local/node-24/bin'),
     'concurrency'     => (int) env('COMPETITOR_PRICING_CONCURRENCY', 6),
     'scraper_timeout' => (int) env('COMPETITOR_PRICING_SCRAPER_TIMEOUT', 1800),
 

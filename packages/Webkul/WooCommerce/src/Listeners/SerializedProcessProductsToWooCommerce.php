@@ -4,7 +4,9 @@ namespace Webkul\WooCommerce\Listeners;
 
 use App\Enums\WooCommerceSyncEventStatus;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
+use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -24,13 +26,27 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
     public $timeout = 600;
 
     /**
-     * A re-sync is idempotent (the exporter upserts by SKU), so retry instead
-     * of dying when a worker is killed mid-run (deploy restart, OOM) — the
-     * expired reservation then re-runs the sync instead of surfacing as
-     * MaxAttemptsExceededException, and transient WooCommerce 5xx errors get
-     * a second chance too.
+     * Retries are bounded by retryUntil(), not by an attempt count.
+     * ThrottlesWooCommerceSync releases this job back onto the queue whenever
+     * the rate-limit window is full, and every release increments the attempt
+     * counter without the job ever having run — an attempt cap would fail a
+     * sync for nothing worse than waiting its turn behind a bulk export. The
+     * deadline keeps the counter out of the decision entirely, and a killed
+     * worker (deploy restart, OOM) stops burning lives with it.
+     *
+     * @var int
      */
-    public $tries = 3;
+    public $tries = 0;
+
+    /**
+     * Genuine failures stay bounded: this counter only advances when handle()
+     * actually threw, so a throttled release does not consume a life. A
+     * re-sync is idempotent (the exporter upserts by SKU), so transient
+     * WooCommerce 5xx errors are worth two more goes.
+     *
+     * @var int
+     */
+    public $maxExceptions = 3;
 
     public $backoff = 60;
 
@@ -51,11 +67,25 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
      * its own, so the delete() that retires it on success would find a closed
      * socket. {@see DisconnectsIdleRedis}
      *
+     * One slot of the outgoing WooCommerce budget is spent per product here —
+     * parent and variants alike, since each is its own job.
+     * {@see ThrottlesWooCommerceSync}
+     *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [new DisconnectsIdleRedis()];
+        return [new DisconnectsIdleRedis(), new ThrottlesWooCommerceSync()];
+    }
+
+    /**
+     * Long enough for the worst realistic backlog to drain at the configured
+     * rate limit — a throttled job must eventually run, not expire in the
+     * queue behind a bulk export.
+     */
+    public function retryUntil(): DateTimeInterface
+    {
+        return now()->addHours((int) config('woocommerce_sync.retry_deadline_hours'));
     }
 
     public function handle(): void

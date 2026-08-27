@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Jobs\Middleware\ThrottlesWooCommerceSync;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Queue\Events\JobFailed as QueueJobFailed;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\ParallelTesting;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
@@ -41,6 +44,17 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Schema::defaultStringLength(191);
+
+        /**
+         * Ceiling on outgoing WooCommerce product writes, one slot per
+         * product (a parent rug and each of its variants are separate jobs).
+         * Applied by {@see ThrottlesWooCommerceSync}; a job that finds the
+         * window full waits for the next one instead of being dropped.
+         */
+        RateLimiter::for(
+            ThrottlesWooCommerceSync::LIMITER,
+            fn () => Limit::perMinute((int) config('woocommerce_sync.rate_limit.per_minute'))
+        );
 
         ParallelTesting::setUpTestDatabase(function (string $database, int $token) {
             Artisan::call('db:seed');

@@ -9,8 +9,10 @@ use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
 use App\Exceptions\WoocommerceTimeoutException;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
+use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Models\Product;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -40,7 +42,24 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
     public const ACTION_UPDATE_VARIATION = 'updateVariation';
 
-    public $tries = 5;
+    /**
+     * Retries are bounded by retryUntil() rather than an attempt count: when
+     * this job is queued directly (the catalog.product.*.after listener path)
+     * ThrottlesWooCommerceSync may release it repeatedly while the rate-limit
+     * window is full, and each release increments the attempt counter without
+     * the job having run. {@see ThrottlesWooCommerceSync}
+     *
+     * @var int
+     */
+    public $tries = 0;
+
+    /**
+     * Only advances on a real exception, so throttled releases never consume
+     * a life. Matches the attempt cap this replaced.
+     *
+     * @var int
+     */
+    public $maxExceptions = 5;
 
     public $timeout = 600;
 
@@ -72,11 +91,25 @@ class ProcessProductsToWooCommerce implements ShouldQueue
      * its own, so the delete() that retires it on success would find a closed
      * socket. {@see DisconnectsIdleRedis}
      *
+     * The throttle is a no-op on the dispatchSync() path used by
+     * SerializedProcessProductsToWooCommerce, which has already spent this
+     * product's slot; it only bites when this job is queued in its own right.
+     * {@see ThrottlesWooCommerceSync}
+     *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [new DisconnectsIdleRedis()];
+        return [new DisconnectsIdleRedis(), new ThrottlesWooCommerceSync()];
+    }
+
+    /**
+     * Long enough for the worst realistic backlog to drain at the configured
+     * rate limit — a throttled job must eventually run, not expire waiting.
+     */
+    public function retryUntil(): DateTimeInterface
+    {
+        return now()->addHours((int) config('woocommerce_sync.retry_deadline_hours'));
     }
 
     public function handle(Exporter $exporter, WooCommerceService $connectorService, DataTransferMappingRepository $dataTransferMappingRepository, WooCommerceSyncEventRecorder $eventRecorder): void
