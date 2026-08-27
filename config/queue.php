@@ -118,6 +118,21 @@ return [
             'block_for'   => null,
         ],
 
+        /**
+         * AI text generation (GenerateAiDescriptionsJob orchestrator, the
+         * per-product generate jobs and the publish job). Kept off "long" so a
+         * run across thousands of products does not block a bulk edit, and off
+         * "default" whose short retry_after would re-reserve a job that is
+         * waiting on a slow model call. Served by "supervisor-ai".
+         */
+        'redis-ai' => [
+            'driver'      => 'redis',
+            'connection'  => 'default',
+            'queue'       => 'ai',
+            'retry_after' => 3600,
+            'block_for'   => null,
+        ],
+
     ],
 
     /*

@@ -1,15 +1,18 @@
 <?php
 
+use App\Jobs\ApplyAiDescriptionsJob;
 use App\Jobs\ApplyDeMunkStockJob;
 use App\Jobs\ApplyPhotoroomTransformationJob;
 use App\Jobs\BulkEditProductsJob;
 use App\Jobs\BulkSyncProductsWithBolComJob;
 use App\Jobs\FetchDeMunkCollectionStockJob;
+use App\Jobs\GenerateAiDescriptionsJob;
+use App\Jobs\GenerateProductDescriptionJob;
 use App\Jobs\ImportProductsJob;
-use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\ImportVoorraadDeMunkJob;
 use App\Jobs\ImportVoorraadEurogrosJob;
 use App\Jobs\MailHordeurenAnalysisReportJob;
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\NotifyMissingEurogrosEansJob;
 use App\Jobs\RunHordeurenAnalysisJob;
 use App\Jobs\ScrapeHordeurenCompetitorJob;
@@ -42,11 +45,14 @@ use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 function queueTimingJobFactories(): array
 {
     return [
+        ApplyAiDescriptionsJob::class          => fn () => new ApplyAiDescriptionsJob([1]),
         ApplyDeMunkStockJob::class             => fn () => new ApplyDeMunkStockJob(['BASIC']),
         ApplyPhotoroomTransformationJob::class => fn () => new ApplyPhotoroomTransformationJob(1, 'afbeelding'),
         BulkEditProductsJob::class             => fn () => new BulkEditProductsJob([], [], false, 0),
         BulkSyncProductsWithBolComJob::class   => fn () => new BulkSyncProductsWithBolComJob(),
         FetchDeMunkCollectionStockJob::class   => fn () => new FetchDeMunkCollectionStockJob('BASIC'),
+        GenerateAiDescriptionsJob::class       => fn () => new GenerateAiDescriptionsJob(1),
+        GenerateProductDescriptionJob::class   => fn () => new GenerateProductDescriptionJob(1, ['beschrijving_l'], 1),
         ImportProductsJob::class               => fn () => new ImportProductsJob('products.xlsx'),
         ImportVoorraadDeMunkJob::class         => fn () => new ImportVoorraadDeMunkJob(),
         ImportVoorraadEurogrosJob::class       => fn () => new ImportVoorraadEurogrosJob(),
@@ -165,13 +171,13 @@ it('drops idle redis sockets on every job that can outlive the redis idle timeou
         }
 
         expect(method_exists($job, 'middleware'))->toBeTrue(
-            "[{$class}] may run for {$timeout}s, past the ".REDIS_IDLE_TIMEOUT."s Redis idle timeout, so it must declare middleware() applying DisconnectsIdleRedis."
+            "[{$class}] may run for {$timeout}s, past the ".REDIS_IDLE_TIMEOUT.'s Redis idle timeout, so it must declare middleware() applying DisconnectsIdleRedis.'
         );
 
         $middleware = array_map(fn ($m) => $m::class, $job->middleware());
 
         expect(in_array(DisconnectsIdleRedis::class, $middleware, true))->toBeTrue(
-            "[{$class}] may run for {$timeout}s, past the ".REDIS_IDLE_TIMEOUT."s Redis idle timeout. Without DisconnectsIdleRedis the delete() that retires it on SUCCESS dies on a closed socket and the job comes back as an unexplained extra attempt."
+            "[{$class}] may run for {$timeout}s, past the ".REDIS_IDLE_TIMEOUT.'s Redis idle timeout. Without DisconnectsIdleRedis the delete() that retires it on SUCCESS dies on a closed socket and the job comes back as an unexplained extra attempt.'
         );
     }
 });

@@ -169,6 +169,13 @@ return [
         'params' => ['image_editor', 'settings'],
         'sort'   => 2,
         'icon'   => '',
+    ], [
+        'key'    => 'configuration.ai-texts',
+        'name'   => 'AI-teksten',
+        'route'  => 'admin.configuration.edit',
+        'params' => ['general', 'ai_texts'],
+        'sort'   => 3,
+        'icon'   => '',
     ],
 
     [
@@ -204,6 +211,18 @@ return [
         'key'        => 'tools.bulk-edit',
         'name'       => 'Bulk bewerken',
         'route'      => 'admin.tools.bulk-edit.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.ai-descriptions',
+        'name'       => 'AI-teksten',
+        'route'      => 'admin.tools.ai-descriptions.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.ai-descriptions-review',
+        'name'       => 'AI-teksten beoordelen',
+        'route'      => 'admin.tools.ai-descriptions.review',
         'sort'       => 14,
         'icon'       => 'icon-product',
     ], [

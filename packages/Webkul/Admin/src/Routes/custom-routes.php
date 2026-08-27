@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\AiDescriptionController;
 use App\Http\Controllers\BolSyncController;
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
 use App\Http\Controllers\PhotoroomController;
+use App\Http\Controllers\Tools\AiDescriptionsController;
 use App\Http\Controllers\Tools\BulkEditController;
 use App\Http\Controllers\Tools\DeMunkStockController;
 use App\Http\Controllers\Tools\ErroredProductsController;
@@ -19,6 +21,9 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::post('{attributeCode}/transform', [PhotoroomController::class, 'transform'])
             ->name('admin.catalog.products.photoroom.transform');
     });
+
+    Route::post('catalog/products/ai-description', [AiDescriptionController::class, 'generate'])
+        ->name('admin.catalog.products.ai-description.generate');
 });
 
 Route::group(['middleware' => ['web', 'admin']], function () {
@@ -41,6 +46,15 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::get('/bulk-edit', [BulkEditController::class, 'index'])->name('admin.tools.bulk-edit.index');
         Route::post('/bulk-edit/preview', [BulkEditController::class, 'preview'])->name('admin.tools.bulk-edit.preview');
         Route::post('/bulk-edit', [BulkEditController::class, 'apply'])->name('admin.tools.bulk-edit.apply');
+
+        Route::get('/ai-teksten', [AiDescriptionsController::class, 'index'])->name('admin.tools.ai-descriptions.index');
+        Route::post('/ai-teksten/preview', [AiDescriptionsController::class, 'preview'])->name('admin.tools.ai-descriptions.preview');
+        Route::post('/ai-teksten', [AiDescriptionsController::class, 'run'])->name('admin.tools.ai-descriptions.run');
+        Route::get('/ai-teksten/concepten', [AiDescriptionsController::class, 'review'])->name('admin.tools.ai-descriptions.review');
+        Route::post('/ai-teksten/concepten/{draft}/beoordeling', [AiDescriptionsController::class, 'decide'])->name('admin.tools.ai-descriptions.decide');
+        Route::post('/ai-teksten/concepten/{draft}/opnieuw', [AiDescriptionsController::class, 'regenerate'])->name('admin.tools.ai-descriptions.regenerate');
+        Route::post('/ai-teksten/concepten/{draft}/terugdraaien', [AiDescriptionsController::class, 'revert'])->name('admin.tools.ai-descriptions.revert');
+        Route::post('/ai-teksten/publiceren', [AiDescriptionsController::class, 'apply'])->name('admin.tools.ai-descriptions.apply');
 
         Route::get('/eurogros/voorraadlijst', [EurgrosController::class, 'downloadVoorraadlijst'])->name('admin.tools.eurgros.vooraadlijst');
 

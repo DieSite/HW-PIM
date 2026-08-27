@@ -55,31 +55,55 @@ class ProductService
         return "Bestel je vloerkleed $naam bij Huis & Wonen online of kom langs in ons Experience Center in Gorinchem. Huis & Wonen de vloerkleden specialist.";
     }
 
+    /**
+     * De bundelprijs: de prijs van de kale variant plus de onderkleedtoeslag
+     * voor die maat.
+     */
     public function calculateMetOnderkleedPrice(Product $product): string
     {
-        if ($product->values['common']['onderkleed'] !== 'Met onderkleed') {
-            throw new \Exception('Moet zonder onderkleed zijn');
-        }
+        $withoutOnderkleed = $this->assertMetOnderkleed($product);
 
-        $withOnderkleed = $this->getUnderrugAlternative($product);
-
-        if (is_null($withOnderkleed)) {
+        if (is_null($withoutOnderkleed)) {
             return '0';
         }
 
-        $price = (float) $withOnderkleed->values['common']['prijs']['EUR'];
-        $size = $product->values['common']['maat'] ?? null;
-        $size = ! is_null($size) ? trim($size) : null;
+        $price = (float) ($withoutOnderkleed->values['common']['prijs']['EUR'] ?? 0);
 
-        $plusPrice = config('rugs.underrugs_cost')[$size] ?? null;
+        $surcharge = $this->underrugSurcharge($product);
 
-        if (is_null($plusPrice)) {
-            Log::warning('Underrugs cost not found for size', ['size' => $size, 'costs' => config('rugs.underrugs_cost')]);
-
+        if (is_null($surcharge)) {
             return (string) $price;
         }
 
-        return (string) ($price + $plusPrice);
+        return (string) ($price + $surcharge);
+    }
+
+    /**
+     * Dezelfde afleiding voor de adviesverkoopprijs. Die is het plafond waar de
+     * dynamische prijsbepaling de bundelprijs tegenaan legt, dus hij moet
+     * meelopen met de kale variant; anders zakt de bundel terug naar een
+     * verouderd plafond.
+     *
+     * Null wanneer er niets te berekenen valt (geen tegenvariant, of die heeft
+     * zelf geen adviesverkoopprijs) — het veld blijft dan met rust.
+     */
+    public function calculateMetOnderkleedAdviesPrice(Product $product): ?string
+    {
+        $withoutOnderkleed = $this->assertMetOnderkleed($product);
+
+        if (is_null($withoutOnderkleed)) {
+            return null;
+        }
+
+        $advies = $withoutOnderkleed->values['common']['adviesverkoopprijs']['EUR'] ?? null;
+
+        if (is_null($advies) || $advies === '') {
+            return null;
+        }
+
+        $surcharge = $this->underrugSurcharge($product) ?? 0;
+
+        return (string) ((float) $advies + $surcharge);
     }
 
     public function getUnderrugAlternative(Product $product): ?Product
@@ -236,5 +260,40 @@ class ProductService
                 SyncProductWithBolComJob::dispatch($product, $credential, $previousSyncState, null, true);
             }
         }
+    }
+
+    /**
+     * De kale tegenvariant van een met-onderkleed-variant, of null als die er
+     * niet is.
+     *
+     * @throws \Exception wanneer het product zelf geen onderkleed heeft
+     */
+    private function assertMetOnderkleed(Product $product): ?Product
+    {
+        if (($product->values['common']['onderkleed'] ?? null) !== 'Met onderkleed') {
+            throw new \Exception('Moet zonder onderkleed zijn');
+        }
+
+        return $this->getUnderrugAlternative($product);
+    }
+
+    /**
+     * De onderkleedtoeslag voor de maat van dit product, of null wanneer die
+     * maat niet in de tarieventabel staat.
+     */
+    private function underrugSurcharge(Product $product): ?float
+    {
+        $size = $product->values['common']['maat'] ?? null;
+        $size = ! is_null($size) ? trim($size) : null;
+
+        $plusPrice = config('rugs.underrugs_cost')[$size] ?? null;
+
+        if (is_null($plusPrice)) {
+            Log::warning('Underrugs cost not found for size', ['size' => $size, 'costs' => config('rugs.underrugs_cost')]);
+
+            return null;
+        }
+
+        return (float) $plusPrice;
     }
 }

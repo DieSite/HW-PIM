@@ -268,6 +268,28 @@ return [
             'timeout'             => 5400,
             'nice'                => 0,
         ],
+
+        /**
+         * Dedicated worker for AI text generation on the "ai" queue (see
+         * config/queue.php redis-ai). Runs several processes because the work
+         * is one HTTP call per product and is bound by the provider's latency,
+         * not by this machine. timeout stays below the connection's
+         * retry_after (3600).
+         */
+        'supervisor-ai' => [
+            'connection'          => 'redis-ai',
+            'queue'               => ['ai'],
+            'balance'             => 'auto',
+            'autoScalingStrategy' => 'time',
+            'minProcesses'        => 1,
+            'maxProcesses'        => 4,
+            'maxTime'             => 0,
+            'maxJobs'             => 0,
+            'memory'              => 1024,
+            'tries'               => 1,
+            'timeout'             => 1800,
+            'nice'                => 0,
+        ],
     ],
 
     'environments' => [
@@ -289,6 +311,9 @@ return [
             'supervisor-long' => [
                 'maxProcesses' => 1,
             ],
+            'supervisor-ai' => [
+                'maxProcesses' => 4,
+            ],
         ],
 
         'local' => [
@@ -306,6 +331,9 @@ return [
             ],
             'supervisor-long' => [
                 'maxProcesses' => 1,
+            ],
+            'supervisor-ai' => [
+                'maxProcesses' => 2,
             ],
         ],
     ],

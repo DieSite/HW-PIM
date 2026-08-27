@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
+use App\Services\AI\AiSettings;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Queue\Events\JobFailed as QueueJobFailed;
 use Illuminate\Support\Facades\Artisan;
@@ -114,6 +115,34 @@ class AppServiceProvider extends ServiceProvider
                 'product' => $product,
             ])->render());
         });
+
+        // A per-field "write this one with AI" button under each text the
+        // generator can produce. The header button still does all three in a
+        // single call; this is for touching up one of them without paying for
+        // the other two.
+        Event::listen('unopim.admin.products.dynamic-attribute-fields.control.textarea.after', function (ViewRenderEventManager $event) {
+            $field = $event->getParam('field');
+
+            if (! $field || ! array_key_exists($field->code, (array) config('ai.fields'))) {
+                return;
+            }
+
+            if (! app(AiSettings::class)->enabled()) {
+                return;
+            }
+
+            // Descriptions live on the parent; a variant's text fields are all null.
+            $productId = request()->route('id');
+            $product = $productId ? WebkulProduct::find($productId) : null;
+
+            if (! $product instanceof WebkulProduct || $product->parent_id) {
+                return;
+            }
+
+            $event->addTemplate(view('admin::custom.aiTexts.field-button', [
+                'fieldCode' => $field->code,
+            ])->render());
+        });
     }
 
     /**
@@ -124,5 +153,6 @@ class AppServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(base_path('config/image_editor_settings.php'), 'core');
         $this->mergeConfigFrom(base_path('config/competitor_pricing_settings.php'), 'core');
         $this->mergeConfigFrom(base_path('config/afwerkingen_settings.php'), 'core');
+        $this->mergeConfigFrom(base_path('config/ai_settings.php'), 'core');
     }
 }

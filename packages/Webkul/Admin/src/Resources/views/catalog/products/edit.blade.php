@@ -52,6 +52,13 @@
                         <button type="button" onclick="getMetaFields()" class="secondary-button">
                             Meta velden genereren
                         </button>
+
+                        @if (app(\App\Services\AI\AiSettings::class)->enabled())
+                            <button type="button" onclick="generateAiTexts(this)" class="secondary-button flex items-center gap-1">
+                                <span class="icon-magic-wand text-sm"></span>
+                                Teksten genereren (AI)
+                            </button>
+                        @endif
                     @endif
 
                     <a href="{{ route('product.frontend', ['product' => $product->id]) }}" class="secondary-button"
@@ -474,6 +481,55 @@
     </x-admin::form>
 
     {!! view_render_event('unopim.admin.catalog.product.edit.after', ['product' => $product]) !!}
+
+    @if (is_null($product->parent_id) && (app(\App\Services\AI\AiSettings::class)->enabled()))
+        {{--
+            Het voorstel-venster voor de AI-teksten. De opmaak staat hier en niet
+            in JavaScript, omdat Tailwind alleen klassennamen compileert die het
+            in de bronbestanden terugvindt.
+        --}}
+        <div id="ai-texts-modal" class="hidden">
+            <div
+                class="fixed inset-0 bg-gray-500 bg-opacity-50 z-[10001]"
+                onclick="hideAiTextsModal()"
+            ></div>
+
+            <div class="fixed inset-0 z-[10002] overflow-y-auto">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="w-full max-w-[900px] max-h-[96%] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 box-shadow p-6">
+                        <p class="text-lg font-bold text-gray-800 dark:text-slate-50">Voorstel van de AI</p>
+                        <p
+                            class="text-sm text-gray-500 dark:text-slate-300 mb-4"
+                            data-ai-texts-subtitle
+                        >
+                            Neem je dit over, vergeet dan niet daarna op Opslaan te drukken.
+                        </p>
+
+                        <div
+                            class="hidden rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-4"
+                            data-ai-texts-error
+                        ></div>
+
+                        <div
+                            class="hidden rounded-md bg-orange-50 border border-orange-200 p-3 text-sm text-orange-600 mb-4"
+                            data-ai-texts-problems
+                        ></div>
+
+                        <div data-ai-texts-body></div>
+
+                        <div class="flex items-center gap-2.5 pt-2">
+                            <button type="button" class="primary-button" data-ai-texts-accept>
+                                Overnemen in het formulier
+                            </button>
+                            <button type="button" class="secondary-button" onclick="hideAiTextsModal()" data-ai-texts-cancel>
+                                Annuleren
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </x-admin::layouts.with-history>
 
 <script>
@@ -537,6 +593,206 @@
             });
     }
 
+    /**
+     * Vraag de AI om nieuwe teksten voor dit product en laat ze eerst zien.
+     *
+     * Er wordt niets opgeslagen: bij "Overnemen" worden alleen de velden in dit
+     * formulier gevuld, daarna moet je zelf nog op Opslaan drukken.
+     */
+    function generateAiTexts(button, fields) {
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="icon-magic-wand text-sm"></span> Bezig met schrijven…';
+
+        // Zonder veldenlijst schrijft één call alle teksten tegelijk; dat is
+        // goedkoper dan drie losse calls, want de opdracht en de foto worden
+        // dan gedeeld. Met een lijst betaal je alleen voor wat je vraagt.
+        //
+        // De formulierwaarden gaan altijd mee en gaan voor op wat is opgeslagen:
+        // bij een net aangemaakt product staat er nog niets in de database, en
+        // bij een wijziging wil je dat de AI de nieuwe kleur ziet, niet de oude.
+        const payload = {
+            product_id: {{ $product->id }},
+            values: readProductFormValues(),
+        };
+
+        if (fields && fields.length) {
+            payload.fields = fields;
+        }
+
+        fetch('{{ route('admin.catalog.products.ai-description.generate') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name=_token]').value,
+            },
+            body: JSON.stringify(payload),
+        })
+            .then(async (response) => {
+                const json = await response.json();
+                if (!response.ok) {
+                    throw new Error(json.message || 'De AI kon geen teksten schrijven.');
+                }
+                return json;
+            })
+            .then((json) => showAiTextsModal(json))
+            .catch((error) => {
+                showAiTextsModal({ texts: {}, error: error.message });
+                console.error('AI-teksten:', error);
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = original;
+            });
+    }
+
+    /**
+     * Vult en toont het voorstel-venster.
+     *
+     * Alle opmaak staat in de blade-markup hieronder, niet in strings hier:
+     * Tailwind scant geen klassennamen die alleen in JavaScript voorkomen, dus
+     * die zouden niet in de gecompileerde admin-CSS terechtkomen.
+     */
+    function showAiTextsModal(result) {
+        const labels = @json(collect(config('ai.fields'))->map(fn ($field) => $field['label']));
+        const modal = document.getElementById('ai-texts-modal');
+        const body = modal.querySelector('[data-ai-texts-body]');
+        const failure = modal.querySelector('[data-ai-texts-error]');
+        const warning = modal.querySelector('[data-ai-texts-problems]');
+        const subtitle = modal.querySelector('[data-ai-texts-subtitle]');
+        const accept = modal.querySelector('[data-ai-texts-accept]');
+        const cancel = modal.querySelector('[data-ai-texts-cancel]');
+
+        const texts = result.texts || {};
+        const hasTexts = Object.keys(texts).length > 0;
+
+        body.replaceChildren();
+        warning.replaceChildren();
+
+        failure.textContent = result.error || '';
+        failure.classList.toggle('hidden', !result.error);
+        warning.classList.toggle('hidden', !(result.problems && result.problems.length));
+        subtitle.classList.toggle('hidden', !hasTexts);
+        accept.classList.toggle('hidden', !hasTexts);
+        cancel.textContent = hasTexts ? 'Annuleren' : 'Sluiten';
+
+        (result.problems || []).forEach((problem) => {
+            const line = document.createElement('p');
+            line.textContent = problem.message;
+            warning.appendChild(line);
+        });
+
+        Object.keys(texts).forEach((code) => {
+            const label = document.createElement('p');
+            label.className = 'text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1';
+            label.textContent = labels[code] || code;
+
+            const text = document.createElement('div');
+            text.className = 'text-sm text-gray-800 dark:text-slate-50 border rounded-md p-3 dark:border-gray-800 mb-4';
+            text.innerHTML = texts[code];
+
+            body.appendChild(label);
+            body.appendChild(text);
+        });
+
+        accept.onclick = () => {
+            applyAiTexts(texts);
+            hideAiTextsModal();
+        };
+
+        modal.classList.remove('hidden');
+    }
+
+    function hideAiTextsModal() {
+        document.getElementById('ai-texts-modal').classList.add('hidden');
+    }
+
+    /**
+     * De huidige, mogelijk nog niet opgeslagen waarden uit het formulier.
+     *
+     * Namen zien eruit als values[common][merk] of values[common][prijs][EUR];
+     * die laatste vorm wordt genest teruggegeven, want zo staat hij ook in de
+     * database.
+     */
+    function readProductFormValues() {
+        const values = {};
+
+        document
+            .querySelectorAll('[name^="values[common]["]')
+            .forEach((input) => {
+                if (input.disabled || input.type === 'file') {
+                    return;
+                }
+
+                if ((input.type === 'checkbox' || input.type === 'radio') && !input.checked) {
+                    return;
+                }
+
+                const keys = [...input.name.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1]).slice(1);
+
+                if (!keys.length) {
+                    return;
+                }
+
+                const editor = window.tinymce ? tinymce.get(input.id) : null;
+                const value = editor ? editor.getContent() : input.value;
+
+                if (value === '' || value === null) {
+                    return;
+                }
+
+                if (keys.length === 1) {
+                    values[keys[0]] = value;
+                } else {
+                    values[keys[0]] = Object.assign({}, values[keys[0]], { [keys[1]]: value });
+                }
+            });
+
+        return values;
+    }
+
+    /**
+     * De velden zitten in een VeeValidate <v-field>, die een losse .value niet
+     * ziet. Vandaar zowel setContent op de TinyMCE-instantie als input/change
+     * op de onderliggende textarea — dezelfde aanpak als getMetaFields().
+     */
+    function applyAiTexts(texts) {
+        Object.keys(texts).forEach((code) => {
+            const editor = window.tinymce ? tinymce.get(code) : null;
+
+            if (editor) {
+                editor.setContent(texts[code]);
+                editor.fire('keyup');
+            }
+
+            const field = document.querySelector('[name="values[common][' + code + ']"]');
+
+            if (field) {
+                field.value = texts[code];
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    }
+
+    /**
+     * Een prijsveld vullen. De inputs zitten in een VeeValidate <v-field>, die
+     * een losse .value niet ziet — vandaar beide events.
+     */
+    function setPriceField(code, value) {
+        const input = document.querySelector('input[name="values[common][' + code + '][EUR]"]');
+
+        if (!input) {
+            return;
+        }
+
+        input.value = value;
+
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
     function calcMetOnderkleed() {
         const sku = document.querySelector('input[name="sku"]').value;
 
@@ -551,13 +807,26 @@
         })
             .then(response => response.json())
             .then(data => {
-                if (confirm('De zonder onderkleed prijs is: €' + data.original_price + '\nBerekende prijs is: €' + data.price + "\n(Vergeet niet op te slaan na het bevestigen van de prijs)")) {
-                    const input = document.querySelector('input[name="values[common][prijs][EUR]"]');
-                    input.value = data.price;
+                let message = 'De zonder onderkleed prijs is: €' + data.original_price
+                    + '\nBerekende prijs is: €' + data.price;
 
-                    // Trigger zowel 'input' als 'change' events
-                    input.dispatchEvent(new Event('input', {bubbles: true}));
-                    input.dispatchEvent(new Event('change', {bubbles: true}));
+                if (data.advies_price) {
+                    message += '\n\nDe zonder onderkleed adviesverkoopprijs is: €' + data.original_advies_price
+                        + '\nBerekende adviesverkoopprijs is: €' + data.advies_price;
+                }
+
+                message += '\n\n(Vergeet niet op te slaan na het bevestigen van de prijs)';
+
+                if (confirm(message)) {
+                    setPriceField('prijs', data.price);
+
+                    // De adviesverkoopprijs is het plafond waar de dynamische
+                    // prijsbepaling de bundelprijs tegenaan legt; die moet dus
+                    // meelopen. Ontbreekt hij op de kale variant, dan valt er
+                    // niets af te leiden en blijft het veld ongemoeid.
+                    if (data.advies_price) {
+                        setPriceField('adviesverkoopprijs', data.advies_price);
+                    }
                 }
             })
             .catch(error => {

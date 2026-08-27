@@ -57,16 +57,27 @@ class ProductHelperController extends Controller
         return response()->json(['meta_title' => $metaTitle, 'meta_description' => $metaDescription]);
     }
 
+    /**
+     * De afgeleide prijs en adviesverkoopprijs van een met-onderkleed-variant.
+     *
+     * De adviesverkoopprijs is null wanneer de kale variant er zelf geen heeft;
+     * de knop laat dat veld dan ongemoeid.
+     */
     public function price(Request $request)
     {
         $sku = $request->input('sku');
 
         $product = Product::where('sku', $sku)->first();
 
-        $price = $this->productService->calculateMetOnderkleedPrice($product);
-        $original = $this->productService->getUnderrugAlternative($product)->values['common']['prijs']['EUR'];
+        $withoutOnderkleed = $this->productService->getUnderrugAlternative($product);
+        $base = $withoutOnderkleed !== null ? ($withoutOnderkleed->values['common'] ?? []) : [];
 
-        return response()->json(['price' => $price, 'original_price' => $original]);
+        return response()->json([
+            'price'                 => $this->productService->calculateMetOnderkleedPrice($product),
+            'original_price'        => $base['prijs']['EUR'] ?? null,
+            'advies_price'          => $this->productService->calculateMetOnderkleedAdviesPrice($product),
+            'original_advies_price' => $base['adviesverkoopprijs']['EUR'] ?? null,
+        ]);
     }
 
     public function sku(Request $request)

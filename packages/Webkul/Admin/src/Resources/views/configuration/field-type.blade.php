@@ -89,7 +89,30 @@
 
         <!-- Select input -->
         @elseif ($field['type'] == 'select')
-            @php $selectedOption = core()->getConfigData($nameKey) ?? ''; @endphp
+            @php
+                $selectedOption = core()->getConfigData($nameKey) ?? '';
+
+                /**
+                 * type="select" renders <v-select-handler>, a Vue component that
+                 * reads its choices from an :options prop. Passing <option> tags
+                 * as slot content leaves the dropdown showing "List is empty",
+                 * so build the array the component actually expects.
+                 */
+                $selectOptions = [];
+
+                if (isset($field['repository'])) {
+                    foreach ($value as $key => $option) {
+                        $selectOptions[] = ['value' => $key, 'title' => trans($option)];
+                    }
+                } else {
+                    foreach ($field['options'] ?? [] as $option) {
+                        $selectOptions[] = [
+                            'value' => $option['value'] ?? 0,
+                            'title' => trans($option['title']),
+                        ];
+                    }
+                }
+            @endphp
 
             <x-admin::form.control-group.control
                 type="select"
@@ -98,27 +121,10 @@
                 :rules="$validations"
                 :value="$selectedOption"
                 :label="trans($field['title'])"
-            >
-                @if (isset($field['repository']))
-                    @foreach ($value as $key => $option)
-                        <option
-                            value="{{ $key }}"
-                            {{ $key == $selectedOption ? 'selected' : ''}}
-                        >
-                            @lang($option)
-                        </option>
-                    @endforeach
-                @else
-                    @foreach ($field['options'] as $option)
-                        <option
-                            value="{{ $option['value'] ?? 0 }}"
-                            {{ $value == $selectedOption ? 'selected' : ''}}
-                        >
-                            @lang($option['title'])
-                        </option>
-                    @endforeach
-                @endif
-            </x-admin::form.control-group.control>
+                :options="json_encode($selectOptions)"
+                track-by="value"
+                label-by="title"
+            />
 
         <!-- Multiselect Input -->
         @elseif ($field['type'] == 'multiselect')
