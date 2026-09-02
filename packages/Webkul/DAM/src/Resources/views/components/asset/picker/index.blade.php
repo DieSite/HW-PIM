@@ -69,7 +69,7 @@
         app.component('v-asset-picker', {
             template: '#v-asset-picker-template',
 
-            props: ['src'],
+            props: ['src', 'defaultSearch'],
 
             data() {
                 return {
@@ -128,7 +128,18 @@
 
             mounted() {
                 this.$emitter.on('data-grid:reset-all-filters', () => {
-                   this.applied.filters.columns = [{index: 'all',value: []}];
+                   /**
+                    * Picking a directory clears the filters, including the search the picker
+                    * opened on. Keep that one as long as it is still untouched, otherwise the
+                    * default selection of the directory tree wipes it right after boot.
+                    */
+                   let search = this.findAppliedColumn('all')?.value ?? [];
+
+                   let keep = this.defaultSearch && search[0] === this.defaultSearch
+                       ? [this.defaultSearch]
+                       : [];
+
+                   this.applied.filters.columns = [{index: 'all',value: keep}];
                    this.applied.pagination.page = 1;
                 });
 
@@ -157,12 +168,6 @@
 
                     const urlParams = new URLSearchParams(window.location.search);
 
-                    if (urlParams.has('search')) {
-                        let searchAppliedColumn = this.findAppliedColumn('all');
-
-                        searchAppliedColumn.value = [urlParams.get('search')];
-                    }
-
                     if (datagrids?.length) {
                         const currentDatagrid = datagrids.find(({ src }) => src === this.src);
 
@@ -172,20 +177,43 @@
                             this.applied.sort = currentDatagrid.applied.sort;
 
                             this.applied.filters = currentDatagrid.applied.filters;
-
-                            if (urlParams.has('search')) {
-                                let searchAppliedColumn = this.findAppliedColumn('all');
-
-                                searchAppliedColumn.value = [urlParams.get('search')];
-                            }
-
-                            this.get();
-
-                            return;
                         }
                     }
 
+                    if (urlParams.has('search')) {
+                        this.applySearch(urlParams.get('search'));
+                    } else if (this.defaultSearch) {
+                        /**
+                         * Opened from a record that knows what it is looking for - a product
+                         * for instance - so start on its own search term instead of on the
+                         * last one used somewhere else.
+                         */
+                        this.applySearch(this.defaultSearch);
+                    }
+
                     this.get();
+                },
+
+                /**
+                 * Put a value in the toolbar search, adding the `all` column when the
+                 * restored filters happen to no longer carry it.
+                 *
+                 * @param {string} value
+                 * @returns {void}
+                 */
+                applySearch(value) {
+                    let searchAppliedColumn = this.findAppliedColumn('all');
+
+                    if (searchAppliedColumn) {
+                        searchAppliedColumn.value = [value];
+                    } else {
+                        this.applied.filters.columns.push({
+                            index: 'all',
+                            value: [value],
+                        });
+                    }
+
+                    this.applied.pagination.page = 1;
                 },
 
                 /**

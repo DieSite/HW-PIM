@@ -202,17 +202,43 @@ class AssetDataGrid extends DataGrid
     }
 
     /**
+     * Split a free text search into separate terms, so that a product name like
+     * "Malta 4873" also finds an asset named "HW-Huis-Wonen-Malta-1-Beige-4873".
+     * Every term has to match, but each may match a different searchable column.
+     *
+     * @return array<int, string>
+     */
+    protected function splitSearchTerms(string $value): array
+    {
+        $terms = preg_split('/[\s\-_]+/u', trim($value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $terms = array_values(array_filter(
+            $terms,
+            fn (string $term): bool => (bool) preg_match('/[\p{L}\p{N}]/u', $term)
+        ));
+
+        return $terms ?: [trim($value)];
+    }
+
+    /**
      * {@inheritDoc}
      */
     public function processRequestedFilters(array $requestedFilters)
     {
         foreach ($requestedFilters as $requestedColumn => $requestedValues) {
             if ($requestedColumn === 'all') {
-                $this->queryBuilder->where(function ($scopeQueryBuilder) use ($requestedValues) {
+                $searchableColumns = collect($this->columns)
+                    ->filter(fn ($column) => $column->searchable && $column->type !== ColumnTypeEnum::BOOLEAN->value);
+
+                $this->queryBuilder->where(function ($scopeQueryBuilder) use ($requestedValues, $searchableColumns) {
                     foreach ($requestedValues as $value) {
-                        collect($this->columns)
-                            ->filter(fn ($column) => $column->searchable && $column->type !== ColumnTypeEnum::BOOLEAN->value)
-                            ->each(fn ($column) => $scopeQueryBuilder->orWhere($column->getDatabaseColumnName(), 'LIKE', '%'.$value.'%'));
+                        $scopeQueryBuilder->orWhere(function ($valueQueryBuilder) use ($value, $searchableColumns) {
+                            foreach ($this->splitSearchTerms((string) $value) as $term) {
+                                $valueQueryBuilder->where(function ($termQueryBuilder) use ($term, $searchableColumns) {
+                                    $searchableColumns->each(fn ($column) => $termQueryBuilder->orWhere($column->getDatabaseColumnName(), 'LIKE', '%'.$term.'%'));
+                                });
+                            }
+                        });
                     }
                 });
             } else {

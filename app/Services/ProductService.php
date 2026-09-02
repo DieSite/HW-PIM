@@ -167,6 +167,22 @@ class ProductService
     }
 
     /**
+     * De zoekterm waarmee de DAM-assetkiezer standaard opent: de productnaam,
+     * met terugval op die van de parent voor varianten die hem niet zelf
+     * hebben ingevuld.
+     */
+    public function assetSearchTerm(Product $product): string
+    {
+        $name = trim((string) ($this->commonValues($product)['productnaam'] ?? ''));
+
+        if ($name === '' && $product->parent) {
+            $name = trim((string) ($this->commonValues($product->parent)['productnaam'] ?? ''));
+        }
+
+        return $name;
+    }
+
+    /**
      * De volledige `values` van een product, met dezelfde tolerantie voor een
      * dubbel gecodeerde kolom.
      *

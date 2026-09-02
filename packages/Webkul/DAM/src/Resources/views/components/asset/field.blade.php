@@ -1,8 +1,9 @@
 @props([
-    'name'        => 'assets',
-    'assetValues' => [],
-    'width'       => '120px',
-    'height'      => '120px'
+    'name'          => 'assets',
+    'assetValues'   => [],
+    'width'         => '120px',
+    'height'        => '120px',
+    'defaultSearch' => ''
 ])
 
 <v-asset-field
@@ -10,6 +11,7 @@
     asset-values="{{ (is_array($assetValues) ? implode(',', $assetValues) : $assetValues) }}"
     width="{{ $width }}"
     height="{{ $height }}"
+    default-search="{{ $defaultSearch }}"
     :errors="errors"
 >
     <x-admin::shimmer.image class="w-[110px] h-[110px] rounded"/>
@@ -84,6 +86,7 @@
 
                                 <x-dam::asset.picker
                                     :src="route('admin.dam.asset_picker.index')"
+                                    ::default-search="defaultSearch"
                                     ref="datagrid"
                                 >
                                     <template #body-header="{ records, meta, massActions, selectAllRecords }">
@@ -269,6 +272,11 @@
                 height: {
                     type: String,
                     default: '120px'
+                },
+
+                defaultSearch: {
+                    type: String,
+                    default: ''
                 },
 
                 errors: {

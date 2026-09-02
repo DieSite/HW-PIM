@@ -72,7 +72,7 @@
             </div>
         </div>
 
-        {!! view_render_event('unopim.admin.products.dynamic-attribute-fields.control.'.$fieldType.'.before', ['field' => $field, 'value' => $value, 'fieldName' => $fieldName]) !!}
+        {!! view_render_event('unopim.admin.products.dynamic-attribute-fields.control.'.$fieldType.'.before', ['field' => $field, 'value' => $value, 'fieldName' => $fieldName, 'productId' => $productId]) !!}
 
         @switch ($fieldType)
             @case ('checkbox')
@@ -310,7 +310,7 @@
             />
         @endIf
 
-        {!! view_render_event('unopim.admin.products.dynamic-attribute-fields.control.'.$fieldType.'.after', ['field' => $field, 'value' => $value, 'fieldName' => $fieldName]) !!}
+        {!! view_render_event('unopim.admin.products.dynamic-attribute-fields.control.'.$fieldType.'.after', ['field' => $field, 'value' => $value, 'fieldName' => $fieldName, 'productId' => $productId]) !!}
 
         <x-admin::form.control-group.error :control-name="$fieldName" />
     </x-admin::form.control-group>
