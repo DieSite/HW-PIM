@@ -26,6 +26,7 @@ class ProductDescriptionGenerator
         private readonly ProductImageResolver $images,
         private readonly DescriptionValidator $validator,
         private readonly SiblingTextRepository $siblings,
+        private readonly TextRepairer $repairer,
     ) {}
 
     /**
@@ -111,6 +112,8 @@ class ProductDescriptionGenerator
 
         OPMAAK
         - Lever elke tekst als HTML met alleen <p>-tags. Geen andere tags, geen attributen.
+        - Schrijf accenten als gewone letters: gemêleerd, reliëf, crème. Geen HTML-entiteiten
+          (&ecirc;) en geen losse leestekens in plaats van een accent (gem#leerd, gem'eleerd).
         - Antwoord uitsluitend met het gevraagde JSON-object, zonder toelichting eromheen.
         TXT;
 
@@ -391,7 +394,7 @@ class ProductDescriptionGenerator
                 throw new RuntimeException("Model leverde geen tekst voor \"{$field}\".");
             }
 
-            $texts[$field] = $this->validator->normaliseHtml($value);
+            $texts[$field] = $this->validator->normaliseHtml($this->repairer->repair($value));
         }
 
         return $texts;

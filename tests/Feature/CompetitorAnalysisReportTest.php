@@ -543,3 +543,74 @@ it('writes every change to the CSV with its reason and source URL', function () 
         ->toContain('CARTEST-A;1000,00;900,00;-100,00;-10,0;Concurrent;shopa.nl')
         ->toContain('https://shopa.nl/kleed');
 });
+
+it('counts a price as confirmed while it is still within the refresh cycle', function () {
+    config()->set('competitor_pricing.refresh_days', 7);
+
+    // Index shops hand over their whole catalogue every night; the custom shops
+    // are fetched page by page and are only due once a week. Judged per run,
+    // the four custom rows below look dead on six nights out of seven — which
+    // is what put the refresh rate at 25% and called healthy shops silent.
+    CompetitorPrice::create(['sku' => 'CARTEST-R1', 'shop' => 'index.nl', 'price' => 500, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-R2', 'shop' => 'custom.nl', 'price' => 600, 'scraped_at' => now()->subDays(5)]);
+    CompetitorPrice::create(['sku' => 'CARTEST-R3', 'shop' => 'custom.nl', 'price' => 610, 'scraped_at' => now()->subDays(5)]);
+    CompetitorPrice::create(['sku' => 'CARTEST-R4', 'shop' => 'custom.nl', 'price' => 620, 'scraped_at' => now()->subDays(5)]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+
+    expect(reportCheck($report, 'refresh_rate')['status'])->toBe('ok')
+        ->and(reportCheck($report, 'refresh_rate')['value'])->toContain('4 van 4')
+        ->and(reportCheck($report, 'silent_shops')['status'])->toBe('ok')
+        ->and(reportCheck($report, 'partial_shops')['status'])->toBe('ok')
+        ->and($report['coverage']['fresh'])->toBe(4);
+});
+
+it('still alerts when prices go unconfirmed for longer than the refresh cycle', function () {
+    config()->set('competitor_pricing.refresh_days', 7);
+
+    CompetitorPrice::create(['sku' => 'CARTEST-S1', 'shop' => 'index.nl', 'price' => 500, 'scraped_at' => now()]);
+
+    // The met-onderkleed leftovers were exactly this: real prices in the table
+    // that the scraper stopped visiting months ago.
+    foreach (['CARTEST-S2', 'CARTEST-S3', 'CARTEST-S4'] as $sku) {
+        CompetitorPrice::create(['sku' => $sku, 'shop' => 'vergeten.nl', 'price' => 600, 'scraped_at' => now()->subDays(84)]);
+    }
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+
+    expect(reportCheck($report, 'refresh_rate')['status'])->toBe('alert')
+        ->and(reportCheck($report, 'refresh_rate')['value'])->toContain('1 van 4')
+        ->and(reportCheck($report, 'silent_shops')['items'][0])->toContain('vergeten.nl');
+});
+
+it('alerts when the run itself confirmed nothing, even inside the cycle', function () {
+    config()->set('competitor_pricing.refresh_days', 7);
+
+    CompetitorPrice::create(['sku' => 'CARTEST-T1', 'shop' => 'custom.nl', 'price' => 500, 'scraped_at' => now()->subDays(2)]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+
+    // Everything is inside its cycle, so the refresh rate is green — a scrape
+    // that died tonight would otherwise stay invisible for a whole week.
+    expect(reportCheck($report, 'refresh_rate')['status'])->toBe('ok')
+        ->and(reportCheck($report, 'run_confirmed')['status'])->toBe('alert')
+        ->and($report['alerts'])->toBeGreaterThan(0);
+});
+
+it('expects every price to be confirmed each run by default', function () {
+    config()->set('competitor_pricing.refresh_days', 0);
+
+    CompetitorPrice::create(['sku' => 'CARTEST-D1', 'shop' => 'werkt.nl', 'price' => 500, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D2', 'shop' => 'achter.nl', 'price' => 600, 'scraped_at' => now()->subDays(5)]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D3', 'shop' => 'achter.nl', 'price' => 610, 'scraped_at' => now()->subDays(5)]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D4', 'shop' => 'achter.nl', 'price' => 620, 'scraped_at' => now()->subDays(5)]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+
+    // Zonder cyclus is vijf dagen oud gewoon niet bevestigd: die prijs stuurt
+    // onze verkoopprijs terwijl niemand hem sinds vorige week gezien heeft.
+    expect(reportCheck($report, 'refresh_rate')['status'])->toBe('alert')
+        ->and(reportCheck($report, 'refresh_rate')['value'])->toContain('1 van 4')
+        ->and(reportCheck($report, 'refresh_rate')['detail'])->toContain('binnen een dag')
+        ->and(reportCheck($report, 'silent_shops')['items'][0])->toContain('achter.nl');
+});

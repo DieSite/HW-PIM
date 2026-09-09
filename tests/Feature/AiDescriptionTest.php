@@ -654,3 +654,58 @@ it('sends the live form values from the edit page, not just the product id', fun
     expect($html)->toContain('values: readProductFormValues()')
         ->toContain('function readProductFormValues()');
 });
+
+it('repairs mangled accents before the text becomes a draft', function () {
+    /**
+     * Gemini writes "gemêleerd" correctly most of the time, but drops a stray
+     * byte in its place in roughly one call in twenty. Nothing in our pipeline
+     * touches the bytes, so the repair happens where model text becomes stored
+     * text.
+     */
+    useFakeAiClient(new FakeAiTextClient([fakeAiTexts(
+        long: str_repeat('Het gem#leerde vlak toont een fijn reli#f. ', 12),
+        meta: 'Vloerkleed Diamante 01 van De Munk met een gem&ecirc;leerd dessin. Bekijk het online bij Huis en Wonen in Gorinchem.',
+    )]));
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
+
+    (new GenerateProductDescriptionJob($parent->id, array_keys((array) config('ai.fields'))))
+        ->handle(app(ProductDescriptionGenerator::class), app(AiDescriptionService::class));
+
+    $draft = AiDescriptionDraft::where('product_id', $parent->id)->firstOrFail();
+
+    expect($draft->fields['beschrijving_l'])->toContain('gemêleerde')
+        ->not->toContain('gem#leerde')
+        ->and($draft->fields['beschrijving_l'])->toContain('reliëf')
+        ->and($draft->fields['meta_beschrijving'])->toContain('gemêleerd')
+        ->not->toContain('&ecirc;')
+        ->and(collect($draft->problems ?? [])->pluck('rule'))->not->toContain('garbled_text');
+});
+
+it('asks the model again when a mangled word is not in the repair list', function () {
+    $mangled = str_repeat('Een fraai dess#in over de hele breedte. ', 12);
+
+    $client = new FakeAiTextClient([fakeAiTexts(long: $mangled), fakeAiTexts()]);
+    useFakeAiClient($client);
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
+
+    $result = app(ProductDescriptionGenerator::class)->generate($parent, ['beschrijving_l']);
+
+    expect($client->requests)->toHaveCount(2)
+        ->and($result['problems'])->toBe([])
+        ->and($result['texts']['beschrijving_l'])->not->toContain('dess#in');
+});
+
+it('keeps a mangled text it cannot repair, flagged for the reviewer', function () {
+    $mangled = str_repeat('Een fraai dess#in over de hele breedte. ', 12);
+
+    useFakeAiClient(new FakeAiTextClient([fakeAiTexts(long: $mangled)]));
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
+
+    $result = app(ProductDescriptionGenerator::class)->generate($parent, ['beschrijving_l']);
+
+    expect(collect($result['problems'])->pluck('rule'))->toContain('garbled_text')
+        ->and(collect($result['problems'])->firstWhere('rule', 'garbled_text')['message'])->toContain('dess#in');
+});

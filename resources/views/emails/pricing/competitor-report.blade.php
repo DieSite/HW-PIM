@@ -78,7 +78,7 @@ Er is deze run **geen enkele prijs gewijzigd**: alle prijzen stonden al gelijk a
 ## Concurrentdekking
 
 - **{{ number_format($coverage['prices'], 0, ',', '.') }} concurrentprijzen** over {{ number_format($coverage['skus'], 0, ',', '.') }} varianten bij {{ $coverage['shops'] }} winkels
-- **{{ number_format($coverage['fresh'], 0, ',', '.') }}** daarvan zijn tijdens deze run opnieuw opgehaald
+- **{{ number_format($coverage['fresh'], 0, ',', '.') }}** daarvan zijn {{ $thresholds['refresh_days'] < 1 ? 'in deze run' : 'binnen '.($thresholds['refresh_days'] + 1).' dagen' }} bevestigd
 
 @if ($shopsWithChanges->isNotEmpty())
 @component('mail::table')

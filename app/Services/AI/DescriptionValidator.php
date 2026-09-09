@@ -20,6 +20,8 @@ class DescriptionValidator
      */
     private const MEASUREMENT = '/\b\d{2,4}\s*(?:cm)?\s*(?:x|×)\s*\d{2,4}\s*(?:cm)?\b|\b\d{2,4}\s*cm\b/i';
 
+    public function __construct(private readonly TextRepairer $repairer = new TextRepairer()) {}
+
     /**
      * @param  array<string, string>  $texts  field code => generated text
      * @param  list<string>  $allowedSizes
@@ -62,6 +64,10 @@ class DescriptionValidator
 
             foreach ($this->usedBannedPhrases($plain, $bannedPhrases) as $phrase) {
                 $problems[] = $this->problem($code, 'banned_phrase', "{$rules['label']} gebruikt de verboden formulering \"{$phrase}\".");
+            }
+
+            foreach ($this->repairer->garbledWords($plain) as $word) {
+                $problems[] = $this->problem($code, 'garbled_text', "{$rules['label']} bevat het verminkte woord \"{$word}\".");
             }
         }
 

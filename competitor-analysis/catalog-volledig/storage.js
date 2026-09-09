@@ -131,20 +131,61 @@ function collectPrices(db) {
 }
 
 /**
- * SKU's die voor een bepaalde shop geen VERSE echte prijs hebben. Een echte
- * prijs ouder dan REFRESH_DAYS (default 7) telt als verlopen en wordt opnieuw
- * opgehaald — anders blijven custom-shopprijzen voor eeuwig op hun eerste
- * scrape staan terwijl de concurrent zijn prijzen allang verhoogd heeft.
- * (Sticky blijft gelden: een mislukte her-scrape overschrijft de oude prijs
- * niet met n.v.t.)
+ * SKU's die voor een bepaalde shop opnieuw opgehaald moeten worden.
+ *
+ * REFRESH_DAYS = 0 (de standaard) betekent: élke run alles opnieuw. Dat is wat
+ * je wilt — de indexwinkels leveren hun hele catalogus toch al elke nacht, en
+ * een custom-shopprijs die een week oud is bepaalt intussen gewoon onze
+ * verkoopprijs terwijl de concurrent allang iets anders vraagt.
+ *
+ * Een positieve waarde laat een echte prijs die jonger is dan dat aantal dagen
+ * staan. Dat scheelt fetches, maar de prijzen lopen er navenant op achter.
+ *
+ * Sticky blijft in beide gevallen gelden: een mislukte her-scrape overschrijft
+ * de oude prijs niet met n.v.t.
  */
-function unpricedSkus(db, shop, allSkus, maxAgeDays = Number(process.env.REFRESH_DAYS || 7)) {
+function unpricedSkus(db, shop, allSkus, maxAgeDays = Number(process.env.REFRESH_DAYS || 0)) {
+  if (!(maxAgeDays > 0)) return [...allSkus];
+
   const priced = new Set(
     db.prepare(
       `SELECT sku FROM prices WHERE shop = ? AND price_str LIKE '€%' AND scraped_at >= datetime('now', ?)`
     ).all(shop, `-${maxAgeDays} days`).map(r => r.sku)
   );
   return allSkus.filter(s => !priced.has(s));
+}
+
+/**
+ * Gooi prijzen weg van SKU's die niet meer in de catalogus staan.
+ *
+ * De prijzen-tabel is sticky: een rij die niet opnieuw gescrapet wordt blijft
+ * met haar oude scraped_at eeuwig staan. Zodra een SKU uit de catalogus
+ * verdwijnt — opgeheven product, of de met-onderkleed-varianten die er bewust
+ * uit gehaald zijn omdat geen concurrent die bundel verkoopt — komt hij nooit
+ * meer langs de scraper en veroudert hij dus voor altijd. Dat vervuilt niet
+ * alleen de database maar ook de verversingsgraad: die rijen tellen wel mee in
+ * de noemer en kunnen per definitie nooit ververst worden.
+ *
+ * Rem: bij een lege of half ingelezen catalogus-CSV zou dit de hele tabel
+ * wissen, dus onder `minCatalogSize` doet deze functie niets.
+ */
+function pruneUnknownSkus(db, knownSkus, minCatalogSize = 1000) {
+  const known = knownSkus instanceof Set ? knownSkus : new Set(knownSkus);
+
+  if (known.size < minCatalogSize) {
+    return { pruned: 0, skipped: true };
+  }
+
+  const orphans = db.prepare(`SELECT DISTINCT sku FROM prices`).all()
+    .map(r => r.sku)
+    .filter(sku => !known.has(sku));
+
+  if (!orphans.length) return { pruned: 0, skipped: false };
+
+  const stmt = db.prepare(`DELETE FROM prices WHERE sku = ?`);
+  const deleteAll = db.transaction(skus => skus.reduce((n, sku) => n + stmt.run(sku).changes, 0));
+
+  return { pruned: deleteAll(orphans), skipped: false };
 }
 
 /** Reset prijzen voor één shop (voor herstart). */
@@ -155,4 +196,5 @@ function clearPrices(db, shop) {
 module.exports = {
   openDb, upsertIndex, clearIndex, getIndexForShop, findInIndex,
   recordPrice, deletePrice, collectPrices, unpricedSkus, clearPrices,
+  pruneUnknownSkus,
 };

@@ -136,8 +136,9 @@ class RunCompetitorAnalysisCommand extends Command
                 $dir,
                 (int) config('competitor_pricing.scraper_timeout'),
                 [
-                    'CATALOG_CSV' => $csv,
-                    'CONCURRENCY' => (string) config('competitor_pricing.concurrency'),
+                    'CATALOG_CSV'  => $csv,
+                    'CONCURRENCY'  => (string) config('competitor_pricing.concurrency'),
+                    'REFRESH_DAYS' => (string) config('competitor_pricing.refresh_days'),
                 ],
             );
 

@@ -103,8 +103,10 @@ class CompetitorAnalysisReporter
 
         $families = $this->families($rows, $products);
 
+        $confirmedSince = $this->confirmedSince($until);
+
         $checks = array_merge(
-            $this->pipelineChecks($rows, $competitors, $cheapest, $products, $since),
+            $this->pipelineChecks($rows, $competitors, $cheapest, $products, $since, $confirmedSince),
             $this->priceChecks($rows, $competitors, $cheapest, $products, $families),
         );
 
@@ -114,8 +116,8 @@ class CompetitorAnalysisReporter
             'since'         => $since,
             'until'         => $until,
             'changes'       => $this->summarize($rows),
-            'shops'         => $this->perShop($rows, $competitors, $products, $since),
-            'coverage'      => $this->coverage($competitors, $since),
+            'shops'         => $this->perShop($rows, $competitors, $products, $confirmedSince),
+            'coverage'      => $this->coverage($competitors, $confirmedSince),
             'outliers'      => $outliers,
             'outlier_total' => array_sum(array_map('count', $outliers)),
             'checks'        => $checks,
@@ -125,6 +127,117 @@ class CompetitorAnalysisReporter
             'thresholds'    => $this->thresholds(),
             'rows'          => $rows->all(),
         ];
+    }
+
+    /**
+     * Surface of a rug in m², parsed from the `maat` attribute.
+     *
+     * Sizes are written as "200 cm x 300 cm", "Rond 200 cm" or "Ovaal 200 cm x
+     * 290 cm"; a round size carries one measure and an oval covers π/4 of its
+     * bounding box. Custom sizes ("Maatwerk") have no fixed surface and return
+     * null, which keeps them out of every per-m² comparison.
+     */
+    public function area(string $maat): ?float
+    {
+        $value = mb_strtolower($maat);
+
+        if (str_contains($value, 'maatwerk')) {
+            return null;
+        }
+
+        $round = str_contains($value, 'rond') || str_contains($value, 'ø') || str_contains($value, 'cirkel');
+        $oval = str_contains($value, 'ovaal') || str_contains($value, 'ovale') || str_contains($value, 'oval') || str_contains($value, 'ellips');
+
+        if (preg_match('/(\d{2,4})\s*(?:cm)?\s*[x×]\s*(\d{2,4})/u', $value, $matches) === 1) {
+            $surface = (float) $matches[1] * (float) $matches[2];
+
+            return ($oval ? $surface * M_PI / 4 : $surface) / 10000;
+        }
+
+        if (($round || $oval) && preg_match('/(\d{2,4})/u', $value, $matches) === 1) {
+            $diameter = (float) $matches[1];
+
+            return M_PI * ($diameter / 2) ** 2 / 10000;
+        }
+
+        return null;
+    }
+
+    /**
+     * Every change in the window as CSV, so the mail body can stay a summary
+     * while the full run is still reviewable in a spreadsheet.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    public function toCsv(array $rows): string
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        fputcsv($handle, [
+            'SKU', 'Oude prijs', 'Nieuwe prijs', 'Verschil', 'Verschil %',
+            'Type', 'Concurrent', 'Concurrentprijs', 'Reden', 'URL', 'Gewijzigd op',
+        ], ';');
+
+        foreach ($rows as $row) {
+            fputcsv($handle, [
+                $row['sku'],
+                $this->number($row['old_price']),
+                $this->number($row['new_price']),
+                $this->number($row['delta']),
+                $row['pct'] === null ? '' : number_format($row['pct'], 1, ',', ''),
+                $this->kindLabel((string) $row['kind']),
+                $row['shop'] ?? '',
+                $this->number($row['competitor_price']),
+                $row['reason'],
+                $row['competitor_url'] ?? '',
+                $row['changed_at']?->format('d-m-Y H:i') ?? '',
+            ], ';');
+        }
+
+        rewind($handle);
+        $csv = (string) stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv;
+    }
+
+    /**
+     * Every flagged item of every check, so the mail can show the first few and
+     * still hand over the complete list.
+     *
+     * @param  list<array<string, mixed>>  $checks
+     */
+    public function checksToCsv(array $checks): string
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        fputcsv($handle, ['Soort', 'Signaal', 'Status', 'Bevinding'], ';');
+
+        foreach ($checks as $check) {
+            foreach ($check['items'] as $item) {
+                fputcsv($handle, [
+                    $check['group'] === self::GROUP_PIPELINE ? 'Analyse' : 'Prijs',
+                    $check['label'],
+                    $check['status'] === self::STATUS_ALERT ? 'Alarm' : 'Let op',
+                    $item,
+                ], ';');
+            }
+        }
+
+        rewind($handle);
+        $csv = (string) stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv;
+    }
+
+    public function kindLabel(string $kind): string
+    {
+        return match ($kind) {
+            self::KIND_ADVIES  => 'Terug naar adviesprijs',
+            self::KIND_DERIVED => 'Afgeleid (met onderkleed)',
+            default            => 'Concurrent',
+        };
     }
 
     /**
@@ -215,7 +328,7 @@ class CompetitorAnalysisReporter
      * @param  Collection<string, array<string, mixed>>  $products
      * @return list<array<string, mixed>>
      */
-    private function perShop(Collection $rows, Collection $competitors, Collection $products, CarbonInterface $since): array
+    private function perShop(Collection $rows, Collection $competitors, Collection $products, CarbonInterface $confirmedSince): array
     {
         $byShop = $competitors->groupBy('shop');
 
@@ -227,7 +340,7 @@ class CompetitorAnalysisReporter
         return $byShop->keys()
             ->merge($driven->keys())
             ->unique()
-            ->map(function (string $shop) use ($byShop, $driven, $products, $since): array {
+            ->map(function (string $shop) use ($byShop, $driven, $products, $confirmedSince): array {
                 /** @var Collection<int, CompetitorPrice> $prices */
                 $prices = $byShop->get($shop, collect());
 
@@ -238,7 +351,7 @@ class CompetitorAnalysisReporter
                 return [
                     'shop'         => $shop,
                     'prices'       => $prices->count(),
-                    'fresh'        => $prices->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $since))->count(),
+                    'fresh'        => $prices->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $confirmedSince))->count(),
                     'changes'      => $shopRows->count(),
                     'avg_pct'      => $withPct->isEmpty() ? null : (float) $withPct->avg('pct'),
                     'median_ratio' => $this->medianRatio($prices, $products),
@@ -275,20 +388,51 @@ class CompetitorAnalysisReporter
      * @param  Collection<int, CompetitorPrice>  $competitors
      * @return array<string, int>
      */
-    private function coverage(Collection $competitors, CarbonInterface $since): array
+    private function coverage(Collection $competitors, CarbonInterface $confirmedSince): array
     {
         return [
             'prices' => $competitors->count(),
             'skus'   => $competitors->pluck('sku')->unique()->count(),
             'shops'  => $competitors->pluck('shop')->unique()->count(),
-            'fresh'  => $competitors->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $since))->count(),
+            'fresh'  => $competitors->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $confirmedSince))->count(),
         ];
     }
 
-    /** Whether the scraper confirmed this price during the reported run. */
-    private function isFresh(CompetitorPrice $price, CarbonInterface $since): bool
+    /**
+     * The moment before which a stored competitor price counts as unconfirmed.
+     *
+     * NOT the start of the reported run. Only the index shops (Shopify,
+     * WooCommerce) hand us their whole catalogue every night; the custom shops
+     * are scraped page by page and `fetch-prices.js` deliberately re-fetches
+     * such a price only once it is older than `refresh_days`. Measured against
+     * a single run, those shops therefore look dead on the six nights they are
+     * not due — which is exactly what fired here: a 25% refresh rate and four
+     * "silent" shops on a night when nothing was wrong with them.
+     *
+     * One day of margin, so a run that starts a little later than the one that
+     * last confirmed a price does not age it out on the hour.
+     */
+    private function confirmedSince(CarbonInterface $until): CarbonInterface
     {
-        return $price->scraped_at !== null && $price->scraped_at->gte($since);
+        return $until->copy()->subDays($this->thresholds()['refresh_days'] + 1);
+    }
+
+    /**
+     * How the confirmation window reads in the mail. The window is the refresh
+     * cycle plus a day of margin, so at the default (every run) it is "binnen
+     * een dag" rather than the nonsensical "binnen 0 dagen".
+     */
+    private function cycleLabel(): string
+    {
+        $days = $this->thresholds()['refresh_days'] + 1;
+
+        return $days <= 1 ? 'binnen een dag' : 'binnen '.$days.' dagen';
+    }
+
+    /** Whether the scraper confirmed this price within its refresh cycle. */
+    private function isFresh(CompetitorPrice $price, CarbonInterface $confirmedSince): bool
+    {
+        return $price->scraped_at !== null && $price->scraped_at->gte($confirmedSince);
     }
 
     /**
@@ -370,40 +514,6 @@ class CompetitorAnalysisReporter
     }
 
     /**
-     * Surface of a rug in m², parsed from the `maat` attribute.
-     *
-     * Sizes are written as "200 cm x 300 cm", "Rond 200 cm" or "Ovaal 200 cm x
-     * 290 cm"; a round size carries one measure and an oval covers π/4 of its
-     * bounding box. Custom sizes ("Maatwerk") have no fixed surface and return
-     * null, which keeps them out of every per-m² comparison.
-     */
-    public function area(string $maat): ?float
-    {
-        $value = mb_strtolower($maat);
-
-        if (str_contains($value, 'maatwerk')) {
-            return null;
-        }
-
-        $round = str_contains($value, 'rond') || str_contains($value, 'ø') || str_contains($value, 'cirkel');
-        $oval = str_contains($value, 'ovaal') || str_contains($value, 'ovale') || str_contains($value, 'oval') || str_contains($value, 'ellips');
-
-        if (preg_match('/(\d{2,4})\s*(?:cm)?\s*[x×]\s*(\d{2,4})/u', $value, $matches) === 1) {
-            $surface = (float) $matches[1] * (float) $matches[2];
-
-            return ($oval ? $surface * M_PI / 4 : $surface) / 10000;
-        }
-
-        if (($round || $oval) && preg_match('/(\d{2,4})/u', $value, $matches) === 1) {
-            $diameter = (float) $matches[1];
-
-            return M_PI * ($diameter / 2) ** 2 / 10000;
-        }
-
-        return null;
-    }
-
-    /**
      * The sized variants of every model family touched this run, so a price
      * can be judged against its own siblings rather than against the catalog.
      *
@@ -461,6 +571,11 @@ class CompetitorAnalysisReporter
      * Checks on the run itself: did every competitor deliver, and did the
      * result stay within the shape a normal night has.
      *
+     * `$since` is the window of this run; `$confirmedSince` the age at which a
+     * stored price counts as unconfirmed (see confirmedSince()). Freshness is
+     * judged against the latter, because most shops are deliberately not
+     * scraped every night.
+     *
      * @param  Collection<int, array<string, mixed>>  $rows
      * @param  Collection<int, CompetitorPrice>  $competitors
      * @param  Collection<string, CompetitorPrice>  $cheapest
@@ -473,12 +588,13 @@ class CompetitorAnalysisReporter
         Collection $cheapest,
         Collection $products,
         CarbonInterface $since,
+        CarbonInterface $confirmedSince,
     ): array {
         $limits = $this->thresholds();
         $checks = [];
 
         $total = $competitors->count();
-        $fresh = $competitors->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $since))->count();
+        $fresh = $competitors->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $confirmedSince))->count();
         $refreshPct = $total === 0 ? 0.0 : $fresh / $total * 100;
 
         $checks[] = $this->check(
@@ -487,15 +603,26 @@ class CompetitorAnalysisReporter
             label: 'Verversingsgraad van de scrape',
             status: $total === 0 || $refreshPct < $limits['min_refresh_pct'] ? self::STATUS_ALERT : self::STATUS_OK,
             value: $total === 0 ? 'geen concurrentprijzen' : $this->pct($refreshPct).' ('.$fresh.' van '.$total.')',
-            detail: 'Prijzen die deze run niet opnieuw zijn opgehaald blijven staan en blijven onze prijs bepalen. Ver onder de '
-                .$this->pct((float) $limits['min_refresh_pct']).' betekent meestal dat de scraper vroegtijdig is gestopt.',
+            detail: 'Elke bewaarde prijs hoort '.$this->cycleLabel().' opnieuw bevestigd te zijn. Wat langer niet bevestigd is bepaalt intussen wel gewoon onze prijs.',
+            items: [],
+        );
+
+        $confirmedThisRun = $competitors->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $since))->count();
+
+        $checks[] = $this->check(
+            group: self::GROUP_PIPELINE,
+            key: 'run_confirmed',
+            label: 'Prijzen bevestigd in deze run',
+            status: $confirmedThisRun === 0 ? self::STATUS_ALERT : self::STATUS_OK,
+            value: $this->plural($confirmedThisRun, 'prijs', 'prijzen'),
+            detail: 'De verversingsgraad hierboven kijkt over de hele cyclus en blijft dus een week groen als de scraper vannacht niets deed. Deze telt alleen wat déze run heeft opgehaald: nul betekent dat er geen enkele winkel is gelezen.',
             items: [],
         );
 
         $byShop = $competitors->groupBy('shop');
 
         $silent = $byShop
-            ->filter(fn (Collection $prices): bool => $prices->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $since))->isEmpty())
+            ->filter(fn (Collection $prices): bool => $prices->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $confirmedSince))->isEmpty())
             ->map(fn (Collection $prices, string $shop): string => $shop.' — 0 van '.$prices->count().' ververst')
             ->values()
             ->all();
@@ -506,13 +633,13 @@ class CompetitorAnalysisReporter
             label: 'Concurrenten die deze run niets leverden',
             status: $silent === [] ? self::STATUS_OK : self::STATUS_ALERT,
             value: count($silent).' van '.$this->plural($byShop->count(), 'winkel', 'winkels'),
-            detail: 'Deze winkels staan wél in de database maar leverden geen enkele verse prijs. Dat wijst op een kapotte scraper-spec of een gewijzigde website — hun oude prijzen bepalen intussen gewoon onze prijs.',
+            detail: 'Deze winkels staan wél in de database maar leverden '.$this->cycleLabel().' geen enkele verse prijs. Dat wijst op een kapotte scraper-spec of een gewijzigde website — hun oude prijzen bepalen intussen gewoon onze prijs.',
             items: $silent,
         );
 
         $partial = $byShop
-            ->map(function (Collection $prices, string $shop) use ($since, $limits): ?string {
-                $shopFresh = $prices->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $since))->count();
+            ->map(function (Collection $prices, string $shop) use ($confirmedSince, $limits): ?string {
+                $shopFresh = $prices->filter(fn (CompetitorPrice $p): bool => $this->isFresh($p, $confirmedSince))->count();
 
                 if ($shopFresh === 0 || $shopFresh >= $prices->count() * $limits['shop_partial_pct'] / 100) {
                     return null;
@@ -534,7 +661,7 @@ class CompetitorAnalysisReporter
             items: $partial,
         );
 
-        $drifted = collect($this->perShop($rows, $competitors, $products, $since))
+        $drifted = collect($this->perShop($rows, $competitors, $products, $confirmedSince))
             ->filter(fn (array $shop): bool => $shop['median_ratio'] !== null
                 && ($shop['median_ratio'] < $limits['shop_ratio_low'] || $shop['median_ratio'] > $limits['shop_ratio_high']))
             ->map(fn (array $shop): string => $shop['shop'].' — mediaan '.$this->pct($shop['median_ratio']).' van de adviesprijs ('.$shop['prices'].' prijzen)')
@@ -1024,6 +1151,7 @@ class CompetitorAnalysisReporter
             'stale_days'         => (int) ($outliers['stale_days'] ?? 14),
             'max_rows'           => (int) ($outliers['max_rows'] ?? 25),
             'min_refresh_pct'    => (float) ($checks['min_refresh_pct'] ?? 80),
+            'refresh_days'       => (int) config('competitor_pricing.refresh_days', 7),
             'shop_partial_pct'   => (float) ($checks['shop_partial_pct'] ?? 50),
             'shop_ratio_low'     => (float) ($checks['shop_ratio_low'] ?? 70),
             'shop_ratio_high'    => (float) ($checks['shop_ratio_high'] ?? 120),
@@ -1033,83 +1161,6 @@ class CompetitorAnalysisReporter
             'mass_change_pct'    => (float) ($checks['mass_change_pct'] ?? 25),
             'max_items'          => (int) ($checks['max_items'] ?? 15),
         ];
-    }
-
-    /**
-     * Every change in the window as CSV, so the mail body can stay a summary
-     * while the full run is still reviewable in a spreadsheet.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     */
-    public function toCsv(array $rows): string
-    {
-        $handle = fopen('php://temp', 'r+');
-
-        fputcsv($handle, [
-            'SKU', 'Oude prijs', 'Nieuwe prijs', 'Verschil', 'Verschil %',
-            'Type', 'Concurrent', 'Concurrentprijs', 'Reden', 'URL', 'Gewijzigd op',
-        ], ';');
-
-        foreach ($rows as $row) {
-            fputcsv($handle, [
-                $row['sku'],
-                $this->number($row['old_price']),
-                $this->number($row['new_price']),
-                $this->number($row['delta']),
-                $row['pct'] === null ? '' : number_format($row['pct'], 1, ',', ''),
-                $this->kindLabel((string) $row['kind']),
-                $row['shop'] ?? '',
-                $this->number($row['competitor_price']),
-                $row['reason'],
-                $row['competitor_url'] ?? '',
-                $row['changed_at']?->format('d-m-Y H:i') ?? '',
-            ], ';');
-        }
-
-        rewind($handle);
-        $csv = (string) stream_get_contents($handle);
-        fclose($handle);
-
-        return $csv;
-    }
-
-    /**
-     * Every flagged item of every check, so the mail can show the first few and
-     * still hand over the complete list.
-     *
-     * @param  list<array<string, mixed>>  $checks
-     */
-    public function checksToCsv(array $checks): string
-    {
-        $handle = fopen('php://temp', 'r+');
-
-        fputcsv($handle, ['Soort', 'Signaal', 'Status', 'Bevinding'], ';');
-
-        foreach ($checks as $check) {
-            foreach ($check['items'] as $item) {
-                fputcsv($handle, [
-                    $check['group'] === self::GROUP_PIPELINE ? 'Analyse' : 'Prijs',
-                    $check['label'],
-                    $check['status'] === self::STATUS_ALERT ? 'Alarm' : 'Let op',
-                    $item,
-                ], ';');
-            }
-        }
-
-        rewind($handle);
-        $csv = (string) stream_get_contents($handle);
-        fclose($handle);
-
-        return $csv;
-    }
-
-    public function kindLabel(string $kind): string
-    {
-        return match ($kind) {
-            self::KIND_ADVIES  => 'Terug naar adviesprijs',
-            self::KIND_DERIVED => 'Afgeleid (met onderkleed)',
-            default            => 'Concurrent',
-        };
     }
 
     private function number(?float $value): string

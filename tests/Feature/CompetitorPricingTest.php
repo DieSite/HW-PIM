@@ -840,3 +840,42 @@ it('does not repeatedly reprice when the editor is saved without touching the di
     expect($variant->fresh()->values['common']['prijs']['EUR'])->toBe('1000')
         ->and(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(0);
 });
+
+it('never stores a competitor price for a met-onderkleed variant', function () {
+    $bare = makePricedVariant([
+        'onderkleed'         => 'Zonder onderkleed',
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ], 'CPTEST-U1');
+
+    $bundle = makePricedVariant([
+        'onderkleed'         => 'Met onderkleed',
+        'prijs'              => ['EUR' => '1030'],
+        'adviesverkoopprijs' => ['EUR' => '1030'],
+    ], 'CPTEST-U1.O');
+
+    // The leftover the scraper wrote before met-onderkleed variants were taken
+    // out of the catalog. It drives no price, but it can never be re-confirmed
+    // either, so every run it aged another day and dragged the refresh rate down.
+    CompetitorPrice::create([
+        'sku'        => $bundle->sku, 'shop' => 'shopa.nl', 'price' => 900,
+        'scraped_at' => '2026-06-17 13:07:30',
+    ]);
+
+    $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
+    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
+    $insert = $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)');
+    $insert->execute([$bare->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/kleed', '2026-09-09 00:02:52']);
+    $insert->execute([$bundle->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/kleed', '2026-06-17 13:07:30']);
+    $pdo = null;
+
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->expectsOutputToContain('1 met-onderkleed prijzen overgeslagen')
+        ->assertSuccessful();
+
+    expect(CompetitorPrice::where('sku', $bare->sku)->count())->toBe(1)
+        ->and(CompetitorPrice::where('sku', $bundle->sku)->count())->toBe(0);
+
+    @unlink($dbPath);
+});

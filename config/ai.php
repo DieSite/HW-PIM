@@ -48,7 +48,7 @@ return [
      * Bumped whenever the prompt changes materially, so drafts can be traced
      * back to the wording that produced them.
      */
-    'prompt_version' => '1',
+    'prompt_version' => '2',
 
     /**
      * Attribute codes the generator may write, and the length window each text
@@ -127,4 +127,28 @@ return [
      * Number of sibling openings fed to the model as "do not reuse these".
      */
     'sibling_examples' => 3,
+
+    /**
+     * Mangled spellings seen in model output, and what they should have been.
+     * The model occasionally leaves a stray byte where an accented vowel
+     * belongs, and "gem#leerd" carries no hint whether the missing letter was
+     * ê, ë or è — so the correction has to be spelled out per word.
+     *
+     * Keys are matched case-insensitively on the stem, so "gem#leerd" also
+     * repairs "gem#leerde". Anything not listed here is flagged for review by
+     * DescriptionValidator rather than published mangled; add it here when a
+     * new spelling shows up.
+     */
+    'text_repairs' => [
+        'gem#leerd'  => 'gemêleerd',
+        'gem6leerd'  => 'gemêleerd',
+        'gem#eleerd' => 'gemêleerd',
+        "gem'eleerd" => 'gemêleerd',
+        'gemeleerd'  => 'gemêleerd',
+        'reli#f'     => 'reliëf',
+        "reli'ef"    => 'reliëf',
+        'cr#me'      => 'crème',
+        "cr'eme"     => 'crème',
+        "'e'en"      => 'één',
+    ],
 ];

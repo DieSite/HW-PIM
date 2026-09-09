@@ -32,7 +32,7 @@ class ImportCompetitorPricesCommand extends Command
             return self::FAILURE;
         }
 
-        $rows = $this->readScrapedPrices($dbPath);
+        $rows = $this->withoutUnderlayVariants($this->readScrapedPrices($dbPath));
 
         if ($rows === []) {
             $this->warn('No usable competitor prices found in the database.');
@@ -121,6 +121,78 @@ class ImportCompetitorPricesCommand extends Command
         }
 
         return $rows;
+    }
+
+    /**
+     * Drop every scraped row that belongs to a "Met onderkleed" variant.
+     *
+     * No competitor sells the rug bundled with an underlay, so such a price is
+     * always the bare rug's page coupled to our bundle — which is exactly why
+     * CompetitorCatalogExporter leaves those variants out of the catalog and
+     * CompetitorPricingService::recompute() refuses to price them. What was
+     * missing was this end: rows scraped before that rule existed are still in
+     * the scraper database with their original scraped_at, so every run
+     * re-imported them and they aged forever without ever being re-confirmed.
+     * They drove no price (recompute skips them) but made up 40% of the table,
+     * which is what pushed the reported refresh rate down to a quarter.
+     *
+     * Skipping them here also removes them: `--prune` deletes stored prices the
+     * scrape no longer reports, so the leftovers disappear on the next run.
+     *
+     * @param  array<int, array{sku: string, shop: string, price: float, url: ?string, scraped_at: ?string}>  $rows
+     * @return array<int, array{sku: string, shop: string, price: float, url: ?string, scraped_at: ?string}>
+     */
+    private function withoutUnderlayVariants(array $rows): array
+    {
+        $underlaySkus = $this->underlaySkus(array_unique(array_column($rows, 'sku')));
+
+        if ($underlaySkus === []) {
+            return $rows;
+        }
+
+        $kept = array_values(array_filter(
+            $rows,
+            fn (array $row): bool => ! isset($underlaySkus[$row['sku']]),
+        ));
+
+        $this->info((count($rows) - count($kept)).' met-onderkleed prijzen overgeslagen (die variant heeft geen eigen concurrentprijs).');
+
+        return $kept;
+    }
+
+    /**
+     * The subset of these SKUs that is a "Met onderkleed" variant, as a lookup.
+     *
+     * The attribute is read in PHP rather than through a JSON path because the
+     * legacy rows with a double-encoded `values` column return NULL for a path,
+     * and a met-onderkleed variant would then slip through as an ordinary one.
+     *
+     * @param  array<int, string>  $skus
+     * @return array<string, true>
+     */
+    private function underlaySkus(array $skus): array
+    {
+        $underlay = [];
+
+        foreach (array_chunk($skus, 500) as $chunk) {
+            Product::query()
+                ->whereIn('sku', $chunk)
+                ->select(['sku', 'values'])
+                ->get()
+                ->each(function (Product $product) use (&$underlay): void {
+                    $values = $product->values;
+
+                    if (is_string($values)) {
+                        $values = json_decode($values, true);
+                    }
+
+                    if (is_array($values) && (($values['common']['onderkleed'] ?? null) === 'Met onderkleed')) {
+                        $underlay[$product->sku] = true;
+                    }
+                });
+        }
+
+        return $underlay;
     }
 
     /**

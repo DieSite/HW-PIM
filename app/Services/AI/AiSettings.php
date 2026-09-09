@@ -5,28 +5,22 @@ namespace App\Services\AI;
 /**
  * Resolves the effective AI settings.
  *
- * Admin Configuration wins over config/ai.php, but only where it is actually
- * filled in — an empty field falls back to the deployed default rather than
- * blanking the setting. Mirrors AfwerkingOptieService's handling of the same
- * screen.
+ * The mechanics (enabled, driver, model, API key) come from config/ai.php and
+ * are not editable from the admin screen. Only the house style is: Admin
+ * Configuration wins over config/ai.php, but only where it is actually filled
+ * in — an empty field falls back to the deployed default rather than blanking
+ * the setting. Mirrors AfwerkingOptieService's handling of the same screen.
  */
 class AiSettings
 {
     public function enabled(): bool
     {
-        $configured = $this->configData('general.ai_texts.settings.enabled');
-
-        if ($configured === null) {
-            return (bool) config('ai.enabled');
-        }
-
-        return (bool) $configured;
+        return (bool) config('ai.enabled');
     }
 
     public function driver(): string
     {
-        return $this->configData('general.ai_texts.settings.driver')
-            ?? (string) config('ai.driver');
+        return (string) config('ai.driver');
     }
 
     /**
@@ -34,22 +28,8 @@ class AiSettings
      */
     public function driverConfig(): array
     {
-        $driver = $this->driver();
-
         /** @var array<string, mixed> $config */
-        $config = config("ai.drivers.{$driver}", []);
-
-        if ($config === []) {
-            return [];
-        }
-
-        if ($model = $this->configData('general.ai_texts.settings.model')) {
-            $config['model'] = $model;
-        }
-
-        if ($apiKey = $this->configData('general.ai_texts.settings.api_key')) {
-            $config['api_key'] = $apiKey;
-        }
+        $config = config('ai.drivers.'.$this->driver(), []);
 
         return $config;
     }

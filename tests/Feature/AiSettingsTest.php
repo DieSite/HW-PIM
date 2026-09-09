@@ -12,16 +12,11 @@ use App\Services\AI\Drivers\OpenAiDriver;
  * that the repository fires. A raw DB write would leave a stale read behind and
  * the test would be measuring the cache instead of the setting.
  *
- * @param  array<string, string>  $settings
  * @param  array<string, string>  $style
  */
-function saveAiConfig(array $settings = [], array $style = []): void
+function saveAiConfig(array $style = []): void
 {
     $payload = [];
-
-    if ($settings !== []) {
-        $payload['general']['ai_texts']['settings'] = $settings;
-    }
 
     if ($style !== []) {
         $payload['general']['ai_texts']['style'] = $style;
@@ -67,52 +62,40 @@ it('renders the settings screen', function () {
         ->assertOk()
         ->assertSee('AI-teksten')
         ->assertSee('Tone of voice')
-        ->assertSee('Verboden formuleringen');
+        ->assertSee('Verboden formuleringen')
+        // The provider/model/API-key section was removed; config/ai.php owns it.
+        ->assertDontSee('Aanbieder')
+        ->assertDontSee('API-sleutel');
 });
 
-it('falls back to config/ai.php when nothing is saved', function () {
+it('takes the mechanics from config/ai.php', function () {
     $settings = app(AiSettings::class);
 
     expect($settings->driver())->toBe('gemini')
         ->and($settings->enabled())->toBeTrue()
+        ->and($settings->driverConfig()['model'])->toBe(config('ai.drivers.gemini.model'))
         ->and($settings->toneOfVoice())->toBeNull();
 });
 
-it('lets the admin screen override the driver and model', function () {
-    saveAiConfig(['driver' => 'openai', 'model' => 'gpt-5-mini', 'api_key' => 'sleutel-uit-de-admin']);
-
-    $settings = app(AiSettings::class);
-
-    expect($settings->driver())->toBe('openai')
-        ->and($settings->driverConfig()['model'])->toBe('gpt-5-mini')
-        ->and($settings->driverConfig()['api_key'])->toBe('sleutel-uit-de-admin');
-});
-
-it('builds the driver the admin screen selected', function () {
-    saveAiConfig(['driver' => 'openai']);
+it('builds the driver config/ai.php selected', function () {
+    config(['ai.driver' => 'openai']);
 
     expect(app(AiClientManager::class)->client())->toBeInstanceOf(OpenAiDriver::class);
 
-    saveAiConfig(['driver' => 'gemini']);
+    config(['ai.driver' => 'gemini']);
     app()->forgetInstance(AiClientManager::class);
 
     expect(app(AiClientManager::class)->client())->toBeInstanceOf(GeminiDriver::class);
 });
 
-it('keeps the deployed default when a field is saved empty', function () {
-    saveAiConfig(['model' => '']);
-
-    expect(app(AiSettings::class)->driverConfig()['model'])->toBe(config('ai.drivers.gemini.model'));
-});
-
-it('switches the generate buttons off from the admin screen', function () {
-    saveAiConfig(['enabled' => '0']);
+it('switches the generate buttons off from config/ai.php', function () {
+    config(['ai.enabled' => false]);
 
     expect(app(AiSettings::class)->enabled())->toBeFalse();
 });
 
 it('puts the admin tone of voice into the house style', function () {
-    saveAiConfig(style: ['tone_of_voice' => 'Kort en droog, geen bijvoeglijke naamwoorden.']);
+    saveAiConfig(['tone_of_voice' => 'Kort en droog, geen bijvoeglijke naamwoorden.']);
 
     $instruction = app(App\Services\AI\ProductDescriptionGenerator::class)->systemInstruction();
 
@@ -120,7 +103,7 @@ it('puts the admin tone of voice into the house style', function () {
 });
 
 it('appends the admin banned phrases to the built-in list', function () {
-    saveAiConfig(style: ['banned_phrases' => "waanzinnig mooi\n\nabsolute topper"]);
+    saveAiConfig(['banned_phrases' => "waanzinnig mooi\n\nabsolute topper"]);
 
     $phrases = app(AiSettings::class)->bannedPhrases();
 
@@ -131,7 +114,7 @@ it('appends the admin banned phrases to the built-in list', function () {
 });
 
 it('adds the admin extra instructions to the house style', function () {
-    saveAiConfig(style: ['extra_instructions' => 'Noem altijd de gratis bezorging boven 500 euro.']);
+    saveAiConfig(['extra_instructions' => 'Noem altijd de gratis bezorging boven 500 euro.']);
 
     expect(app(App\Services\AI\ProductDescriptionGenerator::class)->systemInstruction())
         ->toContain('EXTRA INSTRUCTIES')
@@ -156,7 +139,7 @@ it('hides the generate buttons on the product page when the setting is off', fun
         ->assertOk()
         ->assertSee('Teksten genereren (AI)');
 
-    saveAiConfig(['enabled' => '0']);
+    config(['ai.enabled' => false]);
 
     $this->actingAs($admin, 'admin')
         ->get(route('admin.catalog.products.edit', ['id' => $product->id]))
@@ -165,7 +148,7 @@ it('hides the generate buttons on the product page when the setting is off', fun
 });
 
 it('refuses to call the model when the setting is off', function () {
-    saveAiConfig(['enabled' => '0']);
+    config(['ai.enabled' => false]);
 
     $familyId = (int) Illuminate\Support\Facades\DB::table('attribute_families')->orderBy('id')->value('id');
 
@@ -181,20 +164,4 @@ it('refuses to call the model when the setting is off', function () {
         ->postJson(route('admin.catalog.products.ai-description.generate'), ['product_id' => $product->id])
         ->assertStatus(422)
         ->assertJsonPath('message', 'AI-teksten staan uit in de configuratie.');
-});
-
-it('fills the provider dropdown with the available drivers', function () {
-    $html = $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
-        ->get(route('admin.configuration.edit', ['slug' => 'general', 'slug2' => 'ai_texts']))
-        ->assertOk()
-        ->getContent();
-
-    /**
-     * type="select" renders a Vue component that reads an :options prop; the
-     * <option> tags the configuration blade used to emit were dropped on the
-     * floor and the dropdown showed "List is empty".
-     */
-    expect($html)->toContain('Google Gemini (standaard)')
-        ->toContain('OpenAI')
-        ->toContain('track-by="value"');
 });

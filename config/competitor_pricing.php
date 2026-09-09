@@ -38,7 +38,38 @@ return [
     'scraper_dir'     => base_path('competitor-analysis'),
     'node_bin'        => env('COMPETITOR_PRICING_NODE_BIN', '/usr/local/node-24/bin'),
     'concurrency'     => (int) env('COMPETITOR_PRICING_CONCURRENCY', 6),
-    'scraper_timeout' => (int) env('COMPETITOR_PRICING_SCRAPER_TIMEOUT', 1800),
+    // Room for a full nightly re-fetch of every custom shop (see refresh_days).
+    // Hitting this kills the node process mid-chain, so the whole night is lost:
+    // no prices imported and no report — cheap to allow, expensive to hit.
+    'scraper_timeout' => (int) env('COMPETITOR_PRICING_SCRAPER_TIMEOUT', 3600),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh cycle of the custom shops
+    |--------------------------------------------------------------------------
+    |
+    | Index shops (Shopify/WooCommerce) hand us their whole catalogue with
+    | prices on every run. The custom shops are scraped page by page, and this
+    | is how old such a price may get before `fetch-prices.js` fetches it again.
+    |
+    | 0 means every run re-fetches everything, which is what we want: a price
+    | that is not re-confirmed still sets our selling price, so letting it age
+    | is letting the shop run on numbers the competitor no longer charges. It
+    | costs roughly 3.500 page loads a night (~5 minutes at concurrency 6) —
+    | measured, not estimated — which is why `scraper_timeout` has room.
+    |
+    | It is passed to the scraper as REFRESH_DAYS and is at the same time the
+    | age at which the report calls a stored price unconfirmed. One number, so
+    | the promise the scraper makes and the promise the report checks can never
+    | drift apart — a report window narrower than the cycle flagged every custom
+    | shop as dead on the nights it was not due, which is what made the refresh
+    | alarm cry wolf.
+    |
+    | Raise it only to spare a competitor's server; every day added is a day our
+    | prices may lag theirs.
+    |
+    */
+    'refresh_days' => (int) env('COMPETITOR_PRICING_REFRESH_DAYS', 0),
 
     /*
     |--------------------------------------------------------------------------

@@ -19,44 +19,10 @@ return [
         'sort' => 7,
     ],
     [
-        'key'    => 'general.ai_texts.settings',
-        'name'   => 'Model',
-        'info'   => 'Welke aanbieder en welk model de teksten schrijft.',
-        'sort'   => 1,
-        'fields' => [
-            [
-                'name'          => 'enabled',
-                'title'         => 'AI-teksten ingeschakeld',
-                'type'          => 'boolean',
-                'info'          => 'Zet de generatieknoppen in de admin aan of uit.',
-                'default_value' => 1,
-            ], [
-                'name'    => 'driver',
-                'title'   => 'Aanbieder',
-                'type'    => 'select',
-                'options' => [
-                    ['title' => 'Google Gemini (standaard)', 'value' => 'gemini'],
-                    ['title' => 'OpenAI', 'value' => 'openai'],
-                ],
-                'info' => 'Laat leeg om de standaard uit config/ai.php te gebruiken.',
-            ], [
-                'name'  => 'model',
-                'title' => 'Model',
-                'type'  => 'text',
-                'info'  => 'Bijvoorbeeld gemini-3.7-flash. Laat leeg voor de standaard van de gekozen aanbieder.',
-            ], [
-                'name'  => 'api_key',
-                'title' => 'API-sleutel',
-                'type'  => 'password',
-                'info'  => 'Laat leeg om de sleutel uit de .env te blijven gebruiken.',
-            ],
-        ],
-    ],
-    [
         'key'    => 'general.ai_texts.style',
         'name'   => 'Schrijfstijl',
         'info'   => 'De huisstijl die in elke opdracht aan het model wordt meegegeven.',
-        'sort'   => 2,
+        'sort'   => 1,
         'fields' => [
             [
                 'name'  => 'tone_of_voice',

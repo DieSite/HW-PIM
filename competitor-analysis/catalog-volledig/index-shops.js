@@ -15,7 +15,7 @@
  */
 
 const path = require('path');
-const { openDb, clearIndex, upsertIndex } = require('./storage');
+const { openDb, clearIndex, upsertIndex, pruneUnknownSkus } = require('./storage');
 const { loadCatalog }  = require('./catalog');
 const { normBrand, normModel, slugMatchScore } = require('./normalize');
 const { indexShopify } = require('./indexers/shopify');
@@ -57,6 +57,15 @@ async function main() {
   const db      = openDb();
   const catalog = loadCatalog(CSV_PATH);
   console.log(`Catalogus: ${catalog.entries.length} regels, ${catalog.fixedEntries.length} vaste maten, ${catalog.models.size} unieke modellen`);
+
+  // Prijzen van SKU's die de catalogus verlaten hebben komen nooit meer langs
+  // de scraper en zouden dus met hun oude scraped_at blijven staan.
+  const { pruned, skipped } = pruneUnknownSkus(db, catalog.bySku.keys());
+  if (skipped) {
+    console.warn('  ⚠ catalogus te klein — opruimen van onbekende SKU-prijzen overgeslagen');
+  } else if (pruned) {
+    console.log(`  ${pruned} prijzen opgeruimd van SKU's die niet meer in de catalogus staan`);
+  }
 
   // Bepaal welke shops we draaien
   const runShops = shopArg.length

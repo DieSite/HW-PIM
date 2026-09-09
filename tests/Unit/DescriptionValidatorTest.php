@@ -85,3 +85,22 @@ it('splits blank-line separated text into separate paragraphs', function () {
 it('measures length on the plain text, not on the markup', function () {
     expect($this->validator->plain('<p>Twee<br>woorden</p>'))->toBe('Twee woorden');
 });
+
+it('flags a generated text that still carries a mangled word', function () {
+    $problems = $this->validator->validate(
+        ['beschrijving_k' => '<p>'.str_repeat('Een fraai dess#in over de hele breedte. ', 10).'</p>'],
+        ['170 cm x 240 cm'],
+    );
+
+    expect(collect($problems)->pluck('rule'))->toContain('garbled_text')
+        ->and(collect($problems)->firstWhere('rule', 'garbled_text')['message'])->toContain('dess#in');
+});
+
+it('does not flag a text whose accents are written properly', function () {
+    $problems = $this->validator->validate(
+        ['beschrijving_k' => '<p>'.str_repeat('Een gemêleerd vlak met fijn reliëf en een crème rand. ', 10).'</p>'],
+        ['170 cm x 240 cm'],
+    );
+
+    expect(collect($problems)->pluck('rule'))->not->toContain('garbled_text');
+});
