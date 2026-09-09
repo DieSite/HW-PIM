@@ -10,7 +10,7 @@
  */
 
 const { getText, getJson, sleep } = require('../http');
-const { normBrand, normModel, parseSize, fmtEuro, extractModel, detectShape, modelIdentityMatches } = require('../normalize');
+const { normBrand, normModel, parseSize, fmtEuro, extractModel, detectShape, modelIdentityMatches, sizeMatches } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
 
 /**
@@ -22,7 +22,7 @@ const { upsertIndex, recordPrice } = require('../storage');
  * @param {Map}      opts.catalogModels  - catalog.models map
  * @param {Map}      opts.bySku          - catalog.bySku map
  */
-async function indexShopify(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator }) {
+async function indexShopify(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator, sizeAliases = [] }) {
   const identityOpts = { requireDiscriminator };
   const normBrands = brands.map(b => normBrand(b));
   let page = 1, indexed = 0, priced = 0;
@@ -59,6 +59,15 @@ async function indexShopify(db, { shop, base, brands, catalogModels, bySku, requ
       upsertIndex(db, { shop, normBrand: matchedBrand, normModel: model, title: p.title, url, platform: 'shopify', shape: productShape });
       indexed++;
 
+      // Welke maten dit product zélf voert: bepaalt of een maat-alias mag
+      // inspringen (zie sizeMatches).
+      const beschikbaar = new Set(
+        (p.variants ?? [])
+          .map(v => parseSize(v.title ?? v.public_title ?? ''))
+          .filter(Boolean)
+          .map(s => `${s.widthCm}x${s.heightCm}`)
+      );
+
       // Koppel variantprijzen aan matching catalogusentries
       for (const v of p.variants ?? []) {
         const size = parseSize(v.title ?? v.public_title ?? '');
@@ -82,7 +91,7 @@ async function indexShopify(db, { shop, base, brands, catalogModels, bySku, requ
           const idText = model + ' ' + url.toLowerCase();
 
           for (const entry of entries) {
-            if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm && entry.shape === variantShape
+            if (sizeMatches(entry, size, beschikbaar, sizeAliases) && entry.shape === variantShape
                 && modelIdentityMatches(catModel, idText, entry.mustHave, { ...identityOpts, colour: entry.colour })) {
               recordPrice(db, entry.sku, shop, priceStr, url);
               priced++;

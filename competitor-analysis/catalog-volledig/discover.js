@@ -35,7 +35,11 @@ function indexUrls(db, shopCfg, catalog, rawUrls) {
     if (!brand) continue;
     const nb = normBrand(brand);
 
-    const slug = url.split('/').pop()?.split('?')[0]?.split('.')[0] ?? '';
+    // Laatste NIET-lege segment: een URL die op een slash eindigt
+    // ("…/vernon-warm-olive-160-x-230-cm/") gaf met split('/').pop() een lege
+    // string, en dan matcht er per definitie geen enkel model. Zo indexeerde
+    // vivaldixl.nl nul van zijn 1.001 sitemap-URL's zonder één foutmelding.
+    const slug = url.split('?')[0].split('#')[0].split('/').filter(Boolean).pop()?.split('.')[0] ?? '';
     const slugNorm = slug.toLowerCase().replace(/[-_]/g, ' ');
 
     // Zoek best-matchende model in de catalogus. De modelnaam zelf moet in de

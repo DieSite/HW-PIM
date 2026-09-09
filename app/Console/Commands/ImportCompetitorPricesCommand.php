@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\CompetitorPrice;
+use App\Models\CompetitorPriceRemoval;
 use App\Models\Product;
 use App\Services\CompetitorPricingService;
 use Illuminate\Console\Command;
@@ -21,6 +22,13 @@ class ImportCompetitorPricesCommand extends Command
      * @var string
      */
     protected $description = 'Import competitor prices from the scraper SQLite DB and recompute our selling prices.';
+
+    /**
+     * SKUs of "Met onderkleed" variants seen this run, as a lookup.
+     *
+     * @var array<string, true>
+     */
+    private array $underlay = [];
 
     public function handle(CompetitorPricingService $pricing): int
     {
@@ -70,6 +78,8 @@ class ImportCompetitorPricesCommand extends Command
             $deleted = 0;
 
             foreach ($staleIds->chunk(500) as $chunk) {
+                $this->logRemovals($chunk->all());
+
                 $deleted += CompetitorPrice::whereIn('id', $chunk->all())->delete();
             }
 
@@ -124,6 +134,53 @@ class ImportCompetitorPricesCommand extends Command
     }
 
     /**
+     * Record what pruning is about to delete.
+     *
+     * The deletion is the news, not a side effect: a rug that loses its only
+     * competitor goes straight back to the adviesverkoopprijs, and once the row
+     * is gone nothing is left to explain why. The log lets the daily report
+     * name the couplings that disappeared.
+     *
+     * @param  array<int, int>  $ids
+     */
+    private function logRemovals(array $ids): void
+    {
+        if ($ids === []) {
+            return;
+        }
+
+        $prices = CompetitorPrice::whereIn('id', $ids)->get(['sku', 'shop', 'price', 'url', 'scraped_at']);
+
+        // Een met-onderkleed-rij die verdwijnt is geen verloren koppeling maar
+        // de opruiming van iets dat er nooit had moeten staan. Zonder deze
+        // grens meldt het rapport de eenmalige schoonmaak van ~4.900 rijen als
+        // "kleden die we niet meer bij de concurrent vinden".
+        //
+        // In één keer opgezocht: een pruned rij komt per definitie niet in de
+        // scrape voor, dus de set uit withoutUnderlayVariants dekt hem niet.
+        $onbekend = $prices->pluck('sku')->unique()->reject(fn (string $sku): bool => isset($this->underlay[$sku]))->values()->all();
+        $this->underlay += $this->underlaySkus($onbekend);
+
+        $removals = $prices
+            ->reject(fn (CompetitorPrice $price): bool => isset($this->underlay[$price->sku]))
+            ->map(fn (CompetitorPrice $price): array => [
+                'sku'        => $price->sku,
+                'shop'       => $price->shop,
+                'price'      => $price->price,
+                'url'        => $price->url,
+                'scraped_at' => $price->scraped_at,
+                'removed_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+            ->all();
+
+        if ($removals !== []) {
+            CompetitorPriceRemoval::insert($removals);
+        }
+    }
+
+    /**
      * Drop every scraped row that belongs to a "Met onderkleed" variant.
      *
      * No competitor sells the rug bundled with an underlay, so such a price is
@@ -145,6 +202,7 @@ class ImportCompetitorPricesCommand extends Command
     private function withoutUnderlayVariants(array $rows): array
     {
         $underlaySkus = $this->underlaySkus(array_unique(array_column($rows, 'sku')));
+        $this->underlay = $underlaySkus;
 
         if ($underlaySkus === []) {
             return $rows;

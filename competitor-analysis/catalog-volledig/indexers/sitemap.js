@@ -48,11 +48,16 @@ async function fetchSitemapUrls(rootUrl, maxUrls = 50_000) {
 }
 
 /**
- * Filter een lijst van URL's op het voorkomen van één of meer keywords.
- * Normaliseert alles naar lowercase vóór vergelijking.
+ * Grof voorfilter op de URL-lijst, zodat de modellenlus niet over tienduizenden
+ * URL's hoeft. Géén trefwoorden betekent géén filter: de strenge guards in
+ * discover.js beslissen dan alleen. Dat is bewust — een lege lijst gooide
+ * eerder álles weg, waardoor een shop zonder brandKeys stilzwijgend niets
+ * indexeerde.
  */
 function filterByKeywords(urls, keywords) {
-  const kws = keywords.map(k => k.toLowerCase());
+  const kws = (keywords ?? []).map(k => k.toLowerCase());
+  if (kws.length === 0) return [...urls];
+
   return urls.filter(u => {
     const l = u.toLowerCase();
     return kws.some(k => l.includes(k));
@@ -109,4 +114,55 @@ function parsePriceStr(str) {
   return p > 0 ? p : null;
 }
 
-module.exports = { fetchSitemapUrls, filterByKeywords, extractLinks, extractJsonLdPrice, parsePriceStr };
+/** De URL van pagina N van een overzicht; pagina 1 is de URL zelf. */
+function listPageUrl(listUrl, page, listPageParam = 'p') {
+  if (page <= 1) return listUrl;
+
+  return listUrl + (listUrl.includes('?') ? '&' : '?') + `${listPageParam}=${page}`;
+}
+
+/**
+ * Product-URL's uit een doorgebladerde categoriepagina.
+ *
+ * Niet elke winkel heeft een bruikbare sitemap: karpettenshop.nl serveert op
+ * /sitemap.xml een 404-pagina en heeft er nergens één, maar zijn overzicht
+ * (/karpetten.html?p=N) zet de productlinks gewoon in de HTML. Voor zulke
+ * winkels is dit het alternatief — zelfde uitkomst, andere bron.
+ *
+ * Stopt zodra een pagina niets nieuws meer oplevert, zodat een winkel die bij
+ * een te hoog paginanummer de eerste pagina blijft teruggeven de crawl niet
+ * eindeloos rekt.
+ *
+ * @param {{listUrl: string, listPages?: number, listPageParam?: string, linkRe: RegExp}} cfg
+ * @returns {Promise<string[]>}
+ */
+async function fetchListUrls({ listUrl, listPages = 50, listPageParam = 'p', linkRe }) {
+  const found = new Set();
+  let leeg = 0;
+
+  for (let page = 1; page <= listPages; page++) {
+    const url = listPageUrl(listUrl, page, listPageParam);
+
+    let html;
+    try { html = await getText(url); } catch (e) {
+      console.warn(`  ⚠ lijstpagina ${page} mislukt: ${e.message}`);
+      break;
+    }
+
+    // Tellen wat de pagina zélf bevat, niet wat er nieuw is: een overzicht
+    // kan tussen twee verzoeken van volgorde wisselen en dan bevat een pagina
+    // alleen al geziene producten. Op "geen nieuwe" stoppen kapte de crawl van
+    // karpettenshop op 184 van de ~700 producten af.
+    const opPagina = [...html.matchAll(new RegExp(linkRe.source, 'g'))].map(m => m[0]);
+    for (const u of opPagina) found.add(u);
+
+    leeg = opPagina.length === 0 ? leeg + 1 : 0;
+    if (leeg >= 2) break;
+
+    await sleep(300);
+  }
+
+  return [...found];
+}
+
+module.exports = { fetchSitemapUrls, fetchListUrls, listPageUrl, filterByKeywords, extractLinks, extractJsonLdPrice, parsePriceStr };

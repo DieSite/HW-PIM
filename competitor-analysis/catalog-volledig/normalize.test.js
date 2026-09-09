@@ -10,7 +10,7 @@ const fs       = require('node:fs');
 const os       = require('node:os');
 const path     = require('node:path');
 
-const { detectShape, normModel, parseSize, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens, pageMatchesEntry, colorWords, colorsCompatible } = require('./normalize');
+const { detectShape, normModel, parseSize, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens, pageMatchesEntry, colorWords, colorsCompatible, sizeMatches } = require('./normalize');
 const { loadCatalog } = require('./catalog');
 
 test('detectShape herkent vormen in modelnaam, maat, titel en slug', () => {
@@ -443,4 +443,111 @@ test('loadCatalog leest de optionele Kleuren-kolom', () => {
   } finally {
     fs.unlinkSync(tmp);
   }
+});
+
+test('detectShape herkent een vormwoord dat tegen een cijfer plakt', () => {
+  // WooCommerce-varianten heten "200x290ovaal": tussen cijfer en letter ligt
+  // geen \b, dus die golden als rechthoek. Beide varianten parseren als
+  // 200x290, dus de ovaalprijs overschreef stilletjes de rechthoekprijs —
+  // grootinvloeren.nl gaf de rechthoekige Anaheim 3243 zo € 499 i.p.v. € 480.
+  assert.strictEqual(detectShape('200x290ovaal'), 'ovaal');
+  assert.strictEqual(detectShape('160x230ovaal'), 'ovaal');
+  assert.strictEqual(detectShape('200rond-2'), 'rond');
+  assert.strictEqual(detectShape('{"attribute_pa_maat":"200x290ovaal"}'), 'ovaal');
+
+  // En geen vals alarm op woorden die er toevallig mee beginnen.
+  assert.strictEqual(detectShape('200x290-2'), null);
+  assert.strictEqual(detectShape('rondo 12'), null);
+  assert.strictEqual(detectShape('Rotonda 5'), null);
+});
+
+test('indexUrls leest de slug ook uit een URL met een sluitende slash', () => {
+  // Sitemaps schrijven product-URL's vaak mét sluitende slash. Met
+  // split('/').pop() is de slug dan leeg en matcht er per definitie geen enkel
+  // model — vivaldixl.nl indexeerde zo nul van zijn 1.001 URL's, zonder fout.
+  const slugOf = (url) => url.split('?')[0].split('#')[0].split('/').filter(Boolean).pop()?.split('.')[0] ?? '';
+
+  assert.strictEqual(slugOf('https://x.nl/winkel/vernon-warm-olive-160-x-230-cm/'), 'vernon-warm-olive-160-x-230-cm');
+  assert.strictEqual(slugOf('https://x.nl/winkel/vernon-warm-olive-160-x-230-cm'), 'vernon-warm-olive-160-x-230-cm');
+  assert.strictEqual(slugOf('https://x.nl/p/kleed-12/?variant=3'), 'kleed-12');
+  assert.strictEqual(slugOf('https://x.nl/p/kleed-12.html'), 'kleed-12');
+});
+
+test('listPageUrl hangt het paginanummer correct aan een overzichts-URL', () => {
+  const { listPageUrl } = require('./indexers/sitemap.js');
+
+  assert.strictEqual(listPageUrl('https://x.nl/karpetten.html', 1), 'https://x.nl/karpetten.html');
+  assert.strictEqual(listPageUrl('https://x.nl/karpetten.html', 3), 'https://x.nl/karpetten.html?p=3');
+
+  // Een overzichts-URL die zelf al een query draagt (zoals de productsitemap
+  // van vloerkledenvoordelig) mag geen tweede '?' krijgen.
+  assert.strictEqual(listPageUrl('https://x.nl/lijst?type=products', 2), 'https://x.nl/lijst?type=products&p=2');
+  assert.strictEqual(listPageUrl('https://x.nl/lijst', 2, 'page'), 'https://x.nl/lijst?page=2');
+});
+
+test('vloerkledenspecialist leest ook de diameter-prijs van een rond kleed', () => {
+  const { CUSTOM_SHOPS } = require('./shops.js');
+  const shop = CUSTOM_SHOPS.find((s) => s.key === 'vloerkledenspecialist.nl');
+
+  // Hun size-select schrijft rechthoeken als "2.00 x 3.00|1439" en ronde
+  // kleden als diameter met een Ø. Alleen de eerste vorm kennen betekende dat
+  // elk rond kleed daar n.v.t. bleef, terwijl de pagina keurig geïndexeerd was.
+  const html = '<option value="2.00 x 3.00|1439"></option><option value="2.00 Ø|1375"></option><option value="2.40 Ø|1979"></option>';
+
+  assert.strictEqual(shop.getPrijs(html, 200, 200, 'rond'), '€ 1.375,00');
+  assert.strictEqual(shop.getPrijs(html, 240, 240, 'rond'), '€ 1.979,00');
+  assert.strictEqual(shop.getPrijs(html, 200, 300, 'rechthoek'), '€ 1.439,00');
+
+  // Een maat die de winkel niet voert blijft leeg; nooit terugvallen op een
+  // andere maat of een andere vorm.
+  assert.strictEqual(shop.getPrijs(html, 200, 290, 'rechthoek'), null);
+  assert.strictEqual(shop.getPrijs(html, 300, 300, 'rond'), null);
+});
+
+test('sizeMatches accepteert een maat-alias alleen als de exacte maat ontbreekt', () => {
+  const entry = { widthCm: 80, heightCm: 160 };
+  const aliases = [{ from: [80, 160], to: [80, 150] }];
+
+  // Winkel voert 80x150 (hun XS) maar niet onze 80x160: dan is het dezelfde.
+  const zonderExact = new Set(['80x150', '130x190', '160x230']);
+  assert.strictEqual(sizeMatches(entry, { widthCm: 80, heightCm: 150 }, zonderExact, aliases), true);
+
+  // Voert de winkel onze maat wél, dan is díe de juiste en mag de alias niet
+  // een tweede koppeling maken.
+  const metExact = new Set(['80x150', '80x160']);
+  assert.strictEqual(sizeMatches(entry, { widthCm: 80, heightCm: 150 }, metExact, aliases), false);
+  assert.strictEqual(sizeMatches(entry, { widthCm: 80, heightCm: 160 }, metExact, aliases), true);
+
+  // Zonder alias verandert er niets: alleen exact telt.
+  assert.strictEqual(sizeMatches(entry, { widthCm: 80, heightCm: 150 }, zonderExact, []), false);
+  assert.strictEqual(sizeMatches({ widthCm: 250, heightCm: 250 }, { widthCm: 240, heightCm: 260 }, new Set(), aliases), false);
+});
+
+test('filterByKeywords zonder trefwoorden filtert niet in plaats van alles weg te gooien', () => {
+  const { filterByKeywords } = require('./indexers/sitemap.js');
+  const urls = ['https://x.nl/a-de-munk-kleed/', 'https://x.nl/nuovo-arbitro-vloerkleed/'];
+
+  assert.deepStrictEqual(filterByKeywords(urls, ['de-munk']), [urls[0]]);
+
+  // Een winkel zonder brandKeys indexeerde hiervoor stilzwijgend nul URL's.
+  assert.deepStrictEqual(filterByKeywords(urls, []), urls);
+  assert.deepStrictEqual(filterByKeywords(urls, undefined), urls);
+});
+
+test('floorpassion leest ook de prijs van een rond kleed', () => {
+  const { CUSTOM_SHOPS } = require('./shops.js');
+  const shop = CUSTOM_SHOPS.find((s) => s.key === 'floorpassion.nl');
+
+  // Hun maatopties heten "Afmeting: 200x290 cm" voor rechthoeken én ovalen,
+  // maar "Afmeting: 200 cm rond" voor ronde kleden. Alleen de eerste vorm
+  // kennen liet elk rond kleed daar prijsloos, terwijl de pagina bestaat.
+  const html = '<option value="1" data-price="399.00">Afmeting: 200x290 cm — €399,00</option>'
+    + '<option value="2" data-price="415.00">Afmeting: 200 cm rond — €415,00</option>';
+
+  assert.strictEqual(shop.getPrijs(html, 200, 200, 'rond'), '€ 415,00');
+  assert.strictEqual(shop.getPrijs(html, 200, 290, 'rechthoek'), '€ 399,00');
+  assert.strictEqual(shop.getPrijs(html, 200, 290, 'ovaal'), '€ 399,00');
+
+  // Een maat die er niet staat blijft leeg.
+  assert.strictEqual(shop.getPrijs(html, 300, 300, 'rond'), null);
 });

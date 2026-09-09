@@ -29,7 +29,49 @@ function normBrand(raw) {
   return BRAND_ALIASES[s] ?? s;
 }
 
+/**
+ * Past deze variantmaat bij deze catalogusregel?
+ *
+ * Exact is de regel. De uitzondering is een winkel die een maatband anders
+ * labelt dan wij: vloerkledenloods verkoopt de XS van Karpi Cisco als
+ * "80 x 150 cm" waar ons PIM "80 x 160 cm" zegt — hetzelfde kleed, want de
+ * vier andere maten van dat product matchen exact en de XS kost aan beide
+ * kanten € 129. Zo'n alias staat per winkel in shops.js.
+ *
+ * De alias springt alleen in als de winkel onze exacte maat NIET voert. Voert
+ * hij hem wel, dan is die de juiste en zou een alias een tweede, verkeerde
+ * koppeling maken.
+ *
+ * @param {{widthCm: number, heightCm: number}} entry
+ * @param {{widthCm: number, heightCm: number}} size          maat van de variant
+ * @param {Set<string>} beschikbaar  "BxH" van alle varianten van dit product
+ * @param {Array<{from: [number, number], to: [number, number]}>} aliases
+ */
+function sizeMatches(entry, size, beschikbaar = new Set(), aliases = []) {
+  if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm) return true;
+  if (beschikbaar.has(`${entry.widthCm}x${entry.heightCm}`)) return false;
+
+  return aliases.some(a =>
+    a.from[0] === entry.widthCm && a.from[1] === entry.heightCm &&
+    a.to[0] === size.widthCm && a.to[1] === size.heightCm);
+}
+
 const SHAPE_WORDS_RE = /\b(ovaal|ovale|oval|ellipse?|rond|ronde|round|loper|lopers|runner|organic|organische?)\b/g;
+
+/**
+ * Een vormwoord staat niet altijd los. WooCommerce-varianten heten
+ * "200x290ovaal" en "200rond-2", en `\b` vraagt een niet-woordteken — tussen
+ * een cijfer en een letter staat die grens niet, dus zo'n variant gold als
+ * rechthoek. Bij grootinvloeren.nl kostte dat de rechthoekige Anaheim 3243 de
+ * ovaalprijs (€ 499 in plaats van € 480): beide varianten parseren als
+ * 200x290, en wie het laatst wegschrijft wint. Een cijfer telt daarom óók als
+ * begrens van het woord.
+ */
+const AFTER_DIGIT = '(?:\\b|(?<=\\d))';
+const RE_OVAAL = new RegExp(AFTER_DIGIT + '(ovaal|ovale|oval|ellipse?)\\b');
+const RE_ROND = new RegExp(AFTER_DIGIT + '(rond|ronde|round)\\b');
+const RE_LOPER = new RegExp(AFTER_DIGIT + '(loper|lopers|runner)\\b');
+const RE_ORGANISCH = new RegExp(AFTER_DIGIT + '(organic|organische?)\\b');
 
 /**
  * Detect the rug shape from any text fragments (model name, size label,
@@ -38,10 +80,10 @@ const SHAPE_WORDS_RE = /\b(ovaal|ovale|oval|ellipse?|rond|ronde|round|loper|lope
  */
 function detectShape(...parts) {
   const s = parts.filter(Boolean).join(' ').toLowerCase();
-  if (/\b(ovaal|ovale|oval|ellipse?)\b/.test(s)) return 'ovaal';
-  if (/\b(rond|ronde|round)\b|ø|⌀/.test(s)) return 'rond';
-  if (/\b(loper|lopers|runner)\b/.test(s)) return 'loper';
-  if (/\b(organic|organische?)\b/.test(s)) return 'organisch';
+  if (RE_OVAAL.test(s)) return 'ovaal';
+  if (RE_ROND.test(s) || /ø|⌀/.test(s)) return 'rond';
+  if (RE_LOPER.test(s)) return 'loper';
+  if (RE_ORGANISCH.test(s)) return 'organisch';
   return null;
 }
 
@@ -305,6 +347,7 @@ function slugMatchScore(url, brand, model) {
 }
 
 module.exports = {
+  sizeMatches,
   normBrand, normModel, parseSize, sizeKey, fmtEuro, euroNum,
   isRealPrice, isVanaf, matchScore, extractModel, slugMatchScore, BRAND_ALIASES,
   detectShape, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens,

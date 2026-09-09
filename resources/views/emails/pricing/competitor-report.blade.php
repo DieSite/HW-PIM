@@ -1,208 +1,210 @@
 @php
-    $euro = fn (?float $value): string => $value === null ? '—' : '€ '.number_format($value, 2, ',', '.');
+    /** Vaste spatie na het euroteken: anders valt het bedrag in een smalle kolom op twee regels. */
+    $euro = fn (?float $value): string => $value === null ? '—' : "€\u{00A0}".number_format($value, 2, ',', '.');
     $pct = fn (?float $value): string => $value === null ? '—' : ($value > 0 ? '+' : '').number_format($value, 1, ',', '.').'%';
     $plain = fn (float $value): string => rtrim(rtrim(number_format($value, 1, ',', '.'), '0'), ',');
+    $nf = fn (int $value): string => number_format($value, 0, ',', '.');
+
+    /** Een lange modelnaam breekt de tabel; de SKU is de identificatie. */
+    $naam = function (?string $model, ?string $maat): string {
+        $parts = array_filter([$model, $maat]);
+
+        return $parts === [] ? '—' : implode(' · ', $parts);
+    };
+
+    $link = fn (?string $url, string $label): string => $url === null ? $label : '['.$label.']('.$url.')';
+
+    /** De SKU als link naar het bewerkscherm in de PIM — scheelt zoeken. */
+    $skuLink = fn (string $sku): string => '['.$sku.']('.route('product.by-sku', $sku).')';
+
+    /**
+     * De "Klopt dat?"-cel: één of twee knoppen plus de vervolgstap. Als string
+     * opgebouwd omdat een reeks @if/@endif binnen één tabelregel geen geldige
+     * Blade is.
+     */
+    $oordeelCel = function (array $row, bool $metAkkoord): string {
+        $knoppen = [];
+
+        if (($row['afkeur_url'] ?? null) !== null) {
+            $knoppen[] = '[Koppeling klopt niet]('.$row['afkeur_url'].')';
+        }
+
+        if ($metAkkoord && ($row['akkoord_url'] ?? null) !== null) {
+            $knoppen[] = '[Klopt wel]('.$row['akkoord_url'].')';
+        }
+
+        $knoppen[] = '_'.e($row['actie']).'_';
+
+        return implode('<br>', $knoppen);
+    };
+
+    /**
+     * De concurrent-cel van tabel 1: de goedkoopste, en waar het signaal juist
+     * uit de vergelijking met een tweede winkel komt ook die tweede — "37%
+     * onder de 2e concurrent" is niet na te lopen zonder de pagina waar het
+     * 37% onder ligt. Als string opgebouwd omdat een reeks @if/@endif binnen
+     * één tabelregel geen geldige Blade is.
+     */
+    $concurrentCel = function (array $row) use ($euro, $link): string {
+        if ($row['shop'] === null) {
+            return '—';
+        }
+
+        $cel = $link($row['url'], e($row['shop'])).'<br>'.$euro($row['concurrentprijs']);
+
+        if ($row['tweede_shop'] !== null) {
+            $cel .= '<br><br>2e: '.$link($row['tweede_url'], e($row['tweede_shop'])).'<br>'.$euro($row['tweede_prijs']);
+        }
+
+        return $cel;
+    };
 
     $changes = $report['changes'];
     $coverage = $report['coverage'];
-    $outliers = $report['outliers'];
+    $actions = $report['actions'];
 
-    $shopsWithChanges = collect($report['shops'])->where('changes', '>', 0);
+    /** Elk blok draagt tot 500 regels voor de CSV; de mail toont er max_rows. */
+    $toon = fn (array $block): array => array_slice($block['items'], 0, $maxRows);
 
     $checks = collect($report['checks']);
     $flagged = $checks->where('status', '!=', 'ok');
 
     $statusLabel = fn (string $status): string => match ($status) {
-        'alert' => '🚨 Alarm',
-        'warn'  => '⚠️ Let op',
-        default => '✅ OK',
+        'alert' => '🚨',
+        'warn'  => '⚠️',
+        default => '✅',
     };
-
-    $groupTitles = [
-        'prices'   => 'Aanwijzingen dat een prijs niet klopt',
-        'pipeline' => 'Signalen over de analyse zelf',
-    ];
-
-    /** Outlier groups that describe one of our own price changes. */
-    $changeGroups = [
-        'drops' => [
-            'title' => 'Grote prijsdalingen (≥ '.$plain($thresholds['drop_pct']).'%)',
-            'why'   => 'Zo\'n daling in één run is óf een echte actie van een concurrent óf een verkeerde koppeling. Controleer de bron-URL voordat de prijs blijft staan.',
-        ],
-        'rises' => [
-            'title' => 'Grote prijsstijgingen (≥ '.$plain($thresholds['rise_pct']).'%)',
-            'why'   => 'De concurrent die ons omlaag trok is duurder geworden of niet meer gevonden; onze prijs veert terug richting de adviesprijs.',
-        ],
-        'not_cheapest' => [
-            'title' => 'Niet meer de goedkoopste (begrensd op de kortingsbodem)',
-            'why'   => 'Hier zit de concurrent onder onze maximale korting, dus we volgen hem bewust niet. Wel het moment om de adviesprijs of de bodem te heroverwegen.',
-        ],
-        'lost_coverage' => [
-            'title' => 'Terug naar de adviesprijs (geen concurrent meer gevonden)',
-            'why'   => 'Deze kleden stonden lager door een concurrent die nu niet meer gevonden wordt. Vaak terecht (uitverkocht of verwijderd), soms een scrape die niet doorkwam.',
-        ],
-    ];
 @endphp
 
 @component('mail::message')
 # Concurrentie-analyse vloerkleden
 
-Run van **{{ $report['since']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y H:i') }}** tot **{{ $report['until']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y H:i') }}**.
+Run van **{{ $report['since']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y H:i') }}** tot **{{ $report['until']->copy()->timezone('Europe/Amsterdam')->format('d-m-Y H:i') }}** — {{ $nf($changes['total']) }} {{ $changes['total'] === 1 ? 'prijs' : 'prijzen' }} gewijzigd over {{ $nf($coverage['prices']) }} concurrentprijzen bij {{ $coverage['shops'] }} winkels.
 
 @if ($report['alerts'] > 0)
 @component('mail::panel')
-**Let op: {{ $report['alerts'] }} {{ $report['alerts'] === 1 ? 'controle slaat' : 'controles slaan' }} alarm.** Er staan mogelijk verkeerde prijzen in de winkel. Zie "{{ $groupTitles['prices'] }}" en "{{ $groupTitles['pipeline'] }}" verderop in deze mail.
+**{{ $report['alerts'] }} {{ $report['alerts'] === 1 ? 'controle slaat' : 'controles slaan' }} alarm** — zie onderaan bij "Staat de analyse zelf goed?".
 @endcomponent
 @endif
 
-## Wat er veranderd is
+## 1. {{ $actions['suspects']['title'] }}
 
-@if ($changes['total'] === 0)
-Er is deze run **geen enkele prijs gewijzigd**: alle prijzen stonden al gelijk aan wat de concurrentielogica berekent.
+{{ $actions['suspects']['action'] }}
+
+@if ($actions['suspects']['items'] === [])
+Geen enkel kleed gaf een aanwijzing dat de prijs niet klopt.
 @else
-- **{{ $changes['total'] }} prijswijzigingen** op {{ $changes['products'] }} {{ $changes['products'] === 1 ? 'variant' : 'varianten' }}
-- **{{ $changes['down'] }} omlaag**, **{{ $changes['up'] }} omhoog** — gemiddeld {{ $pct($changes['avg_pct']) }}
-- Netto effect op de prijslijst: **{{ $euro($changes['total_delta']) }}**
-
 @component('mail::table')
-| Type wijziging | Aantal |
-|:---------------|-------:|
-| Gevolgd op een concurrent | {{ $changes['competitor'] }} |
-| Terug naar de adviesprijs (geen concurrent) | {{ $changes['advies'] }} |
-| Afgeleide bundelprijs (met onderkleed) | {{ $changes['derived'] }} |
-| Begrensd op de kortingsbodem | {{ $changes['clamped'] }} |
-| Met handmatige extra korting | {{ $changes['manual'] }} |
-@endcomponent
-@endif
-
-## Concurrentdekking
-
-- **{{ number_format($coverage['prices'], 0, ',', '.') }} concurrentprijzen** over {{ number_format($coverage['skus'], 0, ',', '.') }} varianten bij {{ $coverage['shops'] }} winkels
-- **{{ number_format($coverage['fresh'], 0, ',', '.') }}** daarvan zijn {{ $thresholds['refresh_days'] < 1 ? 'in deze run' : 'binnen '.($thresholds['refresh_days'] + 1).' dagen' }} bevestigd
-
-@if ($shopsWithChanges->isNotEmpty())
-@component('mail::table')
-| Concurrent | Prijzen | Ververst | Wijzigingen | Gem. effect | Mediaan vs. advies |
-|:-----------|--------:|---------:|------------:|------------:|-------------------:|
-@foreach ($shopsWithChanges->take(10) as $shop)
-| {{ $shop['shop'] }} | {{ number_format($shop['prices'], 0, ',', '.') }} | {{ number_format($shop['fresh'], 0, ',', '.') }} | {{ $shop['changes'] }} | {{ $pct($shop['avg_pct']) }} | {{ $shop['median_ratio'] === null ? '—' : number_format($shop['median_ratio'], 0, ',', '.').'%' }} |
+| Kleed | Wat is er mis | Onze prijs | Goedkoopste concurrent | Klopt dat? |
+|:------|:--------------|-----------:|:-----------------------|:-----------|
+@foreach ($actions['suspects']['items'] as $row)
+| **{!! $skuLink($row['sku']) !!}**<br>{{ $naam($row['model'], $row['maat']) }} | {{ $row['reden'] }} | **{{ $euro($row['prijs']) }}**<br>advies {{ $euro($row['advies']) }} | {!! $concurrentCel($row) !!} | {!! $oordeelCel($row, true) !!} |
 @endforeach
 @endcomponent
-
-@if ($shopsWithChanges->count() > 10)
-*En nog {{ $shopsWithChanges->count() - 10 }} andere winkels; de volledige lijst staat in de bijlage.*
-
+@if ($actions['suspects']['total'] > count($actions['suspects']['items']))
+Nog {{ $nf($actions['suspects']['total'] - count($actions['suspects']['items'])) }} kleden met eenzelfde signaal staan in **acties.csv**.
 @endif
 @endif
 
-## Klopt het?
+## 2. {{ $actions['new_products']['title'] }} — {{ $nf($actions['new_products']['total']) }}
+
+{{ $actions['new_products']['action'] }}
+
+@php $rijen = $toon($actions['new_products']); @endphp
+@if ($rijen === [])
+Geen nieuwe kleden toegevoegd in deze periode.
+@else
+@component('mail::table')
+| Kleed | Prijs | Advies | Concurrenten | Actie |
+|:------|------:|-------:|-------------:|:------|
+@foreach ($rijen as $row)
+| {!! $skuLink($row['sku']) !!}<br>{{ $naam($row['model'], $row['maat']) }} | {{ $euro($row['prijs']) }} | {{ $euro($row['advies']) }} | {{ $row['competitors'] }} | {{ $row['actie'] }} |
+@endforeach
+@endcomponent
+@if ($actions['new_products']['total'] > count($rijen))
+Nog {{ $nf($actions['new_products']['total'] - count($rijen)) }} in **acties.csv**.
+@endif
+@endif
+
+## 3. {{ $actions['new_prices']['title'] }} — {{ $nf($actions['new_prices']['total']) }}
+
+{{ $actions['new_prices']['action'] }}
+
+@php $rijen = $toon($actions['new_prices']); @endphp
+@if ($rijen === [])
+Geen kleden die voor het eerst een concurrentprijs kregen.
+@else
+@component('mail::table')
+| Kleed | Concurrent | Concurrentprijs | Onze prijs | Klopt dat? |
+|:------|:-----------|----------------:|-----------:|:-----------|
+@foreach ($rijen as $row)
+| {!! $skuLink($row['sku']) !!}<br>{{ $naam($row['model'], $row['maat']) }} | {{ $row['shop'] ? $link($row['url'], $row['shop']) : '—' }} | {{ $euro($row['concurrentprijs']) }} | {{ $euro($row['prijs']) }} | {!! $oordeelCel($row, false) !!} |
+@endforeach
+@endcomponent
+@if ($actions['new_prices']['total'] > count($rijen))
+Nog {{ $nf($actions['new_prices']['total'] - count($rijen)) }} in **acties.csv**.
+@endif
+@endif
+
+## 4. {{ $actions['lost_prices']['title'] }} — {{ $nf($actions['lost_prices']['total']) }}
+
+{{ $actions['lost_prices']['action'] }}
+
+@php $rijen = $toon($actions['lost_prices']); @endphp
+@if ($rijen === [])
+Geen enkele koppeling verdwenen deze run.
+@else
+@component('mail::table')
+| Kleed | Kwijt bij | Laatste prijs | Concurrenten over | Actie |
+|:------|:----------|--------------:|------------------:|:------|
+@foreach ($rijen as $row)
+| {!! $skuLink($row['sku']) !!}<br>{{ $naam($row['model'], $row['maat']) }} | {{ $link($row['url'], $row['shops']) }} | {{ $euro($row['laatste_prijs']) }} | {{ $row['resterend'] }} | {{ $row['actie'] }} |
+@endforeach
+@endcomponent
+@if ($actions['lost_prices']['total'] > count($rijen))
+Nog {{ $nf($actions['lost_prices']['total'] - count($rijen)) }} in **acties.csv**.
+@endif
+@endif
+
+## 5. {{ $actions['no_coverage']['title'] }} — {{ $nf($actions['no_coverage']['total']) }}
+
+{{ $actions['no_coverage']['action'] }}
+
+@php $rijen = $toon($actions['no_coverage']); @endphp
+@if ($rijen === [])
+Elk kleed heeft minstens één concurrentprijs.
+@else
+@component('mail::table')
+| Kleed | Prijs | Advies | Klopt dat? |
+|:------|------:|-------:|:-----------|
+@foreach ($rijen as $row)
+| {!! $skuLink($row['sku']) !!}<br>{{ $naam($row['model'], $row['maat']) }} | {{ $euro($row['prijs']) }} | {{ $euro($row['advies']) }} | [Klopt, geen concurrent gevonden]({{ $row['bevestig_url'] }})<br>[Mail url van concurrent]({{ $row['mail_url'] }}) |
+@endforeach
+@endcomponent
+De duurste {{ count($rijen) }} staan hierboven; de volledige lijst zit in **acties.csv**.
+Een kleed dat je als “geen concurrent” bevestigt verdwijnt uit dit blok, zodat er alleen overblijft wat nog niemand heeft nagekeken.
+@endif
+
+---
+
+## Staat de analyse zelf goed?
 
 @if ($flagged->isEmpty())
-Alle {{ $checks->count() }} controles staan op groen: de scrape is compleet, elke winkel heeft geleverd en er is geen enkel signaal dat een prijs niet klopt.
+✅ Alle {{ $checks->count() }} controles staan op groen.
 @else
-{{ $flagged->count() }} van de {{ $checks->count() }} controles vragen aandacht. Geen van de prijssignalen is een bewijs — het zijn de patronen die in de praktijk bij een verkeerde prijs horen.
-@endif
+{{ $flagged->count() }} van de {{ $checks->count() }} controles vragen aandacht; de rest staat op groen. Details per bevinding staan in **aandachtspunten.csv**.
 
 @component('mail::table')
-| Controle | Status | Bevinding |
-|:---------|:-------|:----------|
-@foreach ($checks as $check)
-| {{ $check['label'] }} | {{ $statusLabel($check['status']) }} | {{ $check['value'] }} |
+| | Controle | Uitkomst |
+|:-|:---------|:---------|
+@foreach ($flagged as $check)
+| {{ $statusLabel($check['status']) }} | {{ $check['label'] }} | {{ $check['value'] }} |
 @endforeach
 @endcomponent
-
-@foreach ($groupTitles as $group => $title)
-@php($groupChecks = $flagged->where('group', $group))
-@continue($groupChecks->isEmpty())
-### {{ $title }}
-
-@foreach ($groupChecks as $check)
-**{{ $statusLabel($check['status']) }} — {{ $check['label'] }} ({{ $check['value'] }})**
-
-{{ $check['detail'] }}
-
-@foreach (array_slice($check['items'], 0, $maxRows) as $item)
-- {{ $item }}
-@endforeach
-@if (count($check['items']) > $maxRows)
-- *En nog {{ count($check['items']) - $maxRows }} andere; zie de bijlage.*
-@endif
-
-@endforeach
-@endforeach
-
-## Uitschieters
-
-@if ($report['outlier_total'] === 0)
-Geen uitschieters: alle wijzigingen bleven binnen de drempels en er staan geen verdachte of verouderde concurrentprijzen open.
-@else
-@foreach ($changeGroups as $key => $group)
-@continue(($outliers[$key] ?? []) === [])
-### {{ $group['title'] }} — {{ count($outliers[$key]) }}
-
-{{ $group['why'] }}
-
-@component('mail::table')
-| SKU | Oud | Nieuw | Verschil | Concurrent |
-|:----|----:|------:|---------:|:-----------|
-@foreach (array_slice($outliers[$key], 0, $maxRows) as $row)
-| {{ $row['sku'] }} | {{ $euro($row['old_price']) }} | {{ $euro($row['new_price']) }} | {{ $pct($row['pct']) }} | {{ $row['shop'] ?? '—' }} |
-@endforeach
-@endcomponent
-
-@if (count($outliers[$key]) > $maxRows)
-*En nog {{ count($outliers[$key]) - $maxRows }} andere; zie de bijlage.*
-
-@endif
-
-@endforeach
-
-@if ($outliers['suspicious'] !== [])
-### Verdacht lage concurrentprijzen (< {{ $plain($thresholds['competitor_ratio']) }}% van de adviesprijs) — {{ count($outliers['suspicious']) }}
-
-Een gezonde koppeling zit rond 75–110% van de adviesprijs. Ver daaronder staat er meestal een ánder kleed op de pagina van de concurrent.
-
-@component('mail::table')
-| SKU | Concurrent | Concurrentprijs | Adviesprijs | % van advies |
-|:----|:-----------|----------------:|------------:|-------------:|
-@foreach (array_slice($outliers['suspicious'], 0, $maxRows) as $row)
-| {{ $row['sku'] }} | {{ $row['shop'] }} | {{ $euro($row['competitor_price']) }} | {{ $euro($row['advies']) }} | {{ number_format($row['ratio'], 0, ',', '.') }}% |
-@endforeach
-@endcomponent
-
-@if (count($outliers['suspicious']) > $maxRows)
-*En nog {{ count($outliers['suspicious']) - $maxRows }} andere; zie de bijlage.*
-
-@endif
-@endif
-
-@if ($outliers['stale'] !== [])
-### Verouderde concurrentprijzen (> {{ $thresholds['stale_days'] }} dagen niet bevestigd) — {{ count($outliers['stale']) }}
-
-Deze prijzen bepalen nog steeds onze prijs, terwijl de scraper ze al een tijd niet meer heeft kunnen bevestigen.
-
-@component('mail::table')
-| SKU | Concurrent | Prijs | Laatst bevestigd | Leeftijd |
-|:----|:-----------|------:|:-----------------|---------:|
-@foreach (array_slice($outliers['stale'], 0, $maxRows) as $row)
-| {{ $row['sku'] }} | {{ $row['shop'] }} | {{ $euro($row['competitor_price']) }} | {{ $row['scraped_at']?->format('d-m-Y') ?? 'onbekend' }} | {{ $row['age_days'] === null ? '—' : $row['age_days'].' dgn' }} |
-@endforeach
-@endcomponent
-
-@if (count($outliers['stale']) > $maxRows)
-*En nog {{ count($outliers['stale']) - $maxRows }} andere; zie de bijlage.*
-
-@endif
-@endif
 @endif
 
 @if ($report['rows'] !== [])
-Alle {{ $changes['total'] }} wijzigingen staan met reden en bron-URL in `prijswijzigingen.csv`.
-@endif
-@if ($report['flagged'] > 0)
-Alle {{ $report['flagged'] }} bevindingen van de controles staan in `aandachtspunten.csv`.
+Alle {{ $nf($changes['total']) }} prijswijzigingen van deze run zitten als CSV bij deze mail.
 @endif
 
-Groeten,<br>
-{{ config('app.name') }}
 @endcomponent

@@ -11,6 +11,7 @@
 |
 */
 
+use App\Http\Controllers\CompetitorCoverageController;
 use App\Http\Controllers\ProductHelperController;
 use App\Http\Controllers\ProductImageEditorController;
 use Webkul\User\Models\Admin;
@@ -44,4 +45,19 @@ Route::group([
 ], function () {
     Route::get('/source/{asset}', [ProductImageEditorController::class, 'source'])->name('admin.product_image_editor.source');
     Route::get('/image/{asset}', [ProductImageEditorController::class, 'image'])->name('admin.product_image_editor.image');
+});
+
+/*
+ * De knop "Klopt, geen concurrent gevonden" uit het dagrapport. Wordt vanuit
+ * een mailclient geklikt, dus zonder sessie — vandaar `signed` in plaats van
+ * `admin`. De handtekening zit in de URL die de mail zelf genereert.
+ */
+Route::middleware(['web', 'signed'])->group(function (): void {
+    Route::get('/pricing/geen-concurrent/{sku}', [CompetitorCoverageController::class, 'confirm'])
+        ->where('sku', '.*')
+        ->name('pricing.coverage.confirm');
+
+    Route::get('/pricing/prijs-akkoord/{sku}', [CompetitorCoverageController::class, 'acknowledge'])
+        ->where('sku', '.*')
+        ->name('pricing.suspect.acknowledge');
 });

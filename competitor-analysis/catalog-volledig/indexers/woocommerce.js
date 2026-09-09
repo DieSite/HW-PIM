@@ -10,12 +10,25 @@
  *   3. Als er geen inline JSON is (>30 variaties): sla de URL op in de index
  *      voor een latere "precisie" fetch via wc-ajax (zie fetch-prices.js)
  *
+ * TERUGVAL OP DE HELE CATALOGUS. Zoeken op merknaam werkt alleen bij winkels
+ * die het merk in de producttitel zetten ("Karpi Karpet Bermuda" bij
+ * meubelcity). grootinvloeren.nl noemt exact hetzelfde kleed "Vloerkleed Upton
+ * 9191" en karpetwereld.nl "Napoli 12" — daar levert `?search=Eurogros`
+ * respectievelijk `?search=De Munk` nul producten op, en de merkcheck op de
+ * titel gooide wat er tóch doorkwam alsnog weg. Beide winkels stonden dus
+ * volledig ingericht in shops.js en leverden nul prijzen, zonder dat iets
+ * daarover klaagde. Levert het zoeken op merk niets op, dan bladeren we de
+ * catalogus door en matchen we de titel op onze eigen modelnamen.
+ *
  * Retourneert { indexed, priced }.
  */
 
 const { getText, getJson, sleep } = require('../http');
 const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore, detectShape, modelIdentityMatches } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
+
+/** Bovengrens op het doorbladeren, zodat een winkel met een enorme catalogus de run niet opeet. */
+const MAX_CATALOG_PAGES = 60;
 
 /**
  * Haal variatie-JSON op uit HTML (data-product_variations attribuut).
@@ -35,6 +48,43 @@ function extractVariations(html) {
 /**
  * Probeer de WooCommerce Store API (v2 en v1). Sommige shops draaien alleen v1.
  */
+/** Eén pagina van de complete catalogus (zonder zoekterm). */
+async function wooPage(base, page) {
+  for (const ver of ['v1', 'v2']) {
+    try {
+      const url = `${base}/wp-json/wc/store/${ver}/products?per_page=100&page=${page}&status=publish`;
+      const json = await getJson(url);
+      if (Array.isArray(json)) return json;
+    } catch { /* probeer volgende versie */ }
+  }
+  return [];
+}
+
+/**
+ * Lijkt deze titel op een model uit onze catalogus van dit merk?
+ *
+ * Dezelfde token-overlap die verderop de prijs koppelt, hier als voorfilter:
+ * een winkel doorbladeren betekent duizenden producten zien, en alleen voor de
+ * kandidaten hoeft de productpagina opgehaald te worden. Bij grootinvloeren
+ * scheelt dat 1.848 paginaloads. De strenge guards volgen daarna gewoon.
+ */
+function looksLikeCatalogModel(model, nb, catalogModels) {
+  const modTokens = model.split(' ').filter(Boolean);
+
+  for (const key of catalogModels.keys()) {
+    if (!key.startsWith(nb + '|')) continue;
+
+    const catModel  = key.split('|')[1];
+    const catTokens = catModel.split(' ').filter(Boolean);
+    const fwdHits   = catTokens.filter(t => model.includes(t)).length;
+    const revHits   = modTokens.filter(t => catModel.includes(t)).length;
+
+    if (fwdHits >= Math.min(2, catTokens.length) || revHits >= Math.min(2, modTokens.length)) return true;
+  }
+
+  return false;
+}
+
 async function wooSearch(base, search, page) {
   for (const ver of ['v1', 'v2']) {
     try {
@@ -49,7 +99,7 @@ async function wooSearch(base, search, page) {
 async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator }) {
   const identityOpts = { requireDiscriminator };
   const normBrands  = brands.map(b => normBrand(b));
-  let indexed = 0, priced = 0;
+  let indexed = 0, priced = 0, seen = 0;
 
   for (let bi = 0; bi < brands.length; bi++) {
     const brand     = brands[bi];
@@ -71,6 +121,46 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, 
         // Sla producten over die niet echt bij dit merk horen
         if (!nb.split(' ').every(t => t.length < 3 || titleNorm.includes(t) || p.name?.toLowerCase().includes(t))) continue;
 
+        seen++;
+        await indexProduct(p, brand, nb);
+      }
+
+      if (products.length < 100) break;
+      page++;
+      await sleep(400);
+    }
+  }
+
+  // Geen enkel product via de merknaam gevonden: die winkel zet het merk niet
+  // in zijn titels. Blader dan de catalogus door en match op modelnaam.
+  if (seen === 0) {
+    console.log(`  [woo] ${shop}: merkzoekopdracht leverde niets op — catalogus doorbladeren`);
+
+    for (let page = 1; page <= MAX_CATALOG_PAGES; page++) {
+      const products = await wooPage(base, page);
+      if (!products.length) break;
+
+      for (const p of products) {
+        const name = p.name ?? '';
+
+        for (let bi = 0; bi < brands.length; bi++) {
+          const nb = normBrands[bi];
+          if (!looksLikeCatalogModel(normModel(extractModel(name, brands[bi])), nb, catalogModels)) continue;
+
+          await indexProduct(p, brands[bi], nb);
+          break;
+        }
+      }
+
+      if (products.length < 100) break;
+      await sleep(400);
+    }
+  }
+
+  return { indexed, priced };
+
+  /** Indexeer één product en leg de variantprijzen vast die bij ons passen. */
+  async function indexProduct(p, brand, nb) {
         const model        = normModel(extractModel(p.name ?? '', brand));
         const url          = p.permalink ?? `${base}/?p=${p.id}`;
         const productShape = detectShape(p.name, url) ?? 'rechthoek';
@@ -115,15 +205,7 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, 
           }
         }
         await sleep(150);
-      }
-
-      if (products.length < 100) break;
-      page++;
-      await sleep(400);
-    }
   }
-
-  return { indexed, priced };
 }
 
 module.exports = { indexWooCommerce, extractVariations };

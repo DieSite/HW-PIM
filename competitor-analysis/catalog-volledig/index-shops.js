@@ -20,7 +20,7 @@ const { loadCatalog }  = require('./catalog');
 const { normBrand, normModel, slugMatchScore } = require('./normalize');
 const { indexShopify } = require('./indexers/shopify');
 const { indexWooCommerce } = require('./indexers/woocommerce');
-const { fetchSitemapUrls } = require('./indexers/sitemap');
+const { fetchSitemapUrls, fetchListUrls } = require('./indexers/sitemap');
 const { indexUrls }   = require('./discover');
 const { SHOPIFY_SHOPS, WOOCOMMERCE_SHOPS, CUSTOM_SHOPS } = require('./shops');
 const { sleep } = require('./http');
@@ -30,17 +30,33 @@ const CSV_PATH = process.env.CATALOG_CSV || path.join(__dirname, '..', '..', 'HW
 // ── Custom-shop sitemap indexer ───────────────────────────────────────────────
 
 async function indexCustomShop(db, shopCfg, catalog) {
-  const { key, base, brands, sitemapUrl, brandKeys } = shopCfg;
-  console.log(`  sitemap crawl: ${sitemapUrl}`);
+  const { key, sitemapUrl, listUrl } = shopCfg;
 
-  let allUrls;
-  try {
-    allUrls = await fetchSitemapUrls(sitemapUrl, 100_000);
-  } catch (e) {
-    console.warn(`  ⚠ sitemap fout voor ${key}: ${e.message}`);
+  let allUrls = [];
+
+  if (sitemapUrl) {
+    console.log(`  sitemap crawl: ${sitemapUrl}`);
+    try {
+      allUrls = await fetchSitemapUrls(sitemapUrl, 100_000);
+    } catch (e) {
+      console.warn(`  ⚠ sitemap fout voor ${key}: ${e.message}`);
+    }
+    console.log(`  ${allUrls.length} URL's in sitemap`);
+  }
+
+  // Geen (bruikbare) sitemap: sommige winkels hebben er simpelweg geen, en
+  // dan is hun eigen overzichtspagina de bron. Ook de terugval als een
+  // sitemap leeg terugkomt — dat is in de praktijk hetzelfde probleem.
+  if (allUrls.length === 0 && listUrl) {
+    console.log(`  lijst-crawl: ${listUrl}`);
+    allUrls = await fetchListUrls(shopCfg);
+    console.log(`  ${allUrls.length} URL's uit de overzichtspagina's`);
+  }
+
+  if (allUrls.length === 0) {
+    console.warn(`  ⚠ geen enkele URL gevonden voor ${key}`);
     return { indexed: 0 };
   }
-  console.log(`  ${allUrls.length} URL's in sitemap`);
 
   const { indexed } = indexUrls(db, shopCfg, catalog, allUrls);
   console.log(`  ${indexed} URL's gematcht op catalogusmodellen`);
@@ -91,6 +107,7 @@ async function main() {
           catalogModels: catalog.models,
           bySku:         catalog.bySku,
           requireDiscriminator: shopCfg.requireDiscriminator,
+          sizeAliases:   shopCfg.sizeAliases,
         });
         console.log(`  ✅ ${result.indexed} producten geïndexeerd, ${result.priced} prijzen opgeslagen`);
 

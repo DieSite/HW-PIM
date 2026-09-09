@@ -1,7 +1,10 @@
 <?php
 
 use App\Mail\CompetitorAnalysisReport;
+use App\Models\CompetitorCoverageConfirmation;
 use App\Models\CompetitorPrice;
+use App\Models\CompetitorPriceRemoval;
+use App\Models\CompetitorSignalReview;
 use App\Models\Product;
 use App\Models\ProductPriceHistory;
 use App\Services\CompetitorAnalysisReporter;
@@ -123,6 +126,9 @@ function reportCheck(array $report, string $key): array
 afterEach(function () {
     Product::where('sku', 'like', 'CARTEST-%')->delete();
     CompetitorPrice::where('sku', 'like', 'CARTEST-%')->delete();
+    CompetitorPriceRemoval::where('sku', 'like', 'CARTEST-%')->delete();
+    CompetitorCoverageConfirmation::where('sku', 'like', 'CARTEST-%')->delete();
+    CompetitorSignalReview::where('sku', 'like', 'CARTEST-%')->delete();
     ProductPriceHistory::where('sku', 'like', 'CARTEST-%')->delete();
 });
 
@@ -271,7 +277,7 @@ it('mails the report to the configured recipients with a CSV of every change', f
         return $mail->hasTo('luuk@diesite.nl')
             && $mail->hasTo('hans@huis-en-wonen.nl')
             && $mail->attachments() !== []
-            && str_contains($mail->envelope()->subject, 'prijswijziging');
+            && str_contains($mail->envelope()->subject, 'Concurrentie-analyse vloerkleden');
     });
 });
 
@@ -297,10 +303,13 @@ it('renders the report mail without errors, including its outlier tables', funct
 
     expect($html)->toContain('Concurrentie-analyse vloerkleden')
         ->toContain('CARTEST-SUS')
-        ->toContain('Grote prijsdalingen')
-        ->toContain('Verdacht lage concurrentprijzen')
-        ->toContain('Verouderde concurrentprijzen')
-        ->toContain('Terug naar de adviesprijs');
+        // Het kleed staat op 30% van zijn adviesprijs: dat is het signaal dat
+        // de top-5 hoort op te pikken, mét de reden en de vervolgstap erbij.
+        ->toContain('waarvan de prijs waarschijnlijk niet klopt')
+        ->toContain('van het advies')
+        ->toContain('Nieuwe kleden in de PIM')
+        ->toContain('niet meer bij de concurrent vinden')
+        ->toContain('zonder enige concurrentprijs');
 });
 
 it('reports no outliers and no attachment when nothing changed', function () {
@@ -308,9 +317,12 @@ it('reports no outliers and no attachment when nothing changed', function () {
 
     $mail = new CompetitorAnalysisReport($report);
 
+    // Zonder wijzigingen hoort er geen wijzigingen-CSV te zijn. De mail zelf is
+    // niet leeg: openstaande acties (kleden zonder concurrent) blijven staan tot
+    // iemand ze oplost, dus die horen er ook op een rustige dag in.
     expect($report['changes']['total'])->toBe(0)
-        ->and($mail->attachments())->toBe([])
-        ->and($mail->render())->toContain('geen enkele prijs gewijzigd');
+        ->and(collect($mail->attachments())->contains(fn ($a): bool => str_contains($a->as, 'prijswijzigingen')))->toBeFalse()
+        ->and($mail->render())->toContain('0 prijzen gewijzigd');
 });
 
 it('mails the report at the end of the full pipeline run', function () {
@@ -525,9 +537,9 @@ it('attaches the findings of the checks as a second CSV', function () {
     $mail = new CompetitorAnalysisReport($report);
 
     expect($report['flagged'])->toBeGreaterThan(0)
-        ->and($mail->attachments())->toHaveCount(1)
+        ->and(collect($mail->attachments())->pluck('as')->filter(fn (string $as): bool => str_contains($as, 'aandachtspunten')))->toHaveCount(1)
         ->and(app(CompetitorAnalysisReporter::class)->checksToCsv($report['checks']))->toContain('stil.nl')
-        ->and($mail->envelope()->subject)->toContain('alarm');
+        ->and($mail->envelope()->subject)->toContain('Concurrentie-analyse');
 });
 
 it('writes every change to the CSV with its reason and source URL', function () {
@@ -613,4 +625,288 @@ it('expects every price to be confirmed each run by default', function () {
         ->and(reportCheck($report, 'refresh_rate')['value'])->toContain('1 van 4')
         ->and(reportCheck($report, 'refresh_rate')['detail'])->toContain('binnen een dag')
         ->and(reportCheck($report, 'silent_shops')['items'][0])->toContain('achter.nl');
+});
+
+it('lists rugs added to the PIM and says what is still missing', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-N1', 'maat' => '200 cm x 300 cm', 'prijs' => 600.0, 'advies' => 600.0],
+        ['sku' => 'CARTEST-N2', 'maat' => '160 cm x 230 cm', 'prijs' => 400.0],
+    ], 'CARTEST-NIEUW');
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['new_products'];
+
+    $items = collect($block['items'])->keyBy('sku');
+
+    expect($block['total'])->toBe(2)
+        // Zonder adviesprijs slaat de prijsberekening het kleed over; dat is de
+        // enige actie die er bij een nieuw product echt toe doet.
+        ->and($items['CARTEST-N2']['actie'])->toContain('Vul de adviesverkoopprijs')
+        ->and($items['CARTEST-N1']['actie'])->toContain('Nog geen concurrent gevonden');
+});
+
+it('lists rugs that got their first competitor price', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-P1', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 1000.0],
+    ], 'CARTEST-EERST');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-P1', 'shop' => 'shopa.nl', 'price' => 900, 'url' => 'https://shopa.nl/p1', 'scraped_at' => now()]);
+    logReportChange('CARTEST-P1', 1000, 900, 'Concurrent shopa.nl verlaagde naar € 900,00 — nieuwe laagste prijs.', 'shopa.nl', 900);
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['new_prices'];
+
+    expect($block['total'])->toBe(1)
+        ->and($block['items'][0]['sku'])->toBe('CARTEST-P1')
+        ->and($block['items'][0]['shop'])->toBe('shopa.nl')
+        ->and($block['items'][0]['actie'])->toContain('Prijs is hierdoor aangepast');
+});
+
+it('lists couplings that disappeared and flags the last one lost', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-L1', 'maat' => '200 cm x 300 cm', 'prijs' => 1000.0, 'advies' => 1000.0],
+        ['sku' => 'CARTEST-L2', 'maat' => '160 cm x 230 cm', 'prijs' => 500.0, 'advies' => 600.0],
+    ], 'CARTEST-KWIJT');
+
+    // L1 raakt zijn enige concurrent kwijt; L2 houdt er nog één over.
+    CompetitorPriceRemoval::create(['sku' => 'CARTEST-L1', 'shop' => 'weg.nl', 'price' => 800, 'url' => 'https://weg.nl/l1', 'removed_at' => now()]);
+    CompetitorPriceRemoval::create(['sku' => 'CARTEST-L2', 'shop' => 'weg.nl', 'price' => 450, 'removed_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-L2', 'shop' => 'blijft.nl', 'price' => 500, 'scraped_at' => now()]);
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['lost_prices'];
+
+    $items = collect($block['items'])->keyBy('sku');
+
+    expect($block['total'])->toBe(2)
+        ->and($items['CARTEST-L1']['actie'])->toContain('Laatste concurrent weg')
+        ->and($items['CARTEST-L2']['resterend'])->toBe(1)
+        ->and($items['CARTEST-L2']['actie'])->toContain('Nog 1 andere concurrent');
+});
+
+it('lists rugs no competitor sells, most expensive first', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-Z1', 'maat' => '200 cm x 300 cm', 'prijs' => 400.0, 'advies' => 400.0],
+        ['sku' => 'CARTEST-Z2', 'maat' => '240 cm x 340 cm', 'prijs' => 2000.0, 'advies' => 2000.0],
+        ['sku' => 'CARTEST-Z3', 'maat' => 'Maatwerk', 'prijs' => 900.0, 'advies' => 900.0],
+        ['sku' => 'CARTEST-Z4', 'maat' => '200 cm x 300 cm', 'prijs' => 1030.0, 'advies' => 1030.0, 'onderkleed' => 'Met onderkleed'],
+    ], 'CARTEST-BLIND');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-Z1', 'shop' => 'shopa.nl', 'price' => 380, 'scraped_at' => now()]);
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['no_coverage'];
+
+    $skus = collect($block['items'])->pluck('sku');
+
+    // Z1 heeft een concurrent, Z3 is maatwerk en Z4 is een bundel: geen van
+    // drieën is met een concurrentpagina te vergelijken.
+    expect($skus)->toContain('CARTEST-Z2')
+        ->and($skus)->not->toContain('CARTEST-Z1')
+        ->and($skus)->not->toContain('CARTEST-Z3')
+        ->and($skus)->not->toContain('CARTEST-Z4')
+        ->and($block['items'][0]['sku'])->toBe('CARTEST-Z2');
+});
+
+it('ranks the suspect prices by how certain the signal is', function () {
+    makeReportFamily([
+        // Boven het plafond: kan niet uit de prijsberekening komen.
+        ['sku' => 'CARTEST-X1', 'maat' => '200 cm x 300 cm', 'prijs' => 1200.0, 'advies' => 1000.0],
+        // Concurrent op 30% van de adviesprijs: waarschijnlijk een ander kleed.
+        ['sku' => 'CARTEST-X2', 'maat' => '200 cm x 300 cm', 'prijs' => 750.0, 'advies' => 1000.0],
+    ], 'CARTEST-VERDACHT');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-X1', 'shop' => 'shopa.nl', 'price' => 1100, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-X2', 'shop' => 'shopa.nl', 'price' => 300, 'url' => 'https://shopa.nl/x2', 'scraped_at' => now()]);
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['suspects'];
+
+    $items = collect($block['items']);
+
+    expect($items->count())->toBeLessThanOrEqual(5)
+        ->and($items->pluck('sku')->first())->toBe('CARTEST-X1')
+        ->and($items->firstWhere('sku', 'CARTEST-X1')['reden'])->toContain('boven de adviesprijs')
+        ->and($items->firstWhere('sku', 'CARTEST-X2')['reden'])->toContain('van het advies')
+        ->and($items->firstWhere('sku', 'CARTEST-X2')['url'])->toBe('https://shopa.nl/x2');
+});
+
+it('keeps derived bundles out of the suspect top-5', function () {
+    // Dezelfde fout op het kale kleed en op zijn bundel: die bundel is niets
+    // anders dan het kale kleed plus de toeslag, dus hij hoort geen tweede
+    // plek in een lijst van vijf op te eten.
+    makeReportFamily([
+        ['sku' => 'CARTEST-Y1', 'maat' => '200 cm x 300 cm', 'prijs' => 750.0, 'advies' => 1000.0],
+        ['sku' => 'CARTEST-Y1.O', 'maat' => '200 cm x 300 cm', 'prijs' => 780.0, 'advies' => 1030.0, 'onderkleed' => 'Met onderkleed'],
+    ], 'CARTEST-BUNDEL');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-Y1', 'shop' => 'shopa.nl', 'price' => 300, 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-Y1.O', 'shop' => 'shopa.nl', 'price' => 300, 'scraped_at' => now()]);
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['suspects'];
+
+    $skus = collect($block['items'])->pluck('sku');
+
+    expect($skus)->toContain('CARTEST-Y1')
+        ->and($skus)->not->toContain('CARTEST-Y1.O');
+});
+
+it('renders the report on the wide mail theme', function () {
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+    $mail = new CompetitorAnalysisReport($report);
+
+    // Vijf kolommen passen niet in Laravel's 570px; het bredere thema geldt
+    // alleen voor deze mail, zodat de overige UnoPim-mails niet meeveranderen.
+    expect($mail->theme)->toBe('hw')
+        ->and($mail->render())->toContain('1000px')
+        ->and($mail->render())->not->toContain('570px');
+});
+
+it('names the second competitor when that is what the signal compares against', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-D9', 'maat' => '300 cm x 400 cm', 'prijs' => 1100.0, 'advies' => 1100.0],
+    ], 'CARTEST-DISSENT');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-D9', 'shop' => 'goedkoop.nl', 'price' => 1100, 'url' => 'https://goedkoop.nl/d9', 'scraped_at' => now()]);
+    CompetitorPrice::create(['sku' => 'CARTEST-D9', 'shop' => 'duur.nl', 'price' => 1800, 'url' => 'https://duur.nl/d9', 'scraped_at' => now()]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+    $row = collect($report['actions']['suspects']['items'])->firstWhere('sku', 'CARTEST-D9');
+
+    // Zonder de tweede pagina is "39% onder de 2e concurrent" niet te
+    // controleren: je weet niet waar die 39% onder ligt.
+    expect($row['reden'])->toContain('onder de 2e concurrent')
+        ->and($row['tweede_shop'])->toBe('duur.nl')
+        ->and($row['tweede_url'])->toBe('https://duur.nl/d9')
+        ->and($row['tweede_prijs'])->toBe(1800.0)
+        ->and((new CompetitorAnalysisReport($report))->render())->toContain('https://duur.nl/d9');
+});
+
+it('puts both the actions and the size of the run in the subject', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-S9', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 1000.0],
+    ], 'CARTEST-SUBJECT');
+
+    logReportChange('CARTEST-S9', 1000, 900, 'Concurrent shopa.nl verlaagde naar € 900,00 — nieuwe laagste prijs.', 'shopa.nl', 900);
+
+    $subject = (new CompetitorAnalysisReport(
+        app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now())
+    ))->envelope()->subject;
+
+    expect($subject)->toContain('1 prijswijziging')
+        ->and($subject)->toContain('nieuw');
+});
+
+it('offers a confirm link and a report-url link per rug without competitors', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-K1', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 900.0],
+    ], 'CARTEST-KNOP');
+
+    $block = app(CompetitorAnalysisReporter::class)
+        ->build(now()->subHour(), now())['actions']['no_coverage'];
+
+    $row = collect($block['items'])->firstWhere('sku', 'CARTEST-K1');
+
+    expect($row['bevestig_url'])->toContain('/pricing/geen-concurrent/CARTEST-K1')
+        ->and($row['bevestig_url'])->toContain('signature=')
+        ->and($row['mail_url'])->toStartWith('mailto:support@diesite.nl')
+        ->and(urldecode($row['mail_url']))->toContain('SKU: CARTEST-K1')
+        ->and((new CompetitorAnalysisReport(app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now())))->render())
+        ->toContain('Klopt, geen concurrent gevonden');
+});
+
+it('drops a rug from the no-coverage block once it is confirmed', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-K2', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 900.0],
+    ], 'CARTEST-BEVESTIG');
+
+    $reporter = app(CompetitorAnalysisReporter::class);
+    $voor = $reporter->build(now()->subHour(), now())['actions']['no_coverage'];
+
+    // De knop uit de mail: ondertekend, zonder sessie, want hij wordt vanuit
+    // een mailclient geklikt.
+    $this->get(collect($voor['items'])->firstWhere('sku', 'CARTEST-K2')['bevestig_url'])
+        ->assertOk()
+        ->assertSee('CARTEST-K2');
+
+    $na = $reporter->build(now()->subHour(), now())['actions']['no_coverage'];
+
+    expect(collect($voor['items'])->pluck('sku'))->toContain('CARTEST-K2')
+        ->and(collect($na['items'])->pluck('sku'))->not->toContain('CARTEST-K2')
+        ->and($na['total'])->toBe($voor['total'] - 1);
+});
+
+it('refuses an unsigned confirm link', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-K3', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 900.0],
+    ], 'CARTEST-ONGETEKEND');
+
+    $this->get('/pricing/geen-concurrent/CARTEST-K3')->assertForbidden();
+
+    expect(CompetitorCoverageConfirmation::where('sku', 'CARTEST-K3')->count())->toBe(0);
+});
+
+it('offers a prefilled support mail when a coupling looks wrong', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-R9', 'maat' => '200 cm x 300 cm', 'prijs' => 750.0, 'advies' => 1000.0],
+    ], 'CARTEST-AFKEUR');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-R9', 'shop' => 'fout.nl', 'price' => 300, 'url' => 'https://fout.nl/ander-kleed', 'scraped_at' => now()]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now());
+    $row = collect($report['actions']['suspects']['items'])->firstWhere('sku', 'CARTEST-R9');
+
+    // De knop doet niets anders dan melden: de prijs blijft staan tot iemand
+    // bij support ernaar gekeken heeft.
+    $body = urldecode($row['afkeur_url']);
+
+    expect($row['afkeur_url'])->toStartWith('mailto:support@diesite.nl')
+        ->and($body)->toContain('SKU: CARTEST-R9')
+        ->and($body)->toContain('Gekoppeld aan: fout.nl')
+        ->and($body)->toContain('https://fout.nl/ander-kleed')
+        ->and($body)->toContain('Signaal uit het rapport:')
+        ->and(CompetitorPrice::where('sku', 'CARTEST-R9')->count())->toBe(1);
+});
+
+it('stops showing a suspect once it is marked as correct', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-A9', 'maat' => '200 cm x 300 cm', 'prijs' => 750.0, 'advies' => 1000.0],
+    ], 'CARTEST-AKKOORD');
+
+    CompetitorPrice::create(['sku' => 'CARTEST-A9', 'shop' => 'shopa.nl', 'price' => 300, 'scraped_at' => now()]);
+
+    $reporter = app(CompetitorAnalysisReporter::class);
+    $voor = $reporter->build(now()->subHour(), now())['actions']['suspects'];
+
+    $this->get(collect($voor['items'])->firstWhere('sku', 'CARTEST-A9')['akkoord_url'])->assertOk();
+
+    $na = $reporter->build(now()->subHour(), now())['actions']['suspects'];
+
+    expect(collect($voor['items'])->pluck('sku'))->toContain('CARTEST-A9')
+        ->and(collect($na['items'])->pluck('sku'))->not->toContain('CARTEST-A9')
+        // De prijs blijft ongemoeid: dit is een oordeel over het signaal, niet
+        // over de koppeling.
+        ->and(CompetitorPrice::where('sku', 'CARTEST-A9')->count())->toBe(1);
+});
+
+it('lets the reviewed-signals list be emptied again', function () {
+    makeReportFamily([
+        ['sku' => 'CARTEST-C9', 'maat' => '200 cm x 300 cm', 'prijs' => 900.0, 'advies' => 900.0],
+    ], 'CARTEST-LEEG');
+
+    CompetitorCoverageConfirmation::create(['sku' => 'CARTEST-C9', 'confirmed_at' => now()->subDays(40)]);
+    CompetitorSignalReview::create(['sku' => 'CARTEST-C9', 'shop' => '', 'verdict' => CompetitorSignalReview::VERDICT_CONFIRMED, 'reviewed_at' => now()]);
+
+    // Een oordeel dat niemand meer ziet mag geen signaal eeuwig verbergen.
+    $this->artisan('pricing:clear-competitor-reviews', ['--older-than' => 30, '--dry-run' => true])->assertSuccessful();
+    expect(CompetitorCoverageConfirmation::where('sku', 'CARTEST-C9')->count())->toBe(1);
+
+    $this->artisan('pricing:clear-competitor-reviews', ['--older-than' => 30])->assertSuccessful();
+
+    expect(CompetitorCoverageConfirmation::where('sku', 'CARTEST-C9')->count())->toBe(0)
+        ->and(CompetitorSignalReview::where('sku', 'CARTEST-C9')->count())->toBe(1);
+
+    $this->artisan('pricing:clear-competitor-reviews', ['--sku' => 'CARTEST-C9'])->assertSuccessful();
+    expect(CompetitorSignalReview::where('sku', 'CARTEST-C9')->count())->toBe(0);
 });

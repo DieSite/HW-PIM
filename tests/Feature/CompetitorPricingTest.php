@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\CompetitorPrice;
+use App\Models\CompetitorPriceRemoval;
 use App\Models\Product;
 use App\Models\ProductPriceHistory;
 use App\Services\CompetitorPricingService;
@@ -40,6 +41,7 @@ function makePricedVariant(array $common, string $sku = 'CPTEST-V1'): Product
 afterEach(function () {
     Product::where('sku', 'like', 'CPTEST-%')->delete();
     CompetitorPrice::where('sku', 'like', 'CPTEST-%')->delete();
+    CompetitorPriceRemoval::where('sku', 'like', 'CPTEST-%')->delete();
     ProductPriceHistory::where('sku', 'like', 'CPTEST-%')->delete();
 });
 
@@ -876,6 +878,73 @@ it('never stores a competitor price for a met-onderkleed variant', function () {
 
     expect(CompetitorPrice::where('sku', $bare->sku)->count())->toBe(1)
         ->and(CompetitorPrice::where('sku', $bundle->sku)->count())->toBe(0);
+
+    @unlink($dbPath);
+});
+
+it('logs what pruning removes so the report can name it', function () {
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ], 'CPTEST-R1');
+
+    CompetitorPrice::create([
+        'sku' => $variant->sku, 'shop' => 'verdwenen.nl', 'price' => 800,
+        'url' => 'https://verdwenen.nl/kleed', 'scraped_at' => now()->subDays(3),
+    ]);
+
+    $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
+    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
+    $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
+        ->execute([$variant->sku, 'blijft.nl', '€ 950,00', 'https://blijft.nl/kleed', now()->toDateTimeString()]);
+    $pdo = null;
+
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->assertSuccessful();
+
+    $removal = CompetitorPriceRemoval::where('sku', $variant->sku)->sole();
+
+    // De prijs is weg uit de snapshot; zonder dit logje is er niets meer dat
+    // vertelt waarom het kleed terug naar de adviesprijs ging.
+    expect(CompetitorPrice::where('sku', $variant->sku)->pluck('shop')->all())->toBe(['blijft.nl'])
+        ->and($removal->shop)->toBe('verdwenen.nl')
+        ->and((float) $removal->price)->toBe(800.0)
+        ->and($removal->url)->toBe('https://verdwenen.nl/kleed');
+
+    @unlink($dbPath);
+});
+
+it('does not log the met-onderkleed cleanup as lost coverage', function () {
+    $bare = makePricedVariant([
+        'onderkleed'         => 'Zonder onderkleed',
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ], 'CPTEST-W1');
+
+    $bundle = makePricedVariant([
+        'onderkleed'         => 'Met onderkleed',
+        'prijs'              => ['EUR' => '1030'],
+        'adviesverkoopprijs' => ['EUR' => '1030'],
+    ], 'CPTEST-W1.O');
+
+    CompetitorPrice::create(['sku' => $bundle->sku, 'shop' => 'shopa.nl', 'price' => 900, 'scraped_at' => '2026-06-17 13:07:30']);
+    CompetitorPrice::create(['sku' => $bare->sku, 'shop' => 'weg.nl', 'price' => 950, 'scraped_at' => '2026-09-04 00:00:00']);
+
+    $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
+    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
+    $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
+        ->execute([$bare->sku, 'blijft.nl', '€ 950,00', null, now()->toDateTimeString()]);
+    $pdo = null;
+
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->assertSuccessful();
+
+    // Beide rijen zijn weg, maar alleen het verlies van een échte koppeling is
+    // nieuws; de opruiming van de bundelrij is dat niet.
+    expect(CompetitorPriceRemoval::where('sku', $bundle->sku)->count())->toBe(0)
+        ->and(CompetitorPriceRemoval::where('sku', $bare->sku)->pluck('shop')->all())->toBe(['weg.nl']);
 
     @unlink($dbPath);
 });

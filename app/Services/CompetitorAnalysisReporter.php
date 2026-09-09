@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\CompetitorPrice;
+use App\Models\CompetitorSignalReview;
 use App\Models\Product;
 use App\Models\ProductPriceHistory;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Turns one run of the competitor analysis into a report: what our prices did,
@@ -70,6 +72,18 @@ class CompetitorAnalysisReporter
     public const GROUP_PRICES = 'prices';
 
     /**
+     * How many rows per action block end up in the CSV attachment. The mail
+     * shows `max_rows` of them; this is the ceiling on what the reader can
+     * still work through in a spreadsheet afterwards.
+     */
+    private const ACTION_ROWS = 500;
+
+    /** Non-breaking space, so an amount never wraps away from its € sign. */
+    private const NBSP = "\u{00A0}";
+
+    public function __construct(private readonly CompetitorAnalysisActions $actions) {}
+
+    /**
      * Build the full report for the given window.
      *
      * @return array{
@@ -112,6 +126,10 @@ class CompetitorAnalysisReporter
 
         $outliers = $this->outliers($rows, $cheapest, $products);
 
+        // Ruim genoeg voor de bijlage; de mail zelf toont er per blok `max_rows`.
+        $actions = $this->actions->build($since, $until, self::ACTION_ROWS);
+        $actions['suspects'] = $this->suspects($rows, $competitors, $cheapest, $products, $families);
+
         return [
             'since'         => $since,
             'until'         => $until,
@@ -120,6 +138,8 @@ class CompetitorAnalysisReporter
             'coverage'      => $this->coverage($competitors, $confirmedSince),
             'outliers'      => $outliers,
             'outlier_total' => array_sum(array_map('count', $outliers)),
+            'actions'       => $actions,
+            'action_total'  => array_sum(array_map(fn (array $block): int => $block['total'], $actions)),
             'checks'        => $checks,
             'alerts'        => count(array_filter($checks, fn (array $c): bool => $c['status'] === self::STATUS_ALERT)),
             'warnings'      => count(array_filter($checks, fn (array $c): bool => $c['status'] === self::STATUS_WARN)),
@@ -161,6 +181,53 @@ class CompetitorAnalysisReporter
         }
 
         return null;
+    }
+
+    /**
+     * The action blocks as one CSV, so the mail can show a handful per block
+     * and still hand over every row that needs looking at.
+     *
+     * One flat table with a `Blok` column rather than five attachments: the
+     * columns are the same questions each time (welk kleed, welke prijs, wat nu)
+     * and a single sheet can be sorted and filtered.
+     *
+     * @param  array<string, array{title: string, items: list<array<string, mixed>>}>  $actions
+     */
+    public function actionsToCsv(array $actions): string
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        fputcsv($handle, [
+            'Blok', 'SKU', 'Model', 'Maat', 'Onze prijs', 'Adviesprijs',
+            'Concurrent', 'Concurrentprijs', 'URL',
+            '2e concurrent', '2e prijs', 'Reden', 'Actie',
+        ], ';');
+
+        foreach ($actions as $block) {
+            foreach ($block['items'] as $row) {
+                fputcsv($handle, [
+                    $block['title'],
+                    $row['sku'] ?? '',
+                    $row['model'] ?? '',
+                    $row['maat'] ?? '',
+                    $this->csvNumber($row['prijs'] ?? null),
+                    $this->csvNumber($row['advies'] ?? null),
+                    $row['shop'] ?? $row['shops'] ?? '',
+                    $this->csvNumber($row['concurrentprijs'] ?? $row['laatste_prijs'] ?? null),
+                    $row['url'] ?? '',
+                    $row['tweede_shop'] ?? '',
+                    $this->csvNumber($row['tweede_prijs'] ?? null),
+                    $row['reden'] ?? '',
+                    $row['actie'] ?? '',
+                ], ';');
+            }
+        }
+
+        rewind($handle);
+        $csv = (string) stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv;
     }
 
     /**
@@ -238,6 +305,12 @@ class CompetitorAnalysisReporter
             self::KIND_DERIVED => 'Afgeleid (met onderkleed)',
             default            => 'Concurrent',
         };
+    }
+
+    /** Dutch decimal comma, so the numbers land as numbers in Excel. */
+    private function csvNumber(?float $value): string
+    {
+        return $value === null ? '' : number_format($value, 2, ',', '');
     }
 
     /**
@@ -474,7 +547,7 @@ class CompetitorAnalysisReporter
      * from the result has no product at all, which is its own signal.
      *
      * @param  list<string>  $skus
-     * @return Collection<string, array{advies: ?float, prijs: ?float, maat: ?string, parent_id: ?int, onderkleed: ?string, area: ?float}>
+     * @return Collection<string, array{model: ?string, advies: ?float, prijs: ?float, maat: ?string, parent_id: ?int, onderkleed: ?string, area: ?float}>
      */
     private function productPrices(array $skus): Collection
     {
@@ -488,6 +561,7 @@ class CompetitorAnalysisReporter
                     ."`values`->>'$.common.adviesverkoopprijs.EUR' as advies, "
                     ."`values`->>'$.common.prijs.EUR' as prijs, "
                     ."`values`->>'$.common.maat' as maat, "
+                    ."`values`->>'$.common.productnaam' as model, "
                     ."`values`->>'$.common.onderkleed' as onderkleed"
                 )
                 ->get()
@@ -495,6 +569,7 @@ class CompetitorAnalysisReporter
                     $maat = is_string($product->maat) && $product->maat !== 'null' ? $product->maat : null;
 
                     $prices[$product->sku] = [
+                        'model'      => is_string($product->model) && $product->model !== 'null' ? $product->model : null,
                         'advies'     => $this->positive($product->advies),
                         'prijs'      => $this->positive($product->prijs),
                         'maat'       => $maat,
@@ -732,6 +807,257 @@ class CompetitorAnalysisReporter
     }
 
     /**
+     * The handful of rugs whose price is most likely to be wrong right now.
+     *
+     * The price checks each answer one question over the whole catalogue, which
+     * is what made the mail unreadable: six lists of dozens of SKUs, none of
+     * them ranked. This weighs the same signals against each other and returns
+     * only the top of the pile, worst first, with the reason and the next step
+     * spelled out per rug.
+     *
+     * The order is by how certain the signal is, not by how large the number
+     * is. A price above its own ceiling cannot happen through the pricing logic
+     * at all, so it beats a suspicious ratio, which in turn beats a
+     * disagreement between shops. Within one signal the most expensive rug
+     * comes first: same evidence, more money.
+     *
+     * Both `reden` and `actie` are deliberately a few words, not a sentence:
+     * they are table cells someone scans five of, and the mail renderer folds
+     * consecutive lines into one paragraph anyway — the first version read as a
+     * wall of prose that repeated the competitor price it had just shown.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  Collection<int, CompetitorPrice>  $competitors
+     * @param  Collection<string, CompetitorPrice>  $cheapest
+     * @param  Collection<string, array<string, mixed>>  $products
+     * @param  Collection<int, Collection<int, array<string, mixed>>>  $families
+     * @return array{title: string, action: string, total: int, items: list<array<string, mixed>>}
+     */
+    private function suspects(
+        Collection $rows,
+        Collection $competitors,
+        Collection $cheapest,
+        Collection $products,
+        Collection $families,
+    ): array {
+        $limits = $this->thresholds();
+        $candidates = [];
+
+        // Wat iemand al heeft beoordeeld hoort niet elke nacht de top-5 te
+        // vullen; anders verdringt het de gevallen die nog niemand zag.
+        $beoordeeld = CompetitorSignalReview::query()
+            ->where('verdict', CompetitorSignalReview::VERDICT_CONFIRMED)
+            ->pluck('sku')
+            ->flip();
+
+        $add = function (string $sku, int $severity, string $probleem, string $actie, array $extra = []) use (&$candidates, $products, $cheapest, $beoordeeld): void {
+            if ($beoordeeld->has($sku)) {
+                return;
+            }
+
+            $product = $products->get($sku);
+            $competitor = $cheapest->get($sku);
+
+            // Eén regel per kleed: het zwaarste signaal wint, anders staat
+            // hetzelfde kleed drie keer in een lijst van vijf.
+            if (isset($candidates[$sku]) && $candidates[$sku]['severity'] <= $severity) {
+                return;
+            }
+
+            // array_merge, niet `+`: bij een array-unie wint de linkerkant en
+            // blijven de nulls hieronder staan in plaats van de meegegeven waarden.
+            $candidates[$sku] = array_merge([
+                'sku'             => $sku,
+                'severity'        => $severity,
+                'model'           => $product['model'] ?? null,
+                'maat'            => $product['maat'] ?? null,
+                'prijs'           => $product['prijs'] ?? null,
+                'advies'          => $product['advies'] ?? null,
+                'shop'            => $competitor?->shop,
+                'concurrentprijs' => $competitor === null ? null : (float) $competitor->price,
+                'url'             => $competitor?->url,
+                'reden'           => $probleem,
+                'actie'           => $actie,
+                'afkeur_url'      => $competitor === null ? null
+                    : $this->reportCouplingUrl($sku, $product, $competitor, $probleem),
+                'akkoord_url'     => URL::signedRoute('pricing.suspect.acknowledge', ['sku' => $sku]),
+                // Alleen gevuld waar een tweede winkel de vergelijking is die
+                // het signaal maakt; de mail toont hem dan naast de goedkoopste.
+                'tweede_shop'     => null,
+                'tweede_prijs'    => null,
+                'tweede_url'      => null,
+            ], $extra);
+        };
+
+        foreach ($cheapest->keys()->merge($rows->pluck('sku'))->unique() as $sku) {
+            $product = $products->get($sku);
+
+            if ($product === null || $this->isDerivedBundle($sku, $products)) {
+                continue;
+            }
+
+            if ($product['advies'] !== null && $product['prijs'] !== null && $product['prijs'] > $product['advies'] + 0.5) {
+                $add($sku, 1,
+                    'Prijs boven de adviesprijs',
+                    'Handmatige prijs of verlaagd advies?');
+
+                continue;
+            }
+
+            if ($product['advies'] === null && $cheapest->has($sku)) {
+                $add($sku, 2,
+                    'Geen adviesverkoopprijs',
+                    'Vul de adviesverkoopprijs');
+
+                continue;
+            }
+
+            $competitor = $cheapest->get($sku);
+
+            if ($competitor !== null && $product['advies'] !== null && $product['advies'] > 0) {
+                $ratio = (float) $competitor->price / $product['advies'] * 100;
+
+                if ($ratio < $limits['competitor_ratio']) {
+                    $add($sku, 3,
+                        'Concurrent op '.$this->pct($ratio).' van het advies',
+                        'Open de pagina: zelfde kleed en maat?');
+                }
+            }
+        }
+
+        foreach ($this->dissentGaps($competitors, (float) $limits['dissent_pct']) as $sku => $dissent) {
+            if ($this->isDerivedBundle($sku, $products)) {
+                continue;
+            }
+
+            $second = $dissent['second'];
+
+            $add($sku, 4,
+                $this->pct($dissent['gap']).' onder de 2e concurrent',
+                'Vergelijk beide pagina\'s: welke is ons kleed?',
+                [
+                    'tweede_shop'  => $second->shop,
+                    'tweede_prijs' => (float) $second->price,
+                    'tweede_url'   => $second->url,
+                ]);
+        }
+
+        foreach ($this->perSquareMetreDeviations($rows, $families, (float) $limits['psqm_deviation_pct']) as $finding) {
+            if ($this->isDerivedBundle($finding['sku'], $products)) {
+                continue;
+            }
+
+            $add($finding['sku'], 5,
+                'Prijs per m² wijkt '.$this->pct($finding['deviation']).' af',
+                'Vergelijk met de andere maten van dit model');
+        }
+
+        $items = collect($candidates)
+            ->sortBy([
+                fn (array $a, array $b): int => $a['severity'] <=> $b['severity'],
+                fn (array $a, array $b): int => ($b['advies'] ?? 0) <=> ($a['advies'] ?? 0),
+            ])
+            ->values();
+
+        return [
+            'title'  => 'Vijf kleden waarvan de prijs waarschijnlijk niet klopt',
+            'action' => 'Op volgorde van zekerheid; deze prijzen staan nu live in de winkel.',
+            'total'  => $items->count(),
+            'items'  => $items->take(5)->all(),
+        ];
+    }
+
+    /**
+     * "Koppeling klopt niet": een vooringevulde mail naar support.
+     *
+     * Bewust niets méér dan dat. Een knop die de koppeling zelf weggooit en de
+     * prijs herberekent klinkt handiger, maar dan beslist één klik in een
+     * mailclient wat er live in de winkel staat — en de melder is meestal niet
+     * degene die dat oordeel hoort te vellen. De mail draagt alles wat support
+     * nodig heeft om het na te lopen: welk kleed, welke winkel, welke pagina,
+     * beide prijzen en waaróm het systeem het verdacht vond.
+     *
+     * @param  array<string, mixed>|null  $product
+     */
+    private function reportCouplingUrl(string $sku, ?array $product, CompetitorPrice $competitor, string $probleem): string
+    {
+        $naam = trim(implode(' · ', array_filter([$product['model'] ?? null, $product['maat'] ?? null])));
+
+        $body = implode("\n", array_filter([
+            'Deze koppeling in de concurrentie-analyse klopt niet:',
+            '',
+            'SKU: '.$sku,
+            $naam === '' ? null : 'Kleed: '.$naam,
+            'Onze prijs: '.($product['prijs'] ?? null ? $this->euro((float) $product['prijs']) : 'onbekend'),
+            'Adviesprijs: '.($product['advies'] ?? null ? $this->euro((float) $product['advies']) : 'onbekend'),
+            '',
+            'Gekoppeld aan: '.$competitor->shop.' — '.$this->euro((float) $competitor->price),
+            'Pagina: '.($competitor->url ?: 'onbekend'),
+            '',
+            'Signaal uit het rapport: '.$probleem,
+            '',
+            'Wat er mis is: ',
+            '',
+        ]));
+
+        return 'mailto:'.config('competitor_pricing.report.support_address')
+            .'?subject='.rawurlencode('Foute koppeling: '.$sku.' ↔ '.$competitor->shop)
+            .'&body='.rawurlencode($body);
+    }
+
+    /**
+     * Whether this SKU's price is derived rather than computed.
+     *
+     * A "Met onderkleed" variant is its bare sibling plus the underlay
+     * surcharge, so it inherits every fault of that sibling and none of its
+     * own. Listing both fills a top-5 with two rugs — the first run against
+     * live data returned Vogue Uni Black and White twice each — while the only
+     * thing anyone can fix is the bare variant.
+     *
+     * @param  Collection<string, array<string, mixed>>  $products
+     */
+    private function isDerivedBundle(string $sku, Collection $products): bool
+    {
+        return ($products->get($sku)['onderkleed'] ?? null) === 'Met onderkleed';
+    }
+
+    /**
+     * Per SKU: how much cheaper the cheapest competitor is than the next one,
+     * plus that next one, for the SKUs where the gap exceeds the threshold.
+     *
+     * The second shop comes along because the gap is only checkable next to it:
+     * "37% onder de 2e concurrent" is not a claim anyone can follow up without
+     * the page it is 37% under.
+     *
+     * @param  Collection<int, CompetitorPrice>  $competitors
+     * @return array<string, array{gap: float, second: CompetitorPrice}>
+     */
+    private function dissentGaps(Collection $competitors, float $gapPct): array
+    {
+        return $competitors
+            ->groupBy('sku')
+            ->map(function (Collection $prices) use ($gapPct): ?array {
+                if ($prices->count() < 2) {
+                    return null;
+                }
+
+                $sorted = $prices->sortBy('price')->values();
+                $lowest = (float) $sorted[0]->price;
+                $second = (float) $sorted[1]->price;
+
+                if ($lowest <= 0 || $second <= 0) {
+                    return null;
+                }
+
+                $gap = ($second - $lowest) / $second * 100;
+
+                return $gap >= $gapPct ? ['gap' => $gap, 'second' => $sorted[1]] : null;
+            })
+            ->filter()
+            ->all();
+    }
+
+    /**
      * Indirect tells that a price is not correct. None of these prove an error;
      * they are the patterns that in practice accompany one.
      *
@@ -943,6 +1269,20 @@ class CompetitorAnalysisReporter
      */
     private function pricePerSquareMetreOutliers(Collection $rows, Collection $families, float $deviationPct): array
     {
+        return array_column($this->perSquareMetreDeviations($rows, $families, $deviationPct), 'text');
+    }
+
+    /**
+     * The same finding with its numbers intact, so the actionable top-5 can
+     * rank it against the other signals instead of re-deriving it from a
+     * sentence.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  Collection<int, Collection<int, array<string, mixed>>>  $families
+     * @return list<array{sku: string, deviation: float, text: string}>
+     */
+    private function perSquareMetreDeviations(Collection $rows, Collection $families, float $deviationPct): array
+    {
         $changed = $rows->pluck('sku')->unique()->flip();
         $found = [];
 
@@ -976,6 +1316,7 @@ class CompetitorAnalysisReporter
                 }
 
                 $found[] = [
+                    'sku'       => $variant['sku'],
                     'deviation' => abs($deviation),
                     'text'      => $variant['sku'].' ('.($variant['maat'] ?? 'onbekende maat').') — '
                         .$this->euro($variant['per_m2']).'/m² tegenover '.$this->euro($median).'/m² in dit model ('
@@ -986,7 +1327,7 @@ class CompetitorAnalysisReporter
 
         usort($found, fn (array $a, array $b): int => $b['deviation'] <=> $a['deviation']);
 
-        return array_column($found, 'text');
+        return $found;
     }
 
     /**
@@ -1168,9 +1509,17 @@ class CompetitorAnalysisReporter
         return $value === null ? '' : number_format($value, 2, ',', '');
     }
 
+    /**
+     * A price, with a non-breaking space after the sign.
+     *
+     * A normal space lets a narrow table column wrap "€" onto its own line with
+     * the amount underneath, which is how half the prices in the first version
+     * looked. Nothing else about the column changes, so this is the cheapest
+     * place to fix it.
+     */
     private function euro(float $value): string
     {
-        return '€ '.number_format($value, 2, ',', '.');
+        return '€'.self::NBSP.number_format($value, 2, ',', '.');
     }
 
     /** "1 winkel" versus "3 winkels", so a count never reads as a typo. */

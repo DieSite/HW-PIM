@@ -119,6 +119,13 @@ return [
     |
     */
     'report' => [
+        /*
+        | Adres achter de knop "Mail url van concurrent" in het rapport. Die
+        | knop is een mailto-link: de lezer weet de URL, wij niet, dus het
+        | enige zinnige is een vooringevulde mail die hij zelf afmaakt.
+        */
+        'support_address' => env('COMPETITOR_PRICING_SUPPORT_ADDRESS', 'support@diesite.nl'),
+
         'recipients' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env(

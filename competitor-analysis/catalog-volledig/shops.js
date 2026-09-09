@@ -32,11 +32,20 @@ const SHOPIFY_SHOPS = [
     key:    'vloerkledenloods.nl',
     base:   'https://vloerkledenloods.nl',
     brands: ['De Munk', 'Karpi', 'Mart Visser'],
+    // Zij labelen de XS-band van Karpi als "80 x 150 cm" waar ons PIM
+    // "80 x 160 cm" zegt. Dat het hetzelfde kleed is, blijkt uit het product
+    // zelf: de vier andere maten matchen exact én de XS kost aan beide kanten
+    // € 129 (Cisco 63, geverifieerd 09-09-2026). Springt alleen in als zij
+    // onze exacte maat niet voeren — zie sizeMatches in normalize.js.
+    sizeAliases: [{ from: [80, 160], to: [80, 150] }],
   },
   {
     key:    'hetdesignhuys.nl',
     base:   'https://hetdesignhuys.nl',
     brands: ['Eurogros', 'Karpi', 'Mart Visser'],
+    // Zelfde XS-band als vloerkledenloods: 21 varianten op "80 x 150 cm" en
+    // geen enkele op 80 x 160.
+    sizeAliases: [{ from: [80, 160], to: [80, 150] }],
   },
 ];
 
@@ -57,11 +66,6 @@ const WOOCOMMERCE_SHOPS = [
     key:    'vloerkledenspecialist.nl',
     base:   'https://vloerkledenspecialist.nl',
     brands: ['De Munk'],
-  },
-  {
-    key:    'vivaldixl.nl',
-    base:   'https://www.vivaldixl.nl',
-    brands: ['Karpi', 'Mart Visser'],
   },
   {
     key:    'meubelcity.nl',
@@ -133,7 +137,13 @@ const CUSTOM_SHOPS = [
     key:        'karpettenshop.nl',
     base:       'https://www.karpettenshop.nl',
     brands:     ['De Munk'],
-    sitemapUrl: 'https://www.karpettenshop.nl/sitemap.xml',
+    // Deze winkel heeft geen sitemap: /sitemap.xml geeft een 404-pagina en
+    // robots.txt noemt er geen. Het overzicht zet de productlinks wél gewoon
+    // in de HTML, 35 pagina's van ~39 producten.
+    listUrl:      'https://www.karpettenshop.nl/karpetten.html',
+    listPages:    40,
+    listPageParam: 'p',
+    linkRe:       /https:\/\/www\.karpettenshop\.nl\/karpetten\/[^"#?]+\.html/,
     brandKeys:  ['de-munk-carpets'],
     getPrijs(html, w, h) {
       const maat = `${w} x ${h}`;
@@ -195,7 +205,9 @@ const CUSTOM_SHOPS = [
     key:        'vloerkledenvoordelig.nl',
     base:       'https://www.vloerkledenvoordelig.nl',
     brands:     ['Karpi', 'Mart Visser'],
-    sitemapUrl: 'https://www.vloerkledenvoordelig.nl/sitemap.xml',
+    // Kaal /sitemap.xml geeft hier een HTML-pagina (200, geen <loc>); de
+    // echte productsitemap zit achter ?type=products — 6.045 URL's.
+    sitemapUrl: 'https://www.vloerkledenvoordelig.nl/sitemap.xml?type=products',
     brandKeys:  ['karpi', 'mart-visser'],
     fromUrl:    true,
     getPrijs:   null,
@@ -263,10 +275,14 @@ const CUSTOM_SHOPS = [
     brands:     ['Mart Visser', 'Louis De Poortere', 'Desso'],
     sitemapUrl: 'https://www.floorpassion.nl/sitemap.xml',
     brandKeys:  ['mart-visser', 'cendre', 'vernon', 'cavaro', 'prosper', 'poortere', 'desso'],
-    getPrijs(html, w, h) {
-      const maat = `${w}x${h}`;
+    // Rechthoeken en ovalen staan er als "Afmeting: 200x290 cm" (de vorm zit in
+    // de pagina, niet in het label), maar ronde kleden als "Afmeting: 200 cm
+    // rond". Zonder die tweede vorm bleef élk rond kleed hier prijsloos, terwijl
+    // de pagina gewoon bestaat en geïndexeerd wordt.
+    getPrijs(html, w, h, shape) {
+      const maat = shape === 'rond' ? `${w} cm rond` : `${w}x${h} cm`;
       const m = html.match(new RegExp(
-        `<option value="\\d+"[^>]*data-price="([\\d.]+)"[^>]*>Afmeting: ${maat} cm`,
+        `<option value="\\d+"[^>]*data-price="([\\d.]+)"[^>]*>Afmeting: ${maat}`,
         'i'
       ));
       if (!m) return null;
@@ -299,6 +315,36 @@ const CUSTOM_SHOPS = [
     },
     detectBrand(url) {
       if (/mart-visser|cendre|vernon|cavaro|prosper/i.test(url)) return 'Mart Visser';
+      if (/karpi/i.test(url)) return 'Karpi';
+      return null;
+    },
+  },
+
+  // ── vivaldixl.nl (WooCommerce, maar via de sitemap) ──────────────────────
+  //
+  // Staat hier en niet bij WOOCOMMERCE_SHOPS: hun Store API geeft HTTP 500
+  // zodra een zoekopdracht daadwerkelijk producten oplevert (een lege uitslag
+  // geeft netjes 200 met []). De indexer zag daardoor alleen maar fouten of
+  // niets en de winkel leverde structureel nul prijzen.
+  //
+  // Let op de omvang voordat je hier tijd in steekt: het is een tuinmeubel-
+  // winkel met 1.001 producten waarvan er zes vloerkleden zijn, en daarvan is
+  // er één van onze merken (Mart Visser Vernon Warm Olive 160x230). De prijs
+  // staat in JSON-LD, de maat in de URL — verder niets bijzonders.
+  {
+    key:        'vivaldixl.nl',
+    base:       'https://www.vivaldixl.nl',
+    brands:     ['Karpi', 'Mart Visser'],
+    sitemapUrl: 'https://www.vivaldixl.nl/product-sitemap.xml',
+    brandKeys:  ['mart-visser', 'vernon', 'cendre', 'cavaro', 'prosper', 'karpi'],
+    fromUrl:    true,
+    getPrijs:   null,
+    sizeFromUrl(url) {
+      const m = url.match(/(\d{2,3})-x-(\d{2,3})/) || url.match(/(\d{2,3})x(\d{2,3})/);
+      return m ? { widthCm: Number(m[1]), heightCm: Number(m[2]) } : null;
+    },
+    detectBrand(url) {
+      if (/mart-visser|vernon|cendre|cavaro|prosper/i.test(url)) return 'Mart Visser';
       if (/karpi/i.test(url)) return 'Karpi';
       return null;
     },
@@ -351,13 +397,20 @@ const CUSTOM_SHOPS = [
     base:       'https://vloerkledenspecialist.nl',
     brands:     ['De Munk'],
     sitemapUrl: 'https://vloerkledenspecialist.nl/sitemap.xml',
-    brandKeys:  ['de-munk', 'munk-carpets'],
-    // Prijs staat in custom size-select: value="2.00 x 3.00|1439"
-    getPrijs(html, w, h) {
-      const meterW = (w / 100).toFixed(2);
-      const meterH = (h / 100).toFixed(2);
-      const meters = `${meterW} x ${meterH}`;
-      const re = new RegExp(`value="${meters.replace(/[.|]/g, '\\$&').replace(/ /g, '\\s*')}\\|(\\d+(?:[.,]\\d+)?)"`, 'i');
+    // Bewust géén brandKeys: hun slugs zijn inconsistent. 168 De Munk-producten
+    // dragen "de-munk" in de URL, maar 59 andere niet ("nuovo-arbitro-vloerkleed"
+    // naast "de-munk-nuovo-basilio-vloerkleed") en die vielen allemaal weg.
+    // detectBrand geeft hier sowieso altijd De Munk terug, dus het voorfilter
+    // voegde niets toe behalve dat gat; de modelguards doen het echte werk.
+    brandKeys:  undefined,
+    // Prijs staat in een custom size-select: value="2.00 x 3.00|1439".
+    // Ronde kleden staan er als diameter met een Ø: value="2.00 Ø|1375".
+    // Zonder die tweede vorm leverde élk rond kleed hier n.v.t. — alle negen
+    // Intorno-modellen stonden netjes geïndexeerd en bleven toch prijsloos.
+    getPrijs(html, w, h, shape) {
+      const meters = (cm) => (cm / 100).toFixed(2);
+      const key = shape === 'rond' ? `${meters(w)} Ø` : `${meters(w)} x ${meters(h)}`;
+      const re = new RegExp(`value="${key.replace(/[.|]/g, '\\$&').replace(/ /g, '\\s*')}\\|(\\d+(?:[.,]\\d+)?)"`, 'i');
       const m = html.match(re);
       return m ? fmt(parsePriceStr(m[1])) : null;
     },
