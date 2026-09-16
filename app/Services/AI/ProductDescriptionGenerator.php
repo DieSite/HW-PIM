@@ -19,6 +19,19 @@ use RuntimeException;
  */
 class ProductDescriptionGenerator
 {
+    /**
+     * The built-in brief per text block; the admin screen can replace each one.
+     */
+    public const FIELD_BRIEFS = [
+        'beschrijving_l' => 'Het verhaal van het kleed: hoe het eruitziet, waar het van gemaakt is, '
+            .'in welk interieur het past en waar de koper op moet letten. Dit is de hoofdtekst op de productpagina.',
+        'beschrijving_k' => 'Het praktische blok: welke standaardmaten er zijn, of maatwerk mogelijk is '
+            .'en tot welke afmetingen, en de levertijden. Neem alleen de maten en levertijden over die in de '
+            .'productgegevens staan, letterlijk zoals ze daar genoteerd zijn.',
+        'meta_beschrijving' => 'De meta description voor Google. Eén zin die dit specifieke kleed onderscheidt, '
+            .'plus de merknaam Huis & Wonen.',
+    ];
+
     public function __construct(
         private readonly AiClientManager $clients,
         private readonly AiSettings $settings,
@@ -30,13 +43,17 @@ class ProductDescriptionGenerator
     ) {}
 
     /**
+     * A block that refers to another block whose text is still empty gets that
+     * text written in the same call, so the result also carries the source.
+     *
      * @param  list<string>|null  $fields  Attribute codes to write; defaults to all configured fields.
      * @param  array<string, mixed>  $overrides  Values from the open form that have not been saved yet.
      * @return Result
      */
     public function generate(Product $product, ?array $fields = null, array $overrides = []): array
     {
-        $fields = $this->fields($fields);
+        $existing = $this->briefBuilder->common($product, $overrides);
+        $fields = $this->withSources($this->fields($fields), $existing);
         $brief = $this->briefBuilder->build($product, $overrides);
         $allowedSizes = $this->briefBuilder->allowedSizes($product, $overrides);
         $siblingTexts = $this->siblings->openings($product);
@@ -44,7 +61,7 @@ class ProductDescriptionGenerator
 
         $request = new AiRequest(
             systemInstruction: $this->systemInstruction(),
-            prompt: $this->prompt($brief, $fields, $product, $siblingTexts),
+            prompt: $this->prompt($brief, $fields, $product, $siblingTexts, $existing),
             images: $image === null ? [] : [$image],
             jsonSchema: $this->schema($fields),
         );
@@ -63,12 +80,12 @@ class ProductDescriptionGenerator
      */
     public function generateFromValues(array $values, ?array $fields = null): array
     {
-        $fields = $this->fields($fields);
+        $fields = $this->withSources($this->fields($fields), $values);
         $brief = $this->briefBuilder->buildFromValues($values);
 
         $request = new AiRequest(
             systemInstruction: $this->systemInstruction(),
-            prompt: $this->prompt($brief, $fields, null, collect())
+            prompt: $this->prompt($brief, $fields, null, collect(), $values)
                 ."\n\nDit product bestaat nog niet in het systeem, dus er is geen matenlijst. "
                 .'Noem daarom geen enkele concrete maat of levertijd.',
             jsonSchema: $this->schema($fields),
@@ -153,6 +170,9 @@ class ProductDescriptionGenerator
         $client = $this->clients->client();
         $threshold = (float) config('ai.similarity_threshold');
         $bannedPhrases = $this->settings->bannedPhrases();
+        $fieldBannedPhrases = collect($fields)
+            ->mapWithKeys(fn (string $field): array => [$field => $this->settings->fieldBannedPhrases($field)])
+            ->all();
         $siblingTexts = $product !== null ? $this->siblings->fullTexts($product) : [];
 
         $texts = [];
@@ -172,7 +192,7 @@ class ProductDescriptionGenerator
             $inputTokens += $response->inputTokens;
             $outputTokens += $response->outputTokens;
 
-            $problems = $this->validator->validate($texts, $allowedSizes, $bannedPhrases);
+            $problems = $this->validator->validate($texts, $allowedSizes, $bannedPhrases, $fieldBannedPhrases);
             $similarity = isset($texts['beschrijving_l'])
                 ? $this->validator->maxSimilarity($texts['beschrijving_l'], $siblingTexts)
                 : 0.0;
@@ -234,19 +254,141 @@ class ProductDescriptionGenerator
             $failed[] = 'beschrijving_l';
         }
 
+        /** A text built on a rewritten text has to follow it, or it describes the old one. */
+        do {
+            $added = false;
+
+            foreach ($fields as $field) {
+                if (! in_array($field, $failed, true) && array_intersect($this->settings->fieldReferences($field), $failed) !== []) {
+                    $failed[] = $field;
+                    $added = true;
+                }
+            }
+        } while ($added);
+
         return array_values(array_intersect($fields, array_unique($failed)));
+    }
+
+    /**
+     * The requested fields plus every block they refer to that has no text yet,
+     * ordered so a source is always written before the text built on it.
+     *
+     * @param  list<string>  $fields
+     * @param  array<string, mixed>  $existing
+     * @return list<string>
+     */
+    private function withSources(array $fields, array $existing): array
+    {
+        $queue = $fields;
+
+        while ($queue !== []) {
+            foreach ($this->settings->fieldReferences(array_shift($queue)) as $source) {
+                if (! in_array($source, $fields, true) && $this->existingText($existing, $source) === null) {
+                    $fields[] = $source;
+                    $queue[] = $source;
+                }
+            }
+        }
+
+        $ordered = [];
+        $visiting = [];
+
+        $visit = function (string $field) use (&$visit, &$ordered, &$visiting, $fields): void {
+            if (isset($visiting[$field])) {
+                return;
+            }
+
+            $visiting[$field] = true;
+
+            foreach ($this->settings->fieldReferences($field) as $source) {
+                if (in_array($source, $fields, true)) {
+                    $visit($source);
+                }
+            }
+
+            $ordered[] = $field;
+        };
+
+        foreach (array_keys((array) config('ai.fields')) as $code) {
+            if (in_array($code, $fields, true)) {
+                $visit($code);
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * How the requested texts relate to each other, plus the current text of
+     * every referenced block that is not being rewritten in this call.
+     *
+     * @param  list<string>  $fields
+     * @param  array<string, mixed>  $existing
+     */
+    private function referenceBriefs(array $fields, array $existing): string
+    {
+        /** @var array<string, array{label:string}> $config */
+        $config = config('ai.fields');
+
+        $lines = [];
+        $quoted = [];
+
+        foreach ($fields as $field) {
+            foreach ($this->settings->fieldReferences($field) as $source) {
+                if (in_array($source, $fields, true)) {
+                    $lines[] = "- {$field} bouwt voort op {$source}: schrijf eerst {$source} en baseer {$field} op precies die tekst.";
+                } elseif (($text = $this->existingText($existing, $source)) !== null) {
+                    $lines[] = "- {$field} bouwt voort op de huidige tekst van {$source}, hieronder.";
+                    $quoted[$source] = $text;
+                }
+            }
+        }
+
+        if ($lines === []) {
+            return '';
+        }
+
+        $brief = "VERWIJZINGEN TUSSEN TEKSTEN\n".implode("\n", $lines);
+
+        foreach ($quoted as $source => $text) {
+            $label = $config[$source]['label'] ?? $source;
+            $brief .= "\n\nHUIDIGE TEKST VAN {$source} ({$label})\n{$text}";
+        }
+
+        return $brief;
+    }
+
+    /**
+     * @param  array<string, mixed>  $existing
+     */
+    private function existingText(array $existing, string $field): ?string
+    {
+        $value = $existing[$field] ?? null;
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $plain = $this->validator->plain($value);
+
+        return $plain === '' || strtolower($plain) === 'null' ? null : $plain;
     }
 
     /**
      * @param  array<string, mixed>  $brief
      * @param  list<string>  $fields
      * @param  Collection<int, string>  $siblingOpenings
+     * @param  array<string, mixed>  $existing  Current attribute values, form values included.
      */
-    private function prompt(array $brief, array $fields, ?Product $product, Collection $siblingOpenings): string
+    private function prompt(array $brief, array $fields, ?Product $product, Collection $siblingOpenings, array $existing = []): string
     {
         $json = json_encode($brief, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $prompt = "PRODUCTGEGEVENS\n{$json}\n\nGEVRAAGDE TEKSTEN\n".$this->fieldBriefs($fields);
+
+        if ($references = $this->referenceBriefs($fields, $existing)) {
+            $prompt .= "\n\n".$references;
+        }
 
         if ($product !== null) {
             $prompt .= "\n\nINVALSHOEK\n".$this->angle((string) $product->sku);
@@ -274,6 +416,9 @@ class ProductDescriptionGenerator
      * What each field is for. Written out because the field names alone do not
      * say that "beschrijving_k" is the sizes-and-delivery block.
      *
+     * The block settings from the admin screen go here rather than into the
+     * system instruction, so that stays identical for every call and cacheable.
+     *
      * @param  list<string>  $fields
      */
     private function fieldBriefs(array $fields): string
@@ -281,22 +426,26 @@ class ProductDescriptionGenerator
         /** @var array<string, array{label:string, min:int, max:int}> $config */
         $config = config('ai.fields');
 
-        $briefs = [
-            'beschrijving_l' => 'Het verhaal van het kleed: hoe het eruitziet, waar het van gemaakt is, '
-                .'in welk interieur het past en waar de koper op moet letten. Dit is de hoofdtekst op de productpagina.',
-            'beschrijving_k' => 'Het praktische blok: welke standaardmaten er zijn, of maatwerk mogelijk is '
-                .'en tot welke afmetingen, en de levertijden. Neem alleen de maten en levertijden over die in de '
-                .'productgegevens staan, letterlijk zoals ze daar genoteerd zijn.',
-            'meta_beschrijving' => 'De meta description voor Google. Eén zin die dit specifieke kleed onderscheidt, '
-                .'plus de merknaam Huis & Wonen.',
-        ];
-
         return collect($fields)
-            ->map(function (string $field) use ($briefs, $config): string {
+            ->map(function (string $field) use ($config): string {
                 $rules = $config[$field];
+                $instruction = $this->settings->fieldInstruction($field) ?? self::FIELD_BRIEFS[$field] ?? '';
 
-                return "- {$field} ({$rules['label']}, {$rules['min']}-{$rules['max']} tekens platte tekst): "
-                    .($briefs[$field] ?? '');
+                $lines = ["- {$field} ({$rules['label']}, {$rules['min']}-{$rules['max']} tekens platte tekst): {$instruction}"];
+
+                if ($tone = $this->settings->fieldToneOfVoice($field)) {
+                    $lines[] = "  Toon voor deze tekst (gaat voor de algemene toon): {$tone}";
+                }
+
+                if ($extra = $this->settings->fieldExtraInstructions($field)) {
+                    $lines[] = "  Extra instructies voor deze tekst: {$extra}";
+                }
+
+                if ($banned = $this->settings->fieldBannedPhrases($field)) {
+                    $lines[] = '  Vermijd in deze tekst ook: '.implode('; ', $banned);
+                }
+
+                return implode("\n", $lines);
             })
             ->implode("\n");
     }
@@ -374,6 +523,7 @@ class ProductDescriptionGenerator
             'type'                 => 'object',
             'properties'           => $properties,
             'required'             => $fields,
+            'propertyOrdering'     => $fields,
             'additionalProperties' => false,
         ];
     }

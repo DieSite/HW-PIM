@@ -25,10 +25,11 @@ class DescriptionValidator
     /**
      * @param  array<string, string>  $texts  field code => generated text
      * @param  list<string>  $allowedSizes
-     * @param  list<string>  $bannedPhrases
+     * @param  list<string>  $bannedPhrases  Banned in every text.
+     * @param  array<string, list<string>>  $fieldBannedPhrases  Banned in one text only, keyed by field code.
      * @return list<Problem>
      */
-    public function validate(array $texts, array $allowedSizes, array $bannedPhrases = []): array
+    public function validate(array $texts, array $allowedSizes, array $bannedPhrases = [], array $fieldBannedPhrases = []): array
     {
         $problems = [];
 
@@ -62,7 +63,7 @@ class DescriptionValidator
                 $problems[] = $this->problem($code, 'invented_size', "{$rules['label']} noemt maat \"{$size}\" die niet in het assortiment staat.");
             }
 
-            foreach ($this->usedBannedPhrases($plain, $bannedPhrases) as $phrase) {
+            foreach ($this->usedBannedPhrases($plain, [...$bannedPhrases, ...($fieldBannedPhrases[$code] ?? [])]) as $phrase) {
                 $problems[] = $this->problem($code, 'banned_phrase', "{$rules['label']} gebruikt de verboden formulering \"{$phrase}\".");
             }
 

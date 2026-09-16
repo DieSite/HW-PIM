@@ -12,14 +12,31 @@ use App\Services\AI\Drivers\OpenAiDriver;
  * that the repository fires. A raw DB write would leave a stale read behind and
  * the test would be measuring the cache instead of the setting.
  *
+ * Every AI field is always posted, blank unless given. The repository collects
+ * the form in `static` variables inside recursiveArray(), which survive for the
+ * whole test process, so a partial save would quietly re-save whatever an
+ * earlier test posted.
+ *
  * @param  array<string, string>  $style
+ * @param  array<string, array<string, string>>  $blocks  Per text block, keyed by field code.
  */
-function saveAiConfig(array $style = []): void
+function saveAiConfig(array $style = [], array $blocks = []): void
 {
+    $sections = ['style' => $style];
+
+    foreach (array_keys((array) config('ai.fields')) as $field) {
+        $sections[$field] = $blocks[$field] ?? [];
+    }
+
     $payload = [];
 
-    if ($style !== []) {
-        $payload['general']['ai_texts']['style'] = $style;
+    foreach ($sections as $section => $values) {
+        $key = "general.ai_texts.{$section}";
+        $names = collect(config('core'))->firstWhere('key', $key)['fields'] ?? [];
+
+        foreach (array_column($names, 'name') as $name) {
+            $payload['general']['ai_texts'][$section][$name] = $values[$name] ?? '';
+        }
     }
 
     test()
@@ -63,6 +80,11 @@ it('renders the settings screen', function () {
         ->assertSee('AI-teksten')
         ->assertSee('Tone of voice')
         ->assertSee('Verboden formuleringen')
+        ->assertSee('Algemene schrijfstijl')
+        ->assertSee('Beschrijving lang')
+        ->assertSee('Beschrijving kort')
+        ->assertSee('Meta beschrijving')
+        ->assertSee('Opdracht')
         // The provider/model/API-key section was removed; config/ai.php owns it.
         ->assertDontSee('Aanbieder')
         ->assertDontSee('API-sleutel');
@@ -164,4 +186,212 @@ it('refuses to call the model when the setting is off', function () {
         ->postJson(route('admin.catalog.products.ai-description.generate'), ['product_id' => $product->id])
         ->assertStatus(422)
         ->assertJsonPath('message', 'AI-teksten staan uit in de configuratie.');
+});
+
+/**
+ * Generates texts through a stub model and hands back what it was sent, so a
+ * test can see where the block settings ended up.
+ *
+ * @param  list<string>|null  $fields
+ * @param  array<string, mixed>  $values  Create-form values; sku and productnaam are filled in.
+ * @param  list<array<string, string>>  $responses  Per call, merged over valid texts; the last one repeats.
+ * @return array{prompt: string, system: string, problems: list<array{field:string, rule:string, message:string}>, texts: array<string, string>, requests: list<App\Services\AI\AiRequest>}
+ */
+function generateWithBlockSettings(?array $fields = null, array $values = [], array $responses = [[]]): array
+{
+    $client = new class($responses) implements App\Services\AI\AiTextClient
+    {
+        /** @var list<App\Services\AI\AiRequest> */
+        public array $requests = [];
+
+        public function __construct(private array $responses) {}
+
+        public function complete(App\Services\AI\AiRequest $request): App\Services\AI\AiResponse
+        {
+            $this->requests[] = $request;
+
+            $override = $this->responses[min(count($this->requests), count($this->responses)) - 1];
+
+            return new App\Services\AI\AiResponse(json_encode([
+                'beschrijving_l'    => str_repeat('Een nuchtere zin over dit wollen kleed. ', 12),
+                'beschrijving_k'    => str_repeat('Dit kleed is verkrijgbaar in meerdere maten. ', 8),
+                'meta_beschrijving' => 'Vloerkleed Diamante 01 met een beige gemeleerd dessin. Bekijk het online bij Huis en Wonen of kom langs in Gorinchem vandaag.',
+                ...$override,
+            ]), 'fake-model', 100, 50);
+        }
+
+        public function model(): string
+        {
+            return 'fake-model';
+        }
+    };
+
+    app()->bind(AiClientManager::class, fn () => new class($client) extends AiClientManager
+    {
+        public function __construct(private App\Services\AI\AiTextClient $fake)
+        {
+            parent::__construct(app(AiSettings::class));
+        }
+
+        public function client(?string $driver = null): App\Services\AI\AiTextClient
+        {
+            return $this->fake;
+        }
+    });
+
+    $result = app(App\Services\AI\ProductDescriptionGenerator::class)
+        ->generateFromValues(['sku' => 'AIBLOK-1', 'productnaam' => 'Diamante 01', ...$values], $fields);
+
+    return [
+        'prompt'   => $client->requests[0]->prompt,
+        'system'   => $client->requests[0]->systemInstruction,
+        'problems' => $result['problems'],
+        'texts'    => $result['texts'],
+        'requests' => $client->requests,
+    ];
+}
+
+it('uses the built-in brief for a block that was left empty', function () {
+    $sent = generateWithBlockSettings();
+
+    expect($sent['prompt'])->toContain(App\Services\AI\ProductDescriptionGenerator::FIELD_BRIEFS['beschrijving_l'])
+        ->not->toContain('Toon voor deze tekst')
+        ->not->toContain('Extra instructies voor deze tekst');
+});
+
+it('replaces the brief of one block only', function () {
+    saveAiConfig(blocks: ['beschrijving_k' => ['instruction' => 'Alleen de maten, als doorlopende zin.']]);
+
+    $prompt = generateWithBlockSettings()['prompt'];
+
+    expect($prompt)->toContain('beschrijving_k (Beschrijving kort, 250-800 tekens platte tekst): Alleen de maten, als doorlopende zin.')
+        ->not->toContain(App\Services\AI\ProductDescriptionGenerator::FIELD_BRIEFS['beschrijving_k'])
+        ->toContain(App\Services\AI\ProductDescriptionGenerator::FIELD_BRIEFS['beschrijving_l']);
+});
+
+it('puts block tone and extra instructions under that block, and keeps the global style shared', function () {
+    saveAiConfig(
+        style: ['tone_of_voice' => 'Algemene nuchtere toon.', 'extra_instructions' => 'Algemene extra regel.'],
+        blocks: ['meta_beschrijving' => [
+            'tone_of_voice'      => 'Wervend en kort.',
+            'extra_instructions' => 'Eindig met de merknaam.',
+        ]],
+    );
+
+    $sent = generateWithBlockSettings();
+
+    $metaBlock = Illuminate\Support\Str::after($sent['prompt'], '- meta_beschrijving');
+
+    expect($metaBlock)->toContain('Toon voor deze tekst (gaat voor de algemene toon): Wervend en kort.')
+        ->toContain('Extra instructies voor deze tekst: Eindig met de merknaam.')
+        ->and(Illuminate\Support\Str::before($sent['prompt'], '- meta_beschrijving'))->not->toContain('Wervend en kort.')
+        ->and($sent['system'])->toContain('Algemene nuchtere toon.')
+        ->toContain('Algemene extra regel.')
+        ->not->toContain('Wervend en kort.');
+});
+
+it('bans a block phrase in that block only', function () {
+    saveAiConfig(blocks: ['beschrijving_l' => ['banned_phrases' => "nuchtere zin\n\nware blikvanger"]]);
+
+    expect(app(AiSettings::class)->fieldBannedPhrases('beschrijving_l'))
+        // Already banned globally, so not repeated per block.
+        ->toBe(['nuchtere zin'])
+        ->and(app(AiSettings::class)->fieldBannedPhrases('beschrijving_k'))->toBe([])
+        ->and(app(AiSettings::class)->bannedPhrases())->not->toContain('nuchtere zin');
+
+    $sent = generateWithBlockSettings();
+
+    expect($sent['prompt'])->toContain('Vermijd in deze tekst ook: nuchtere zin');
+
+    $banned = collect($sent['problems'])->where('rule', 'banned_phrase');
+
+    expect($banned->pluck('field')->unique()->all())->toBe(['beschrijving_l']);
+});
+
+it('detects a reference to another block by its field code', function () {
+    saveAiConfig(blocks: [
+        'beschrijving_k'    => ['instruction' => 'Een samenvatting van beschrijving_l in twee zinnen.'],
+        'meta_beschrijving' => ['extra_instructions' => 'Niet te verwarren met beschrijving_lang of beschrijving_kort.'],
+    ]);
+
+    $settings = app(AiSettings::class);
+
+    expect($settings->fieldReferences('beschrijving_k'))->toBe(['beschrijving_l'])
+        ->and($settings->fieldReferences('meta_beschrijving'))->toBe([])
+        ->and($settings->fieldReferences('beschrijving_l'))->toBe([]);
+});
+
+it('writes the referenced block first when both are generated together', function () {
+    saveAiConfig(blocks: ['beschrijving_l' => ['instruction' => 'Een uitbreiding van meta_beschrijving.']]);
+
+    $sent = generateWithBlockSettings();
+    $schema = $sent['requests'][0]->jsonSchema;
+
+    expect($schema['propertyOrdering'])->toBe(['meta_beschrijving', 'beschrijving_l', 'beschrijving_k'])
+        ->and($schema['required'])->toBe(['meta_beschrijving', 'beschrijving_l', 'beschrijving_k'])
+        ->and($sent['prompt'])->toContain('VERWIJZINGEN TUSSEN TEKSTEN')
+        ->toContain('- beschrijving_l bouwt voort op meta_beschrijving: schrijf eerst meta_beschrijving')
+        ->not->toContain('HUIDIGE TEKST VAN');
+});
+
+it('hands over the current text of a referenced block that is not rewritten', function () {
+    saveAiConfig(blocks: ['beschrijving_k' => ['instruction' => 'Een samenvatting van beschrijving_l.']]);
+
+    $sent = generateWithBlockSettings(
+        fields: ['beschrijving_k'],
+        values: ['beschrijving_l' => '<p>Een handgeweven kleed in zandtinten met een zachte hoogpool.</p>'],
+    );
+
+    expect($sent['requests'][0]->jsonSchema['required'])->toBe(['beschrijving_k'])
+        ->and($sent['prompt'])->toContain('- beschrijving_k bouwt voort op de huidige tekst van beschrijving_l, hieronder.')
+        ->toContain("HUIDIGE TEKST VAN beschrijving_l (Beschrijving lang)\nEen handgeweven kleed in zandtinten met een zachte hoogpool.")
+        ->and(array_keys($sent['texts']))->toBe(['beschrijving_k']);
+});
+
+it('also writes a referenced block that is still empty', function () {
+    saveAiConfig(blocks: ['beschrijving_k' => ['instruction' => 'Een samenvatting van beschrijving_l.']]);
+
+    $sent = generateWithBlockSettings(fields: ['beschrijving_k'], values: ['beschrijving_l' => 'null']);
+
+    expect($sent['requests'][0]->jsonSchema['propertyOrdering'])->toBe(['beschrijving_l', 'beschrijving_k'])
+        ->and(array_keys($sent['texts']))->toBe(['beschrijving_l', 'beschrijving_k'])
+        ->and($sent['prompt'])->toContain('schrijf eerst beschrijving_l');
+});
+
+it('rewrites a dependent text when its source is rewritten', function () {
+    saveAiConfig(blocks: ['beschrijving_k' => ['instruction' => 'Een samenvatting van beschrijving_l.']]);
+
+    $sent = generateWithBlockSettings(responses: [
+        ['beschrijving_l' => '<p>Te kort.</p>'],
+        [],
+    ]);
+
+    expect($sent['requests'])->toHaveCount(2)
+        ->and($sent['requests'][1]->jsonSchema['required'])->toBe(['beschrijving_l', 'beschrijving_k'])
+        ->and($sent['problems'])->toBe([]);
+});
+
+it('does not send the ordering hint to OpenAI, whose strict schema rejects it', function () {
+    Illuminate\Support\Facades\Http::fake([
+        '*' => Illuminate\Support\Facades\Http::response([
+            'model'   => 'gpt-5',
+            'choices' => [['message' => ['content' => '{"beschrijving_l":"x"}']]],
+            'usage'   => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+        ]),
+    ]);
+
+    (new OpenAiDriver(
+        ['api_key' => 'test', 'model' => 'gpt-5'],
+        ['timeout' => 5, 'max_tokens' => 100, 'temperature' => 1.0, 'retries' => 1],
+    ))->complete(new App\Services\AI\AiRequest(
+        systemInstruction: 'systeem',
+        prompt: 'opdracht',
+        jsonSchema: ['type' => 'object', 'properties' => ['beschrijving_l' => ['type' => 'string']], 'required' => ['beschrijving_l'], 'propertyOrdering' => ['beschrijving_l'], 'additionalProperties' => false],
+    ));
+
+    Illuminate\Support\Facades\Http::assertSent(function (Illuminate\Http\Client\Request $request): bool {
+        $schema = $request['response_format']['json_schema']['schema'];
+
+        return ! array_key_exists('propertyOrdering', $schema) && $schema['required'] === ['beschrijving_l'];
+    });
 });

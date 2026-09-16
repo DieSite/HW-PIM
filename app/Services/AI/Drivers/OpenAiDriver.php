@@ -100,7 +100,7 @@ class OpenAiDriver implements AiTextClient
                 'json_schema' => [
                     'name'   => 'product_texts',
                     'strict' => true,
-                    'schema' => $aiRequest->jsonSchema,
+                    'schema' => Arr::except($aiRequest->jsonSchema, ['propertyOrdering']),
                 ],
             ];
         }
