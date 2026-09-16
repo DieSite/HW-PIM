@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b43038a777449fe8fe4702d7007870a8",
+    "content-hash": "317ef9023f9f13248d8d200f16fc3abc",
     "packages": [
         {
             "name": "astrotomic/laravel-translatable",
@@ -817,6 +817,51 @@
                 "source": "https://github.com/dflydev/dflydev-dot-access-data/tree/v3.0.3"
             },
             "time": "2024-07-08T12:26:09+00:00"
+        },
+        {
+            "name": "diesite/monitor-client",
+            "version": "1.1.0",
+            "source": {
+                "type": "git",
+                "url": "git@github.com:DieSite/monitoring-client-laravel.git",
+                "reference": "db3c6e2aa9294c403adc5c6bd2a8d034006bd973"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/DieSite/monitoring-client-laravel/zipball/db3c6e2aa9294c403adc5c6bd2a8d034006bd973",
+                "reference": "db3c6e2aa9294c403adc5c6bd2a8d034006bd973",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/database": "^11.0|^12.0|^13.0",
+                "illuminate/routing": "^11.0|^12.0|^13.0",
+                "illuminate/support": "^11.0|^12.0|^13.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Diesite\\Monitor\\MonitorServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Diesite\\Monitor\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "authors": [
+                {
+                    "name": "Luuk",
+                    "email": "luuk@diesite.nl"
+                }
+            ],
+            "description": "Exposes a token-secured metrics endpoint for the DieSite TV dashboard",
+            "time": "2026-09-16T10:48:45+00:00"
         },
         {
             "name": "diglactic/laravel-breadcrumbs",
@@ -15667,13 +15712,13 @@
         "ext-calendar": "*",
         "ext-curl": "*",
         "ext-exif": "*",
+        "ext-fileinfo": "*",
         "ext-intl": "*",
         "ext-mbstring": "*",
         "ext-openssl": "*",
         "ext-pdo": "*",
         "ext-pdo_mysql": "*",
-        "ext-tokenizer": "*",
-        "ext-fileinfo": "*"
+        "ext-tokenizer": "*"
     },
     "platform-dev": {},
     "platform-overrides": {
