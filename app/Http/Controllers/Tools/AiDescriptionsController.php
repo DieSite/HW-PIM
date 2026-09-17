@@ -139,6 +139,7 @@ class AiDescriptionsController extends Controller
             'status'           => $status,
             'counts'           => $this->counts($request->query('run')),
             'rewritableCount'  => $this->rewritableQuery($request->query('run'), $status)->count(),
+            'discardableCount' => $this->discardableQuery($request->query('run'), $status)->count(),
             'publishableCount' => $this->publishableQuery($request->query('run'))->count(),
             'flaggedCount'     => $this->publishableQuery($request->query('run'))
                 ->where('status', AiDescriptionDraft::STATUS_PENDING)
@@ -206,6 +207,30 @@ class AiDescriptionsController extends Controller
         }
 
         session()->flash('success', "{$count} teksten worden opnieuw geschreven. Ververs de pagina over een paar minuten.");
+
+        return back();
+    }
+
+    /**
+     * Delete every unpublished draft in the current view. Published drafts stay,
+     * because they hold the values a revert needs.
+     */
+    public function discardAll(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'run'    => ['nullable', 'integer'],
+            'status' => ['required', 'string', 'in:pending,approved,rejected,failed,all'],
+        ]);
+
+        $count = $this->discardableQuery($validated['run'] ?? null, $validated['status'])->delete();
+
+        if ($count === 0) {
+            session()->flash('warning', 'Er staan geen concepten in deze weergave die weggegooid kunnen worden.');
+
+            return back();
+        }
+
+        session()->flash('success', "{$count} concepten zijn weggegooid.");
 
         return back();
     }
@@ -321,6 +346,17 @@ class AiDescriptionsController extends Controller
             ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->whereNotIn('status', [AiDescriptionDraft::STATUS_APPLIED, AiDescriptionDraft::STATUS_APPROVED]);
+    }
+
+    /**
+     * @return Builder<AiDescriptionDraft>
+     */
+    private function discardableQuery(mixed $runId, string $status): Builder
+    {
+        return AiDescriptionDraft::query()
+            ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->where('status', '!=', AiDescriptionDraft::STATUS_APPLIED);
     }
 
     /**

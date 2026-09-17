@@ -47,6 +47,23 @@
                 </form>
             @endif
 
+            @if ($status !== 'applied')
+                <form
+                    action="{{ route('admin.tools.ai-descriptions.discard-all') }}"
+                    method="POST"
+                    onsubmit="return confirm('Alle {{ $discardableCount }} concepten in deze weergave weggooien? Dit kan niet ongedaan worden gemaakt. Gepubliceerde teksten blijven staan.');"
+                >
+                    @csrf
+                    @if ($run)
+                        <input type="hidden" name="run" value="{{ $run->id }}">
+                    @endif
+                    <input type="hidden" name="status" value="{{ $status }}">
+                    <button type="submit" class="secondary-button" @disabled($discardableCount === 0)>
+                        Alle concepten weggooien ({{ $discardableCount }})
+                    </button>
+                </form>
+            @endif
+
             <form
                 action="{{ route('admin.tools.ai-descriptions.apply') }}"
                 method="POST"

@@ -855,3 +855,64 @@ it('warns instead of publishing when nothing is ready', function () {
 
     Queue::assertNothingPushed();
 });
+
+it('offers a discard-all button on the review page', function () {
+    AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->get(route('admin.tools.ai-descriptions.review'))
+        ->assertOk()
+        ->assertSee('Alle concepten weggooien (1)');
+});
+
+it('discards every unpublished draft of the run in the current view', function () {
+    $run = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_l'], 'status' => 'completed']);
+    $otherRun = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_l'], 'status' => 'completed']);
+
+    $drafts = collect([
+        'pending'  => [AiDescriptionDraft::STATUS_PENDING, $run->id],
+        'approved' => [AiDescriptionDraft::STATUS_APPROVED, $run->id],
+        'rejected' => [AiDescriptionDraft::STATUS_REJECTED, $run->id],
+        'failed'   => [AiDescriptionDraft::STATUS_FAILED, $run->id],
+        'applied'  => [AiDescriptionDraft::STATUS_APPLIED, $run->id],
+        'other'    => [AiDescriptionDraft::STATUS_PENDING, $otherRun->id],
+    ])->map(fn (array $draft, string $name) => AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => $name])->id,
+        'status'     => $draft[0],
+        'run_id'     => $draft[1],
+        'fields'     => ['beschrijving_l' => 'x'],
+    ]));
+
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    $this->actingAs($admin, 'admin')
+        ->post(route('admin.tools.ai-descriptions.discard-all'), ['run' => $run->id, 'status' => 'pending'])
+        ->assertRedirect()
+        ->assertSessionHas('success', '1 concepten zijn weggegooid.');
+
+    expect($drafts['pending']->fresh())->toBeNull()
+        ->and($drafts['approved']->fresh())->not->toBeNull()
+        ->and($drafts['other']->fresh())->not->toBeNull();
+
+    $this->actingAs($admin, 'admin')
+        ->post(route('admin.tools.ai-descriptions.discard-all'), ['run' => $run->id, 'status' => 'all'])
+        ->assertRedirect()
+        ->assertSessionHas('success', '3 concepten zijn weggegooid.');
+
+    expect($drafts['approved']->fresh())->toBeNull()
+        ->and($drafts['rejected']->fresh())->toBeNull()
+        ->and($drafts['failed']->fresh())->toBeNull()
+        ->and($drafts['applied']->fresh())->not->toBeNull()
+        ->and($drafts['other']->fresh())->not->toBeNull();
+});
+
+it('warns instead of discarding when the view holds no drafts', function () {
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->post(route('admin.tools.ai-descriptions.discard-all'), ['status' => 'pending'])
+        ->assertRedirect()
+        ->assertSessionHas('warning');
+});
