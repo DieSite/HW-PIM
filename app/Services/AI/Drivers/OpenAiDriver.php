@@ -63,6 +63,12 @@ class OpenAiDriver implements AiTextClient
             throw new RuntimeException('OpenAI gaf een lege tekst terug.');
         }
 
+        if (Arr::get($body ?? [], 'choices.0.finish_reason') === 'length') {
+            throw new RuntimeException(
+                "OpenAI-antwoord afgekapt: limiet van {$this->request['max_tokens']} output-tokens bereikt. Verhoog AI_MAX_TOKENS."
+            );
+        }
+
         return new AiResponse(
             text: $text,
             model: $this->model(),

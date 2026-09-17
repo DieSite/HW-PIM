@@ -342,6 +342,24 @@ it('stores a draft without touching the product', function () {
         ->and(Product::find($parent->id)->values['common']['beschrijving_l'])->toBe('<p>Oude tekst.</p>');
 });
 
+it('moves a draft that was queued for a rewrite back into review', function () {
+    useFakeAiClient(new FakeAiTextClient([fakeAiTexts()]));
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'merk' => 'De Munk']);
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => $parent->id,
+        'status'     => AiDescriptionDraft::STATUS_REGENERATING,
+        'fields'     => ['beschrijving_l' => '<p>Oud voorstel.</p>'],
+    ]);
+
+    (new GenerateProductDescriptionJob($parent->id, array_keys((array) config('ai.fields'))))
+        ->handle(app(ProductDescriptionGenerator::class), app(AiDescriptionService::class));
+
+    expect($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PENDING)
+        ->and(AiDescriptionDraft::where('product_id', $parent->id)->count())->toBe(1);
+});
+
 it('records a failed draft instead of blowing up the run', function () {
     app()->bind(AiClientManager::class, fn () => new class(app(App\Services\AI\AiSettings::class)) extends AiClientManager
     {
@@ -399,6 +417,38 @@ it('leaves drafts that were not approved alone when publishing', function () {
 
     expect(Product::find($parent->id)->values['common']['beschrijving_l'])->toBe('<p>Oude tekst.</p>')
         ->and($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PENDING);
+});
+
+it('publishes drafts that were marked as publishing', function () {
+    Queue::fake();
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'beschrijving_l' => '<p>Oude tekst.</p>']);
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => $parent->id,
+        'status'     => AiDescriptionDraft::STATUS_PUBLISHING,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+    ]);
+
+    (new ApplyAiDescriptionsJob([$draft->id], syncWoo: false))->handle(app(AiDescriptionService::class));
+
+    expect(Product::find($parent->id)->values['common']['beschrijving_l'])->toBe('<p>Nieuwe tekst.</p>')
+        ->and($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_APPLIED);
+});
+
+it('hands drafts back for publishing when the publish job dies', function () {
+    $drafts = collect([AiDescriptionDraft::STATUS_PUBLISHING, AiDescriptionDraft::STATUS_APPLIED])
+        ->map(fn (string $status) => AiDescriptionDraft::create([
+            'product_id' => makeAiProduct(['productnaam' => $status])->id,
+            'status'     => $status,
+            'fields'     => ['beschrijving_l' => 'x'],
+        ]));
+
+    (new ApplyAiDescriptionsJob($drafts->pluck('id')->all()))->failed(new RuntimeException('Worker gestopt.'));
+
+    expect($drafts[0]->fresh()->status)->toBe(AiDescriptionDraft::STATUS_APPROVED)
+        ->and($drafts[0]->fresh()->error)->toBe('Publiceren afgebroken: Worker gestopt.')
+        ->and($drafts[1]->fresh()->status)->toBe(AiDescriptionDraft::STATUS_APPLIED);
 });
 
 it('only selects parent products for a run', function () {
@@ -761,7 +811,11 @@ it('rewrites every draft in the current view but leaves signed-off drafts alone'
     )
         ->and($pushed[$drafts['pending']->product_id]->fields)->toBe(['meta_beschrijving'])
         ->and($pushed[$drafts['failed']->product_id]->fields)->toBe(['beschrijving_k'])
-        ->and($pushed[$drafts['pending']->product_id]->runId)->toBe($run->id);
+        ->and($pushed[$drafts['pending']->product_id]->runId)->toBe($run->id)
+        ->and($drafts->only(['pending', 'rejected', 'failed'])->map(fn (AiDescriptionDraft $draft) => $draft->fresh()->status)->unique()->values()->all())
+        ->toBe([AiDescriptionDraft::STATUS_REGENERATING])
+        ->and($drafts['approved']->fresh()->status)->toBe(AiDescriptionDraft::STATUS_APPROVED)
+        ->and($drafts['other']->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PENDING);
 });
 
 it('only rewrites the drafts of the selected status', function () {
@@ -835,7 +889,8 @@ it('approves every pending draft of the run and publishes it with the approved o
 
     $pending = $drafts['pending']->fresh();
 
-    expect($pending->status)->toBe(AiDescriptionDraft::STATUS_APPROVED)
+    expect($pending->status)->toBe(AiDescriptionDraft::STATUS_PUBLISHING)
+        ->and($drafts['approved']->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PUBLISHING)
         ->and($pending->reviewed_by)->toBe($admin->id)
         ->and($pending->reviewed_at)->not->toBeNull()
         ->and($drafts['rejected']->fresh()->status)->toBe(AiDescriptionDraft::STATUS_REJECTED)
@@ -915,4 +970,76 @@ it('warns instead of discarding when the view holds no drafts', function () {
         ->post(route('admin.tools.ai-descriptions.discard-all'), ['status' => 'pending'])
         ->assertRedirect()
         ->assertSessionHas('warning');
+});
+
+it('takes approved drafts out of the approved list as soon as publishing is requested', function () {
+    Queue::fake();
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'status'     => AiDescriptionDraft::STATUS_APPROVED,
+        'fields'     => ['beschrijving_l' => 'x'],
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->post(route('admin.tools.ai-descriptions.apply'), ['sync_woo' => 1])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PUBLISHING);
+
+    Queue::assertPushed(ApplyAiDescriptionsJob::class, fn (ApplyAiDescriptionsJob $job): bool => $job->draftIds === [$draft->id]);
+});
+
+it('shows drafts in progress under their own tab with a progress banner', function () {
+    foreach ([AiDescriptionDraft::STATUS_REGENERATING, AiDescriptionDraft::STATUS_PUBLISHING, AiDescriptionDraft::STATUS_PENDING] as $status) {
+        AiDescriptionDraft::create([
+            'product_id' => makeAiProduct(['productnaam' => "Kleed {$status}"])->id,
+            'status'     => $status,
+            'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>'],
+        ]);
+    }
+
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    $this->actingAs($admin, 'admin')
+        ->get(route('admin.tools.ai-descriptions.review'))
+        ->assertOk()
+        ->assertSee('Bezig met 2 teksten:')
+        ->assertSee('Bezig (2)')
+        ->assertSee('Kleed pending')
+        ->assertDontSee('Kleed regenerating');
+
+    $this->actingAs($admin, 'admin')
+        ->get(route('admin.tools.ai-descriptions.review', ['status' => 'processing']))
+        ->assertOk()
+        ->assertSee('Kleed regenerating')
+        ->assertSee('Kleed publishing')
+        ->assertSee('Wordt gepubliceerd')
+        ->assertDontSee('Kleed pending')
+        ->assertDontSee('onclick="aiDraftDecide', false);
+});
+
+it('refuses to decide on or rewrite a draft that is still being processed', function () {
+    Queue::fake();
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'status'     => AiDescriptionDraft::STATUS_PUBLISHING,
+        'fields'     => ['beschrijving_l' => 'x'],
+    ]);
+
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    $this->actingAs($admin, 'admin')
+        ->postJson(route('admin.tools.ai-descriptions.decide', ['draft' => $draft->id]), ['decision' => 'reject'])
+        ->assertStatus(422);
+
+    $this->actingAs($admin, 'admin')
+        ->postJson(route('admin.tools.ai-descriptions.regenerate', ['draft' => $draft->id]))
+        ->assertStatus(422);
+
+    expect($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PUBLISHING);
+
+    Queue::assertNothingPushed();
 });

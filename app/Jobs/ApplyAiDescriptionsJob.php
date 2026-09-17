@@ -58,7 +58,7 @@ class ApplyAiDescriptionsJob implements ShouldQueue
     {
         AiDescriptionDraft::query()
             ->whereIn('id', $this->draftIds)
-            ->where('status', AiDescriptionDraft::STATUS_APPROVED)
+            ->whereIn('status', [AiDescriptionDraft::STATUS_PUBLISHING, AiDescriptionDraft::STATUS_APPROVED])
             ->chunkById(100, function ($drafts) use ($descriptions) {
                 foreach ($drafts as $draft) {
                     try {
@@ -73,5 +73,20 @@ class ApplyAiDescriptionsJob implements ShouldQueue
                     }
                 }
             });
+    }
+
+    /**
+     * Drafts this job never got to go back to approved, so they can be
+     * published again instead of hanging in "wordt gepubliceerd".
+     */
+    public function failed(Throwable $exception): void
+    {
+        AiDescriptionDraft::query()
+            ->whereIn('id', $this->draftIds)
+            ->where('status', AiDescriptionDraft::STATUS_PUBLISHING)
+            ->update([
+                'status' => AiDescriptionDraft::STATUS_APPROVED,
+                'error'  => mb_substr("Publiceren afgebroken: {$exception->getMessage()}", 0, 2000),
+            ]);
     }
 }

@@ -141,6 +141,9 @@ class GeminiDriver implements AiTextClient
     }
 
     /**
+     * A reply cut off at the token limit is refused outright: its JSON is
+     * unterminated, which PHP reports as a misleading "Control character error".
+     *
      * @param  array<string, mixed>|null  $body
      */
     private function toResponse(?array $body): AiResponse
@@ -162,10 +165,16 @@ class GeminiDriver implements AiTextClient
             ->filter(fn ($part): bool => is_string($part) && $part !== '')
             ->implode('');
 
-        if (trim($text) === '') {
-            $finishReason = (string) Arr::get($candidate, 'finishReason', 'onbekend');
+        $finishReason = (string) Arr::get($candidate, 'finishReason', 'onbekend');
 
+        if (trim($text) === '') {
             throw new RuntimeException("Gemini gaf een lege tekst terug (finishReason: {$finishReason}).");
+        }
+
+        if ($finishReason === 'MAX_TOKENS') {
+            throw new RuntimeException(
+                "Gemini-antwoord afgekapt: limiet van {$this->request['max_tokens']} output-tokens bereikt (denken telt mee). Verhoog AI_MAX_TOKENS."
+            );
         }
 
         return new AiResponse(

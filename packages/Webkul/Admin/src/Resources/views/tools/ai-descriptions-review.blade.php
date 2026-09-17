@@ -18,8 +18,25 @@
 
         <x-admin::flash-group />
 
+        @php
+            $statusLabels = ['pending' => 'Te beoordelen', 'approved' => 'Goedgekeurd', 'rejected' => 'Afgekeurd', 'applied' => 'Gepubliceerd', 'failed' => 'Mislukt', 'regenerating' => 'Wordt herschreven', 'publishing' => 'Wordt gepubliceerd'];
+            $regeneratingCount = $counts['regenerating'] ?? 0;
+            $publishingCount = $counts['publishing'] ?? 0;
+            $processingCount = $regeneratingCount + $publishingCount;
+            $counts['processing'] = $processingCount;
+        @endphp
+
+        @if ($processingCount > 0)
+            <div class="rounded-lg border border-violet-200 bg-violet-50 dark:bg-cherry-800 dark:border-gray-800 p-4 text-sm text-gray-700 dark:text-slate-50" data-processing-banner>
+                <span class="font-semibold">Bezig met {{ $processingCount }} {{ $processingCount === 1 ? 'tekst' : 'teksten' }}:</span>
+                {{ $regeneratingCount }} {{ $regeneratingCount === 1 ? 'wordt' : 'worden' }} opnieuw geschreven, {{ $publishingCount }} {{ $publishingCount === 1 ? 'wordt' : 'worden' }} gepubliceerd.
+                Deze pagina ververst elke 15 seconden.
+                <a href="{{ route('admin.tools.ai-descriptions.review', array_filter(['run' => $run?->id, 'status' => 'processing'])) }}" class="text-violet-600 hover:underline">Bekijken</a>
+            </div>
+        @endif
+
         <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-4 flex flex-wrap items-center gap-3">
-            @foreach (['pending' => 'Te beoordelen', 'approved' => 'Goedgekeurd', 'rejected' => 'Afgekeurd', 'applied' => 'Gepubliceerd', 'failed' => 'Mislukt', 'all' => 'Alles'] as $key => $label)
+            @foreach (['pending' => 'Te beoordelen', 'approved' => 'Goedgekeurd', 'rejected' => 'Afgekeurd', 'applied' => 'Gepubliceerd', 'failed' => 'Mislukt', 'processing' => 'Bezig', 'all' => 'Alles'] as $key => $label)
                 <a
                     href="{{ route('admin.tools.ai-descriptions.review', array_filter(['run' => $run?->id, 'status' => $key])) }}"
                     class="text-sm px-3 py-1.5 rounded-md {{ $status === $key ? 'bg-violet-400 text-white' : 'bg-gray-100 dark:bg-cherry-900 text-gray-700 dark:text-slate-50' }}"
@@ -30,7 +47,7 @@
 
             <div class="flex-1"></div>
 
-            @if (! in_array($status, ['approved', 'applied'], true))
+            @if (! in_array($status, ['approved', 'applied', 'processing'], true))
                 <form
                     action="{{ route('admin.tools.ai-descriptions.regenerate-all') }}"
                     method="POST"
@@ -47,7 +64,7 @@
                 </form>
             @endif
 
-            @if ($status !== 'applied')
+            @if (! in_array($status, ['applied', 'processing'], true))
                 <form
                     action="{{ route('admin.tools.ai-descriptions.discard-all') }}"
                     method="POST"
@@ -121,13 +138,17 @@
                     <div class="text-right text-xs text-gray-400 shrink-0">
                         <p>Gelijkenis {{ round(($draft->similarity ?? 0) * 100) }}%</p>
                         <p>{{ $draft->model }}</p>
-                        <p class="font-semibold uppercase tracking-wide">{{ $draft->status }}</p>
+                        <p class="font-semibold uppercase tracking-wide">{{ $statusLabels[$draft->status] ?? $draft->status }}</p>
                     </div>
                 </div>
 
                 @if ($draft->status === 'failed')
                     <p class="text-sm text-red-600">{{ $draft->error }}</p>
                 @else
+                    @if ($draft->error)
+                        <p class="mb-4 text-sm text-red-600">{{ $draft->error }}</p>
+                    @endif
+
                     @if (! empty($draft->problems))
                         <div class="mb-4 rounded-md bg-orange-50 border border-orange-200 p-3 text-sm text-orange-600">
                             @foreach ($draft->problems as $problem)
@@ -156,13 +177,17 @@
                 @endif
 
                 <div class="flex items-center gap-2.5 pt-3 border-t dark:border-gray-800">
-                    @if ($draft->status !== 'applied')
-                        <button type="button" class="primary-button" onclick="aiDraftDecide({{ $draft->id }}, 'approve', this)">Goedkeuren</button>
-                        <button type="button" class="secondary-button" onclick="aiDraftDecide({{ $draft->id }}, 'reject', this)">Afkeuren</button>
-                    @endif
-                    <button type="button" class="secondary-button" onclick="aiDraftRegenerate({{ $draft->id }}, this)">Opnieuw schrijven</button>
-                    @if ($draft->isRevertible())
-                        <button type="button" class="transparent-button" onclick="aiDraftRevert({{ $draft->id }}, this)">Terugdraaien</button>
+                    @if ($draft->isInProgress())
+                        <span class="text-sm text-gray-500">{{ $statusLabels[$draft->status] }}…</span>
+                    @else
+                        @if ($draft->status !== 'applied')
+                            <button type="button" class="primary-button" onclick="aiDraftDecide({{ $draft->id }}, 'approve', this)">Goedkeuren</button>
+                            <button type="button" class="secondary-button" onclick="aiDraftDecide({{ $draft->id }}, 'reject', this)">Afkeuren</button>
+                        @endif
+                        <button type="button" class="secondary-button" onclick="aiDraftRegenerate({{ $draft->id }}, this)">Opnieuw schrijven</button>
+                        @if ($draft->isRevertible())
+                            <button type="button" class="transparent-button" onclick="aiDraftRevert({{ $draft->id }}, this)">Terugdraaien</button>
+                        @endif
                     @endif
                     <span class="text-sm text-gray-500" data-feedback></span>
                 </div>
@@ -178,6 +203,10 @@
 
     @pushOnce('scripts')
         <script>
+            @if ($processingCount > 0)
+                setTimeout(() => window.location.reload(), 15000);
+            @endif
+
             function aiDraftFeedback(button, message) {
                 const feedback = button.closest('[data-draft]').querySelector('[data-feedback]');
                 feedback.textContent = message;
@@ -221,7 +250,10 @@
                 const url = '{{ route('admin.tools.ai-descriptions.regenerate', ['draft' => '__ID__']) }}'.replace('__ID__', id);
 
                 aiDraftPost(url, button)
-                    .then((json) => aiDraftFeedback(button, json.message))
+                    .then((json) => {
+                        aiDraftFeedback(button, json.message);
+                        button.closest('[data-draft]').querySelectorAll('button').forEach((other) => { other.hidden = true; });
+                    })
                     .catch(() => {});
             }
 

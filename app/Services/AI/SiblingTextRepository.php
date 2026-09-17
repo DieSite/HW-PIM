@@ -79,7 +79,7 @@ class SiblingTextRepository
         [$merk, $collectie] = explode('|', $key, 2);
 
         $drafts = AiDescriptionDraft::query()
-            ->whereIn('status', ['pending', 'approved', 'applied'])
+            ->whereIn('status', ['pending', 'approved', 'publishing', 'applied'])
             ->where('product_id', '!=', $product->id)
             ->whereHas('product', function ($query) use ($merk, $collectie) {
                 $query->where('values->common->merk', $merk)

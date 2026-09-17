@@ -127,7 +127,8 @@ class AiDescriptionsController extends Controller
         $drafts = AiDescriptionDraft::query()
             ->with('product:id,sku,values')
             ->when($request->filled('run'), fn ($query) => $query->where('run_id', (int) $request->query('run')))
-            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($status === 'processing', fn ($query) => $query->whereIn('status', AiDescriptionDraft::IN_PROGRESS_STATUSES))
+            ->when(! in_array($status, ['all', 'processing'], true), fn ($query) => $query->where('status', $status))
             ->orderByDesc('similarity')
             ->orderBy('id')
             ->paginate(15)
@@ -157,6 +158,10 @@ class AiDescriptionsController extends Controller
             'decision' => ['required', 'string', 'in:approve,reject'],
         ]);
 
+        if ($draft->isInProgress()) {
+            return response()->json(['message' => 'Dit concept wordt nog verwerkt.'], 422);
+        }
+
         $draft->update([
             'status' => $validated['decision'] === 'approve'
                 ? AiDescriptionDraft::STATUS_APPROVED
@@ -173,6 +178,10 @@ class AiDescriptionsController extends Controller
      */
     public function regenerate(AiDescriptionDraft $draft): JsonResponse
     {
+        if ($draft->isInProgress()) {
+            return response()->json(['message' => 'Dit concept wordt nog verwerkt.'], 422);
+        }
+
         $this->dispatchRewrite($draft);
 
         return response()->json(['message' => 'Opnieuw schrijven is gestart. Ververs de pagina over een halve minuut.']);
@@ -254,6 +263,8 @@ class AiDescriptionsController extends Controller
             return back();
         }
 
+        $this->markPublishing($draftIds);
+
         ApplyAiDescriptionsJob::dispatch($draftIds, $request->boolean('sync_woo', true));
 
         $count = count($draftIds);
@@ -284,10 +295,11 @@ class AiDescriptionsController extends Controller
             ->whereIn('id', $draftIds)
             ->where('status', AiDescriptionDraft::STATUS_PENDING)
             ->update([
-                'status'      => AiDescriptionDraft::STATUS_APPROVED,
                 'reviewed_by' => auth()->guard('admin')->id(),
                 'reviewed_at' => now(),
             ]);
+
+        $this->markPublishing($draftIds);
 
         ApplyAiDescriptionsJob::dispatch($draftIds, true);
 
@@ -325,11 +337,26 @@ class AiDescriptionsController extends Controller
     }
 
     /**
+     * Moves the drafts out of the review lists straight away, so a bulk action
+     * shows its effect before the queue gets to it.
+     *
+     * @param  list<int>  $draftIds
+     */
+    private function markPublishing(array $draftIds): void
+    {
+        AiDescriptionDraft::query()
+            ->whereIn('id', $draftIds)
+            ->update(['status' => AiDescriptionDraft::STATUS_PUBLISHING, 'error' => null]);
+    }
+
+    /**
      * Rewrites the fields the draft holds; a failed draft has none, so it falls
      * back to what its run asked for, then to every configured field.
      */
     private function dispatchRewrite(AiDescriptionDraft $draft): void
     {
+        $draft->update(['status' => AiDescriptionDraft::STATUS_REGENERATING]);
+
         GenerateProductDescriptionJob::dispatch(
             $draft->product_id,
             array_keys($draft->fields ?? []) ?: ($draft->run?->fields ?: array_keys((array) config('ai.fields'))),
@@ -345,7 +372,7 @@ class AiDescriptionsController extends Controller
         return AiDescriptionDraft::query()
             ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            ->whereNotIn('status', [AiDescriptionDraft::STATUS_APPLIED, AiDescriptionDraft::STATUS_APPROVED]);
+            ->whereNotIn('status', [AiDescriptionDraft::STATUS_APPLIED, AiDescriptionDraft::STATUS_APPROVED, ...AiDescriptionDraft::IN_PROGRESS_STATUSES]);
     }
 
     /**
@@ -356,7 +383,7 @@ class AiDescriptionsController extends Controller
         return AiDescriptionDraft::query()
             ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            ->where('status', '!=', AiDescriptionDraft::STATUS_APPLIED);
+            ->whereNotIn('status', [AiDescriptionDraft::STATUS_APPLIED, ...AiDescriptionDraft::IN_PROGRESS_STATUSES]);
     }
 
     /**

@@ -37,9 +37,14 @@ return [
         ],
     ],
 
+    /**
+     * max_tokens includes the model's thinking tokens, which can take most of
+     * the budget on a photo-plus-three-texts call. Only used tokens are billed,
+     * so a generous ceiling costs nothing extra.
+     */
     'request' => [
         'timeout'     => (int) env('AI_TIMEOUT', 120),
-        'max_tokens'  => (int) env('AI_MAX_TOKENS', 4096),
+        'max_tokens'  => (int) env('AI_MAX_TOKENS', 16384),
         'temperature' => (float) env('AI_TEMPERATURE', 1.0),
         'retries'     => (int) env('AI_RETRIES', 2),
     ],

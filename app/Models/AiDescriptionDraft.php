@@ -17,6 +17,21 @@ class AiDescriptionDraft extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    /**
+     * Queued for a rewrite; the generate job moves it to pending or failed.
+     */
+    public const STATUS_REGENERATING = 'regenerating';
+
+    /**
+     * Queued for publishing; the apply job moves it to applied or failed.
+     */
+    public const STATUS_PUBLISHING = 'publishing';
+
+    /**
+     * @var list<string>
+     */
+    public const IN_PROGRESS_STATUSES = [self::STATUS_REGENERATING, self::STATUS_PUBLISHING];
+
     protected $fillable = [
         'product_id',
         'run_id',
@@ -61,6 +76,11 @@ class AiDescriptionDraft extends Model
      * Model declares a protected $previous, which would shadow the attribute
      * here and make this always return false.
      */
+    public function isInProgress(): bool
+    {
+        return in_array($this->status, self::IN_PROGRESS_STATUSES, true);
+    }
+
     public function isRevertible(): bool
     {
         return $this->status === self::STATUS_APPLIED && ! empty($this->previous_values);

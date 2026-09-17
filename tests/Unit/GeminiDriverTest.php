@@ -150,6 +150,16 @@ it('names the finish reason when the reply comes back empty', function () {
         ->toThrow(RuntimeException::class, 'MAX_TOKENS');
 });
 
+it('reports a reply cut off at the token limit instead of handing over broken json', function () {
+    geminiReply(['candidates' => [[
+        'content'      => ['parts' => [['text' => '{"beschrijving_l": "<p>Een tapijt dat']]],
+        'finishReason' => 'MAX_TOKENS',
+    ]]]);
+
+    expect(fn () => geminiDriver()->complete(new AiRequest('Huisstijl', 'Brief')))
+        ->toThrow(RuntimeException::class, 'Gemini-antwoord afgekapt: limiet van 1024 output-tokens bereikt');
+});
+
 it('refuses to call out without an api key', function () {
     Http::fake();
 
