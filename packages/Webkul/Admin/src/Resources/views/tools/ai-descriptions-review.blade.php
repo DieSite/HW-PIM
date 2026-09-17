@@ -61,6 +61,20 @@
                     Goedgekeurde teksten publiceren ({{ $counts['approved'] ?? 0 }})
                 </button>
             </form>
+
+            <form
+                action="{{ route('admin.tools.ai-descriptions.approve-and-apply-all') }}"
+                method="POST"
+                onsubmit="return confirm('Alle {{ $publishableCount }} te beoordelen en goedgekeurde teksten{{ $run ? ' van deze reeks' : '' }} goedkeuren, publiceren en naar de webshop sturen?{{ $flaggedCount ? ' Let op: '.$flaggedCount.' daarvan hebben nog opmerkingen van de controle.' : '' }}');"
+            >
+                @csrf
+                @if ($run)
+                    <input type="hidden" name="run" value="{{ $run->id }}">
+                @endif
+                <button type="submit" class="primary-button" @disabled($publishableCount === 0)>
+                    Alles goedkeuren en doorsturen ({{ $publishableCount }})
+                </button>
+            </form>
         </div>
 
         @forelse ($drafts as $draft)

@@ -790,3 +790,68 @@ it('refuses to rewrite the approved view', function () {
 
     Queue::assertNothingPushed();
 });
+
+it('offers an approve-and-publish-all button on the review page', function () {
+    AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+        'problems'   => [['message' => 'Te lang.']],
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->get(route('admin.tools.ai-descriptions.review'))
+        ->assertOk()
+        ->assertSee('Alles goedkeuren en doorsturen (1)')
+        ->assertSee('1 daarvan hebben nog opmerkingen');
+});
+
+it('approves every pending draft of the run and publishes it with the approved ones', function () {
+    Queue::fake();
+
+    $run = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_l'], 'status' => 'completed']);
+    $otherRun = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_l'], 'status' => 'completed']);
+
+    $drafts = collect([
+        'pending'  => [AiDescriptionDraft::STATUS_PENDING, $run->id, ['beschrijving_l' => 'x']],
+        'approved' => [AiDescriptionDraft::STATUS_APPROVED, $run->id, ['beschrijving_l' => 'x']],
+        'rejected' => [AiDescriptionDraft::STATUS_REJECTED, $run->id, ['beschrijving_l' => 'x']],
+        'failed'   => [AiDescriptionDraft::STATUS_FAILED, $run->id, null],
+        'applied'  => [AiDescriptionDraft::STATUS_APPLIED, $run->id, ['beschrijving_l' => 'x']],
+        'other'    => [AiDescriptionDraft::STATUS_PENDING, $otherRun->id, ['beschrijving_l' => 'x']],
+    ])->map(fn (array $draft, string $name) => AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => $name])->id,
+        'status'     => $draft[0],
+        'run_id'     => $draft[1],
+        'fields'     => $draft[2],
+    ]));
+
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    $this->actingAs($admin, 'admin')
+        ->post(route('admin.tools.ai-descriptions.approve-and-apply-all'), ['run' => $run->id])
+        ->assertRedirect()
+        ->assertSessionHas('success', '2 teksten zijn goedgekeurd en worden gepubliceerd en naar de webshop gestuurd.');
+
+    $pending = $drafts['pending']->fresh();
+
+    expect($pending->status)->toBe(AiDescriptionDraft::STATUS_APPROVED)
+        ->and($pending->reviewed_by)->toBe($admin->id)
+        ->and($pending->reviewed_at)->not->toBeNull()
+        ->and($drafts['rejected']->fresh()->status)->toBe(AiDescriptionDraft::STATUS_REJECTED)
+        ->and($drafts['other']->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PENDING);
+
+    Queue::assertPushed(ApplyAiDescriptionsJob::class, fn (ApplyAiDescriptionsJob $job): bool => $job->syncWoo
+        && collect($job->draftIds)->sort()->values()->all() === collect([$drafts['pending']->id, $drafts['approved']->id])->sort()->values()->all());
+});
+
+it('warns instead of publishing when nothing is ready', function () {
+    Queue::fake();
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->post(route('admin.tools.ai-descriptions.approve-and-apply-all'))
+        ->assertRedirect()
+        ->assertSessionHas('warning');
+
+    Queue::assertNothingPushed();
+});

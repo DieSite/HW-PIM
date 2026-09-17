@@ -139,6 +139,11 @@ class AiDescriptionsController extends Controller
             'status'           => $status,
             'counts'           => $this->counts($request->query('run')),
             'rewritableCount'  => $this->rewritableQuery($request->query('run'), $status)->count(),
+            'publishableCount' => $this->publishableQuery($request->query('run'))->count(),
+            'flaggedCount'     => $this->publishableQuery($request->query('run'))
+                ->where('status', AiDescriptionDraft::STATUS_PENDING)
+                ->whereRaw('JSON_LENGTH(problems) > 0')
+                ->count(),
         ]);
     }
 
@@ -232,6 +237,41 @@ class AiDescriptionsController extends Controller
         return back();
     }
 
+    /**
+     * Approve every draft still waiting for review and publish it together
+     * with the drafts that were already approved.
+     */
+    public function approveAndApplyAll(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'run' => ['nullable', 'integer'],
+        ]);
+
+        $draftIds = $this->publishableQuery($validated['run'] ?? null)->pluck('id')->all();
+
+        if ($draftIds === []) {
+            session()->flash('warning', 'Er staan geen teksten klaar om goed te keuren en te publiceren.');
+
+            return back();
+        }
+
+        AiDescriptionDraft::query()
+            ->whereIn('id', $draftIds)
+            ->where('status', AiDescriptionDraft::STATUS_PENDING)
+            ->update([
+                'status'      => AiDescriptionDraft::STATUS_APPROVED,
+                'reviewed_by' => auth()->guard('admin')->id(),
+                'reviewed_at' => now(),
+            ]);
+
+        ApplyAiDescriptionsJob::dispatch($draftIds, true);
+
+        $count = count($draftIds);
+        session()->flash('success', "{$count} teksten zijn goedgekeurd en worden gepubliceerd en naar de webshop gestuurd.");
+
+        return back();
+    }
+
     public function revert(AiDescriptionDraft $draft): JsonResponse
     {
         try {
@@ -281,6 +321,20 @@ class AiDescriptionsController extends Controller
             ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->whereNotIn('status', [AiDescriptionDraft::STATUS_APPLIED, AiDescriptionDraft::STATUS_APPROVED]);
+    }
+
+    /**
+     * Drafts that are waiting for review or already approved, and actually hold
+     * texts to publish.
+     *
+     * @return Builder<AiDescriptionDraft>
+     */
+    private function publishableQuery(mixed $runId): Builder
+    {
+        return AiDescriptionDraft::query()
+            ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
+            ->whereIn('status', [AiDescriptionDraft::STATUS_PENDING, AiDescriptionDraft::STATUS_APPROVED])
+            ->whereNotNull('fields');
     }
 
     /**
