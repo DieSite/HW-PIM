@@ -28,10 +28,28 @@
                 </a>
             @endforeach
 
+            <div class="flex-1"></div>
+
+            @if (! in_array($status, ['approved', 'applied'], true))
+                <form
+                    action="{{ route('admin.tools.ai-descriptions.regenerate-all') }}"
+                    method="POST"
+                    onsubmit="return confirm('Alle {{ $rewritableCount }} teksten in deze weergave opnieuw laten schrijven? Dit kost een AI-aanroep per product. Goedgekeurde en gepubliceerde teksten blijven ongemoeid.');"
+                >
+                    @csrf
+                    @if ($run)
+                        <input type="hidden" name="run" value="{{ $run->id }}">
+                    @endif
+                    <input type="hidden" name="status" value="{{ $status }}">
+                    <button type="submit" class="secondary-button" @disabled($rewritableCount === 0)>
+                        Alles opnieuw schrijven ({{ $rewritableCount }})
+                    </button>
+                </form>
+            @endif
+
             <form
                 action="{{ route('admin.tools.ai-descriptions.apply') }}"
                 method="POST"
-                class="flex-1 flex justify-end"
                 onsubmit="return confirm('Alle goedgekeurde teksten publiceren en naar de webshop sturen?');"
             >
                 @csrf

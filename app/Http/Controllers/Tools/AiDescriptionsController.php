@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Services\AI\AiDescriptionService;
 use App\Services\AI\AiSettings;
 use App\Services\AI\ProductDescriptionGenerator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -133,10 +134,11 @@ class AiDescriptionsController extends Controller
             ->withQueryString();
 
         return view('admin::tools.ai-descriptions-review', [
-            'drafts' => $drafts,
-            'run'    => $request->filled('run') ? AiDescriptionRun::find((int) $request->query('run')) : null,
-            'status' => $status,
-            'counts' => $this->counts($request->query('run')),
+            'drafts'           => $drafts,
+            'run'              => $request->filled('run') ? AiDescriptionRun::find((int) $request->query('run')) : null,
+            'status'           => $status,
+            'counts'           => $this->counts($request->query('run')),
+            'rewritableCount'  => $this->rewritableQuery($request->query('run'), $status)->count(),
         ]);
     }
 
@@ -165,13 +167,42 @@ class AiDescriptionsController extends Controller
      */
     public function regenerate(AiDescriptionDraft $draft): JsonResponse
     {
-        GenerateProductDescriptionJob::dispatch(
-            $draft->product_id,
-            array_keys($draft->fields ?? []) ?: array_keys((array) config('ai.fields')),
-            $draft->run_id,
-        );
+        $this->dispatchRewrite($draft);
 
         return response()->json(['message' => 'Opnieuw schrijven is gestart. Ververs de pagina over een halve minuut.']);
+    }
+
+    /**
+     * Rewrite every draft in the current view. Published and approved drafts
+     * are left alone: a human already signed those off.
+     */
+    public function regenerateAll(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'run'    => ['nullable', 'integer'],
+            'status' => ['required', 'string', 'in:pending,rejected,failed,all'],
+        ]);
+
+        $count = 0;
+
+        $this->rewritableQuery($validated['run'] ?? null, $validated['status'])
+            ->with('run:id,fields')
+            ->chunkById(500, function ($drafts) use (&$count): void {
+                foreach ($drafts as $draft) {
+                    $this->dispatchRewrite($draft);
+                    $count++;
+                }
+            });
+
+        if ($count === 0) {
+            session()->flash('warning', 'Er staan geen teksten in deze weergave die opnieuw geschreven kunnen worden.');
+
+            return back();
+        }
+
+        session()->flash('success', "{$count} teksten worden opnieuw geschreven. Ververs de pagina over een paar minuten.");
+
+        return back();
     }
 
     public function apply(Request $request): RedirectResponse
@@ -226,6 +257,30 @@ class AiDescriptionsController extends Controller
         }
 
         return $texts;
+    }
+
+    /**
+     * Rewrites the fields the draft holds; a failed draft has none, so it falls
+     * back to what its run asked for, then to every configured field.
+     */
+    private function dispatchRewrite(AiDescriptionDraft $draft): void
+    {
+        GenerateProductDescriptionJob::dispatch(
+            $draft->product_id,
+            array_keys($draft->fields ?? []) ?: ($draft->run?->fields ?: array_keys((array) config('ai.fields'))),
+            $draft->run_id,
+        );
+    }
+
+    /**
+     * @return Builder<AiDescriptionDraft>
+     */
+    private function rewritableQuery(mixed $runId, string $status): Builder
+    {
+        return AiDescriptionDraft::query()
+            ->when($runId !== null, fn ($query) => $query->where('run_id', (int) $runId))
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->whereNotIn('status', [AiDescriptionDraft::STATUS_APPLIED, AiDescriptionDraft::STATUS_APPROVED]);
     }
 
     /**

@@ -3,6 +3,7 @@
 use App\Jobs\ApplyAiDescriptionsJob;
 use App\Jobs\GenerateProductDescriptionJob;
 use App\Models\AiDescriptionDraft;
+use App\Models\AiDescriptionRun;
 use App\Models\Product;
 use App\Services\AI\AiClientManager;
 use App\Services\AI\AiDescriptionService;
@@ -708,4 +709,84 @@ it('keeps a mangled text it cannot repair, flagged for the reviewer', function (
 
     expect(collect($result['problems'])->pluck('rule'))->toContain('garbled_text')
         ->and(collect($result['problems'])->firstWhere('rule', 'garbled_text')['message'])->toContain('dess#in');
+});
+
+it('offers a rewrite-all button on the review page', function () {
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
+
+    AiDescriptionDraft::create([
+        'product_id' => $parent->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->get(route('admin.tools.ai-descriptions.review'))
+        ->assertOk()
+        ->assertSee('Alles opnieuw schrijven (1)');
+});
+
+it('rewrites every draft in the current view but leaves signed-off drafts alone', function () {
+    Queue::fake();
+
+    $run = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_k'], 'status' => 'completed']);
+    $otherRun = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_l'], 'status' => 'completed']);
+
+    $drafts = collect([
+        'pending'  => [AiDescriptionDraft::STATUS_PENDING, $run->id, ['meta_beschrijving' => 'x']],
+        'rejected' => [AiDescriptionDraft::STATUS_REJECTED, $run->id, ['beschrijving_l' => 'x']],
+        'failed'   => [AiDescriptionDraft::STATUS_FAILED, $run->id, null],
+        'approved' => [AiDescriptionDraft::STATUS_APPROVED, $run->id, ['beschrijving_l' => 'x']],
+        'applied'  => [AiDescriptionDraft::STATUS_APPLIED, $run->id, ['beschrijving_l' => 'x']],
+        'other'    => [AiDescriptionDraft::STATUS_PENDING, $otherRun->id, ['beschrijving_l' => 'x']],
+    ])->map(fn (array $draft, string $name) => AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => $name])->id,
+        'status'     => $draft[0],
+        'run_id'     => $draft[1],
+        'fields'     => $draft[2],
+    ]));
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->post(route('admin.tools.ai-descriptions.regenerate-all'), ['run' => $run->id, 'status' => 'all'])
+        ->assertRedirect()
+        ->assertSessionHas('success', '3 teksten worden opnieuw geschreven. Ververs de pagina over een paar minuten.');
+
+    Queue::assertPushed(GenerateProductDescriptionJob::class, 3);
+
+    $pushed = collect(Queue::pushed(GenerateProductDescriptionJob::class))
+        ->mapWithKeys(fn (GenerateProductDescriptionJob $job) => [$job->productId => $job]);
+
+    expect($pushed->keys()->sort()->values()->all())->toBe(
+        $drafts->only(['pending', 'rejected', 'failed'])->pluck('product_id')->sort()->values()->all()
+    )
+        ->and($pushed[$drafts['pending']->product_id]->fields)->toBe(['meta_beschrijving'])
+        ->and($pushed[$drafts['failed']->product_id]->fields)->toBe(['beschrijving_k'])
+        ->and($pushed[$drafts['pending']->product_id]->runId)->toBe($run->id);
+});
+
+it('only rewrites the drafts of the selected status', function () {
+    Queue::fake();
+
+    foreach ([AiDescriptionDraft::STATUS_PENDING, AiDescriptionDraft::STATUS_FAILED] as $status) {
+        AiDescriptionDraft::create([
+            'product_id' => makeAiProduct(['productnaam' => $status])->id,
+            'status'     => $status,
+        ]);
+    }
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->post(route('admin.tools.ai-descriptions.regenerate-all'), ['status' => 'failed'])
+        ->assertRedirect();
+
+    Queue::assertPushed(GenerateProductDescriptionJob::class, 1);
+});
+
+it('refuses to rewrite the approved view', function () {
+    Queue::fake();
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->post(route('admin.tools.ai-descriptions.regenerate-all'), ['status' => 'approved'])
+        ->assertSessionHasErrors('status');
+
+    Queue::assertNothingPushed();
 });
