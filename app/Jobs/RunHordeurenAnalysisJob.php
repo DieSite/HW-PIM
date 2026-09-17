@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use Illuminate\Support\Str;
+use Diesite\Monitor\Monitor;
 use App\Jobs\Concerns\HordeurenScraperEnvironment;
 use App\Mail\HordeurenAnalysisFailed;
 use DateTimeInterface;
@@ -173,6 +175,8 @@ class RunHordeurenAnalysisJob implements ShouldQueue
                 Cache::forget(self::RUNNING_CACHE_KEY);
                 Cache::forget(self::BATCH_CACHE_KEY);
 
+                Monitor::negative('Hordeurenanalyse mislukt', Str::limit($e->getMessage(), 120), '🚪');
+
                 Mail::to($email)->send(new HordeurenAnalysisFailed(
                     error: $e->getMessage(),
                 ));
@@ -204,6 +208,8 @@ class RunHordeurenAnalysisJob implements ShouldQueue
     public function failed(?Throwable $exception): void
     {
         Cache::forget(self::RUNNING_CACHE_KEY);
+
+        Monitor::negative('Hordeurenanalyse mislukt', Str::limit($exception?->getMessage() ?? 'Onbekende fout', 120), '🚪');
 
         Mail::to($this->email)->send(new HordeurenAnalysisFailed(
             error: $exception?->getMessage() ?? 'Onbekende fout',

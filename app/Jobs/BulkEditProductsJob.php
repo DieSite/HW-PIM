@@ -2,6 +2,9 @@
 
 namespace App\Jobs;
 
+use Throwable;
+use Illuminate\Support\Str;
+use Diesite\Monitor\Monitor;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Models\BulkEditRun;
 use App\Models\Product;
@@ -102,5 +105,12 @@ class BulkEditProductsJob implements ShouldQueue
             'status'        => 'completed',
             'finished_at'   => now(),
         ]);
+
+        Monitor::positive('Bulkbewerking klaar', "{$changed} producten aangepast", '✏️');
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        Monitor::negative('Bulkbewerking mislukt', Str::limit($exception->getMessage(), 120), '✏️');
     }
 }

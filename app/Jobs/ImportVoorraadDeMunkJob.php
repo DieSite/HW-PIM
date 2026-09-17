@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use Diesite\Monitor\Monitor;
+use Illuminate\Support\Str;
 use App\Clients\DeMunkPortalClient;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
@@ -135,6 +137,8 @@ class ImportVoorraadDeMunkJob implements ShouldQueue
     public function failed(Throwable $exception): void
     {
         Sentry::captureException($exception);
+
+        Monitor::negative('De Munk voorraad import mislukt', Str::limit($exception->getMessage(), 120), '📦');
 
         Log::error('De Munk voorraad import mislukt', [
             'message' => $exception->getMessage(),

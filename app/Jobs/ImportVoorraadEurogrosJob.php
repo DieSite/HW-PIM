@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use Diesite\Monitor\Monitor;
+use Illuminate\Support\Str;
 use App\Imports\EurogrosVoorraadImport;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
@@ -78,6 +80,7 @@ class ImportVoorraadEurogrosJob implements ShouldQueue
     public function failed(Throwable $exception): void
     {
         Sentry::captureException($exception);
+        Monitor::negative('Eurogros voorraad import mislukt', Str::limit($exception->getMessage(), 120), '📦');
         Log::error('ImportVoorraadEurogrosJob: permanently failed', [
             'exception' => $exception->getMessage(),
             'file'      => $exception->getFile(),

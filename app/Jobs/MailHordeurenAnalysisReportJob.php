@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use Illuminate\Support\Str;
+use Diesite\Monitor\Monitor;
 use App\Mail\HordeurenAnalysisFailed;
 use App\Mail\HordeurenAnalysisReport;
 use DateTimeInterface;
@@ -149,6 +151,12 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
             finishedAt: now(),
         ));
 
+        Monitor::positive(
+            'Hordeurenanalyse verstuurd',
+            sprintf('%d prijzen gevonden · %d ontbrekend', $summary['priced'] ?? 0, $summary['missing'] ?? 0),
+            '🚪'
+        );
+
         Cache::forget(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY);
         Cache::forget(RunHordeurenAnalysisJob::BATCH_CACHE_KEY);
     }
@@ -157,6 +165,8 @@ class MailHordeurenAnalysisReportJob implements ShouldQueue
     {
         Cache::forget(RunHordeurenAnalysisJob::RUNNING_CACHE_KEY);
         Cache::forget(RunHordeurenAnalysisJob::BATCH_CACHE_KEY);
+
+        Monitor::negative('Hordeurenanalyse mislukt', Str::limit($exception?->getMessage() ?? 'Onbekende fout', 120), '🚪');
 
         Mail::to($this->email)->send(new HordeurenAnalysisFailed(
             error: $exception?->getMessage() ?? 'Onbekende fout',

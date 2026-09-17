@@ -2,9 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ProductPriceHistory;
 use App\Services\CompetitorCatalogExporter;
+use Diesite\Monitor\Monitor;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
@@ -33,20 +36,50 @@ class RunCompetitorAnalysisCommand extends Command
 
         $startedAt = now();
 
-        if (! $this->option('skip-scrape') && ! $this->runScraper()) {
-            return self::FAILURE;
-        }
+        try {
+            if (! $this->option('skip-scrape') && ! $this->runScraper()) {
+                Monitor::negative('Concurrentieanalyse mislukt', 'De scraper is niet afgerond', '💶');
 
-        $exitCode = $this->call('pricing:import-competitor-prices', [
-            '--no-recompute' => (bool) $this->option('no-recompute'),
-            '--prune'        => true,
-        ]);
+                return self::FAILURE;
+            }
 
-        if ($exitCode === self::SUCCESS) {
+            $exitCode = $this->call('pricing:import-competitor-prices', [
+                '--no-recompute' => (bool) $this->option('no-recompute'),
+                '--prune'        => true,
+            ]);
+
+            if ($exitCode !== self::SUCCESS) {
+                Monitor::negative('Concurrentieanalyse mislukt', 'Import van concurrentprijzen is mislukt', '💶');
+
+                return $exitCode;
+            }
+
+            $this->reportToMonitor($startedAt);
             $this->mailReport($startedAt);
-        }
 
-        return $exitCode;
+            return $exitCode;
+        } catch (\Throwable $e) {
+            Monitor::negative('Concurrentieanalyse mislukt', Str::limit($e->getMessage(), 120), '💶');
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Push the run's price movement to the DieSite TV board.
+     */
+    private function reportToMonitor(Carbon $startedAt): void
+    {
+        $changes = ProductPriceHistory::query()
+            ->where('changed_at', '>=', $startedAt)
+            ->selectRaw('SUM(new_price < old_price) as down, SUM(new_price > old_price) as up')
+            ->first();
+
+        Monitor::positive(
+            'Concurrentieanalyse klaar',
+            sprintf('%d prijzen omlaag · %d prijzen omhoog', (int) $changes?->down, (int) $changes?->up),
+            '💶'
+        );
     }
 
     /**

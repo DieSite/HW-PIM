@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use Diesite\Monitor\Monitor;
 use App\Mail\NewEurogrosEanNumbers;
 use App\Models\EurogrosMissingEanNumber;
 use Carbon\CarbonImmutable;
@@ -33,6 +34,12 @@ class NotifyMissingEurogrosEansJob implements ShouldQueue
         $missing = EurogrosMissingEanNumber::where('created_at', '>=', $this->since)
             ->pluck('ean')
             ->all();
+
+        Monitor::positive(
+            'Eurogros voorraad geïmporteerd',
+            count($missing) === 0 ? 'Geen nieuwe EAN-nummers' : count($missing).' nieuwe EAN-nummers zonder koppeling',
+            '📦'
+        );
 
         if (count($missing) === 0) {
             return;

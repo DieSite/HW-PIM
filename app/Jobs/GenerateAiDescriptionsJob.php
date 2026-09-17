@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use Illuminate\Support\Str;
+use Diesite\Monitor\Monitor;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Models\AiDescriptionRun;
 use App\Services\AI\AiDescriptionService;
@@ -101,9 +103,24 @@ class GenerateAiDescriptionsJob implements ShouldQueue
                 'status' => 'failed',
                 'error'  => mb_substr($exception->getMessage(), 0, 2000),
             ]))
-            ->finally(fn (Batch $batch) => AiDescriptionRun::where('id', $runId)
-                ->where('status', 'processing')
-                ->update(['status' => 'completed', 'finished_at' => now()]))
+            ->finally(function (Batch $batch) use ($runId): void {
+                AiDescriptionRun::where('id', $runId)
+                    ->where('status', 'processing')
+                    ->update(['status' => 'completed', 'finished_at' => now()]);
+
+                $run = AiDescriptionRun::find($runId);
+
+                Monitor::positive(
+                    'AI-teksten klaar',
+                    sprintf(
+                        'Run #%d · %d concepten klaar voor beoordeling · %d mislukt',
+                        $runId,
+                        (int) $run?->generated_count,
+                        (int) $run?->failed_count
+                    ),
+                    '🤖'
+                );
+            })
             ->dispatch();
     }
 
@@ -113,5 +130,7 @@ class GenerateAiDescriptionsJob implements ShouldQueue
             'status' => 'failed',
             'error'  => mb_substr($exception->getMessage(), 0, 2000),
         ]);
+
+        Monitor::negative("AI-teksten run #{$this->runId} mislukt", Str::limit($exception->getMessage(), 120), '🤖');
     }
 }

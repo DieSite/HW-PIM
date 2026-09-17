@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use Diesite\Monitor\Monitor;
+use Illuminate\Support\Str;
 use App\Clients\DeMunkPortalClient;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Services\DeMunkMatcher;
@@ -81,6 +83,11 @@ class ApplyDeMunkStockJob implements ShouldQueue
                 Sentry::captureMessage(
                     'De Munk import: collecties ontbreken: '.implode(', ', $missingCollections),
                 );
+                Monitor::negative(
+                    'De Munk: collecties ontbreken',
+                    implode(', ', $missingCollections),
+                    '📦'
+                );
             }
 
             $fetchedCollections = array_values(array_diff($this->collections, $missingCollections));
@@ -100,6 +107,16 @@ class ApplyDeMunkStockJob implements ShouldQueue
                 'products_touched'    => $writeResult['products'],
                 'variants_changed'    => $writeResult['variants_changed'],
             ]);
+
+            Monitor::positive(
+                'De Munk voorraad bijgewerkt',
+                sprintf(
+                    '%d varianten gewijzigd · %d artikelen niet gekoppeld',
+                    $writeResult['variants_changed'],
+                    count($matchResult['unmatched'])
+                ),
+                '📦'
+            );
         } catch (Throwable $e) {
             Sentry::withScope(function ($scope) use ($e): void {
                 $scope->setContext('demunk_import', ['message' => $e->getMessage()]);
@@ -113,6 +130,8 @@ class ApplyDeMunkStockJob implements ShouldQueue
     public function failed(Throwable $exception): void
     {
         Sentry::captureException($exception);
+
+        Monitor::negative('De Munk voorraad import mislukt', Str::limit($exception->getMessage(), 120), '📦');
 
         Log::error('De Munk voorraad import mislukt', [
             'message' => $exception->getMessage(),
