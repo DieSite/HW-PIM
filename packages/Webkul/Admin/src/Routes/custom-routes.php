@@ -62,6 +62,7 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::post('/ai-teksten/concepten/opnieuw', [AiDescriptionsController::class, 'regenerateAll'])->name('admin.tools.ai-descriptions.regenerate-all');
         Route::post('/ai-teksten/concepten/weggooien', [AiDescriptionsController::class, 'discardAll'])->name('admin.tools.ai-descriptions.discard-all');
         Route::post('/ai-teksten/concepten/{draft}/opnieuw', [AiDescriptionsController::class, 'regenerate'])->name('admin.tools.ai-descriptions.regenerate');
+        Route::post('/ai-teksten/concepten/{draft}/aanpassen', [AiDescriptionsController::class, 'edit'])->name('admin.tools.ai-descriptions.edit');
         Route::post('/ai-teksten/concepten/{draft}/terugdraaien', [AiDescriptionsController::class, 'revert'])->name('admin.tools.ai-descriptions.revert');
         Route::post('/ai-teksten/alles-publiceren', [AiDescriptionsController::class, 'approveAndApplyAll'])->name('admin.tools.ai-descriptions.approve-and-apply-all');
         Route::post('/ai-teksten/publiceren', [AiDescriptionsController::class, 'apply'])->name('admin.tools.ai-descriptions.apply');

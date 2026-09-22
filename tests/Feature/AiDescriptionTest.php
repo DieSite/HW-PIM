@@ -1043,3 +1043,150 @@ it('refuses to decide on or rewrite a draft that is still being processed', func
 
     Queue::assertNothingPushed();
 });
+
+it('offers an edit button on the review page instead of a reject button', function () {
+    $draft = AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+    ]);
+
+    $html = $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->get(route('admin.tools.ai-descriptions.review'))
+        ->assertOk()
+        ->assertSee('Aanpassen')
+        ->assertDontSee('Afkeuren')
+        ->getContent();
+
+    expect($html)->toContain("aiDraftEditStart({$draft->id}, this)")
+        ->toContain("aiDraftEditSave({$draft->id}, this)")
+        ->toContain("id=\"ai-draft-{$draft->id}-beschrijving_l\"")
+        // The text is handed to the same TinyMCE build the product form uses,
+        // so nobody has to touch the HTML by hand.
+        ->toContain('tinymce/6.6.2/tinymce.min.js')
+        ->toContain('tinymce.init(')
+        ->toContain('&lt;p&gt;Nieuwe tekst.&lt;/p&gt;');
+});
+
+it('saves a hand-corrected text, approves it and queues it for publishing', function () {
+    Queue::fake();
+
+    $run = AiDescriptionRun::create(['status' => 'done', 'sync_woo' => true]);
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'run_id'     => $run->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>', 'beschrijving_k' => '<p>Kort.</p>'],
+        'problems'   => [['field' => 'beschrijving_l', 'rule' => 'too_short', 'message' => 'Te kort.']],
+        'error'      => 'Iets ging mis.',
+    ]);
+
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    $this->actingAs($admin, 'admin')
+        ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
+            'fields' => [
+                'beschrijving_l' => '<p>Door mij herschreven.</p>',
+                'beschrijving_k' => 'Kort en bondig.',
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('fields.beschrijving_l', '<p>Door mij herschreven.</p>')
+        // Plain text typed by hand is wrapped, the same way generated text is.
+        ->assertJsonPath('fields.beschrijving_k', '<p>Kort en bondig.</p>');
+
+    $draft->refresh();
+
+    expect($draft->status)->toBe(AiDescriptionDraft::STATUS_PUBLISHING)
+        ->and($draft->fields)->toMatchArray([
+            'beschrijving_l' => '<p>Door mij herschreven.</p>',
+            'beschrijving_k' => '<p>Kort en bondig.</p>',
+        ])
+        ->and($draft->problems)->toBe([])
+        ->and($draft->error)->toBeNull()
+        ->and($draft->reviewed_by)->toBe($admin->id)
+        ->and($draft->reviewed_at)->not->toBeNull();
+
+    Queue::assertPushed(ApplyAiDescriptionsJob::class, fn (ApplyAiDescriptionsJob $job) => $job->draftIds === [$draft->id] && $job->syncWoo === true);
+});
+
+it('publishes a hand-corrected text onto the product', function () {
+    Queue::fake();
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'beschrijving_l' => '<p>Oude tekst.</p>']);
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => $parent->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>'],
+    ]);
+
+    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+        ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
+            'fields' => ['beschrijving_l' => '<p>Door mij herschreven.</p>'],
+        ])
+        ->assertOk();
+
+    (new ApplyAiDescriptionsJob([$draft->id], syncWoo: false))->handle(app(AiDescriptionService::class));
+
+    $draft->refresh();
+
+    expect($draft->status)->toBe(AiDescriptionDraft::STATUS_APPLIED)
+        ->and(Product::find($parent->id)->values['common']['beschrijving_l'])->toBe('<p>Door mij herschreven.</p>')
+        ->and($draft->previous_values)->toBe(['beschrijving_l' => '<p>Oude tekst.</p>']);
+});
+
+it('only accepts texts the draft already holds and refuses an empty one', function () {
+    Queue::fake();
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => makeAiProduct(['productnaam' => 'Diamante 01'])->id,
+        'status'     => AiDescriptionDraft::STATUS_PENDING,
+        'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>'],
+    ]);
+
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    $this->actingAs($admin, 'admin')
+        ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
+            'fields' => ['meta_beschrijving' => 'Een veld dat dit concept niet heeft.'],
+        ])
+        ->assertStatus(422);
+
+    $this->actingAs($admin, 'admin')
+        ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
+            'fields' => ['beschrijving_l' => '   '],
+        ])
+        ->assertStatus(422);
+
+    expect($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_PENDING)
+        ->and($draft->fresh()->fields)->toBe(['beschrijving_l' => '<p>Voorstel.</p>']);
+
+    Queue::assertNothingPushed();
+});
+
+it('refuses to edit a draft that is still being processed or already published', function () {
+    Queue::fake();
+
+    $product = makeAiProduct(['productnaam' => 'Diamante 01']);
+    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+
+    foreach ([AiDescriptionDraft::STATUS_PUBLISHING, AiDescriptionDraft::STATUS_APPLIED] as $status) {
+        $draft = AiDescriptionDraft::create([
+            'product_id' => $product->id,
+            'status'     => $status,
+            'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>'],
+        ]);
+
+        $this->actingAs($admin, 'admin')
+            ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
+                'fields' => ['beschrijving_l' => '<p>Nieuw.</p>'],
+            ])
+            ->assertStatus(422);
+
+        expect($draft->fresh()->status)->toBe($status);
+    }
+
+    Queue::assertNothingPushed();
+});

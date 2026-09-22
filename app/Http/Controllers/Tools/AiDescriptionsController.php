@@ -12,6 +12,7 @@ use App\Models\AiDescriptionRun;
 use App\Models\Product;
 use App\Services\AI\AiDescriptionService;
 use App\Services\AI\AiSettings;
+use App\Services\AI\DescriptionValidator;
 use App\Services\AI\ProductDescriptionGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,7 @@ class AiDescriptionsController extends Controller
         private readonly AiDescriptionService $descriptions,
         private readonly ProductDescriptionGenerator $generator,
         private readonly AiSettings $settings,
+        private readonly DescriptionValidator $validator,
     ) {}
 
     public function index(): View
@@ -171,6 +173,62 @@ class AiDescriptionsController extends Controller
         ]);
 
         return response()->json(['status' => $draft->status]);
+    }
+
+    /**
+     * Save a hand-corrected draft. An edited text needs no second opinion: the
+     * person who typed it has approved it, so it goes straight to publishing
+     * instead of waiting in the approved list.
+     */
+    public function edit(Request $request, AiDescriptionDraft $draft): JsonResponse
+    {
+        if ($draft->isInProgress()) {
+            return response()->json(['message' => 'Dit concept wordt nog verwerkt.'], 422);
+        }
+
+        if ($draft->status === AiDescriptionDraft::STATUS_APPLIED) {
+            return response()->json(['message' => 'Dit concept is al gepubliceerd.'], 422);
+        }
+
+        $validated = $request->validate([
+            'fields'   => ['required', 'array', 'min:1'],
+            'fields.*' => ['required', 'string'],
+        ]);
+
+        /** @var array<string, string> $edited */
+        $edited = array_intersect_key($validated['fields'], $draft->fields ?? []);
+
+        $texts = [];
+
+        foreach ($edited as $code => $text) {
+            $normalised = $this->validator->normaliseHtml((string) $text);
+
+            if ($normalised === '') {
+                return response()->json(['message' => 'Een aangepaste tekst mag niet leeg zijn.'], 422);
+            }
+
+            $texts[$code] = $normalised;
+        }
+
+        if ($texts === []) {
+            return response()->json(['message' => 'Dit concept bevat deze teksten niet.'], 422);
+        }
+
+        $draft->update([
+            'fields'      => array_merge($draft->fields ?? [], $texts),
+            'problems'    => [],
+            'error'       => null,
+            'status'      => AiDescriptionDraft::STATUS_PUBLISHING,
+            'reviewed_by' => auth()->guard('admin')->id(),
+            'reviewed_at' => now(),
+        ]);
+
+        ApplyAiDescriptionsJob::dispatch([$draft->id], $draft->run?->sync_woo ?? true);
+
+        return response()->json([
+            'message' => 'Opgeslagen en goedgekeurd. De tekst wordt gepubliceerd en naar de webshop gestuurd.',
+            'fields'  => $texts,
+        ]);
     }
 
     /**

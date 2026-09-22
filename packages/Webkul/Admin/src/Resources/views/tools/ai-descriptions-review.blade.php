@@ -162,14 +162,22 @@
                             <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
                                 {{ $fieldConfig[$code]['label'] ?? $code }}
                             </p>
-                            <div class="grid grid-cols-2 gap-4 text-sm">
-                                <div class="text-gray-500">
+                            <div class="grid grid-cols-2 gap-4 text-sm" data-compare>
+                                <div class="text-gray-500" data-current>
                                     <p class="text-xs mb-1">Nu op de webshop</p>
                                     <div>{!! $common[$code] ?? '<em>leeg</em>' !!}</div>
                                 </div>
                                 <div class="text-gray-800 dark:text-slate-50">
                                     <p class="text-xs mb-1">Voorstel</p>
-                                    <div>{!! $text !!}</div>
+                                    <div data-proposal="{{ $code }}">{!! $text !!}</div>
+                                    <textarea
+                                        id="ai-draft-{{ $draft->id }}-{{ $code }}"
+                                        data-proposal-input
+                                        data-field="{{ $code }}"
+                                        rows="10"
+                                        style="display: none;"
+                                        class="w-full py-2 px-3 border rounded-md text-sm dark:bg-cherry-800 dark:border-gray-800"
+                                    >{{ $text }}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -181,12 +189,16 @@
                         <span class="text-sm text-gray-500">{{ $statusLabels[$draft->status] }}…</span>
                     @else
                         @if ($draft->status !== 'applied')
-                            <button type="button" class="primary-button" onclick="aiDraftDecide({{ $draft->id }}, 'approve', this)">Goedkeuren</button>
-                            <button type="button" class="secondary-button" onclick="aiDraftDecide({{ $draft->id }}, 'reject', this)">Afkeuren</button>
+                            <button type="button" class="primary-button" data-review-action onclick="aiDraftDecide({{ $draft->id }}, 'approve', this)">Goedkeuren</button>
+                            @if (! empty($draft->fields))
+                                <button type="button" class="secondary-button" data-review-action onclick="aiDraftEditStart({{ $draft->id }}, this)">Aanpassen</button>
+                                <button type="button" class="primary-button" data-edit-action style="display: none;" onclick="aiDraftEditSave({{ $draft->id }}, this)">Opslaan en doorzetten</button>
+                                <button type="button" class="transparent-button" data-edit-action style="display: none;" onclick="aiDraftEditCancel(this)">Annuleren</button>
+                            @endif
                         @endif
-                        <button type="button" class="secondary-button" onclick="aiDraftRegenerate({{ $draft->id }}, this)">Opnieuw schrijven</button>
+                        <button type="button" class="secondary-button" data-review-action onclick="aiDraftRegenerate({{ $draft->id }}, this)">Opnieuw schrijven</button>
                         @if ($draft->isRevertible())
-                            <button type="button" class="transparent-button" onclick="aiDraftRevert({{ $draft->id }}, this)">Terugdraaien</button>
+                            <button type="button" class="transparent-button" data-review-action onclick="aiDraftRevert({{ $draft->id }}, this)">Terugdraaien</button>
                         @endif
                     @endif
                     <span class="text-sm text-gray-500" data-feedback></span>
@@ -202,6 +214,13 @@
     </div>
 
     @pushOnce('scripts')
+        {{-- The same TinyMCE build the product edit form loads through x-admin::tinymce. --}}
+        <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.6.2/tinymce.min.js"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+        ></script>
+
         <script>
             @if ($processingCount > 0)
                 setTimeout(() => window.location.reload(), 15000);
@@ -210,6 +229,139 @@
             function aiDraftFeedback(button, message) {
                 const feedback = button.closest('[data-draft]').querySelector('[data-feedback]');
                 feedback.textContent = message;
+            }
+
+            /**
+             * The button classes set display: flex, which wins over the hidden
+             * attribute, so visibility is toggled through the style attribute.
+             */
+            function aiDraftShow(elements, visible) {
+                elements.forEach((element) => { element.style.display = visible ? '' : 'none'; });
+            }
+
+            /**
+             * While editing, the editor takes the full width of the card: the
+             * shop's current text is what the reviewer just read, and TinyMCE's
+             * toolbar does not fit in half a column.
+             */
+            function aiDraftEditing(card, editing) {
+                aiDraftShow(card.querySelectorAll('[data-review-action]'), !editing);
+                aiDraftShow(card.querySelectorAll('[data-edit-action]'), editing);
+                aiDraftShow(card.querySelectorAll('[data-proposal]'), !editing);
+                aiDraftShow(card.querySelectorAll('[data-current]'), !editing);
+
+                card.querySelectorAll('[data-compare]').forEach((grid) => {
+                    grid.classList.toggle('grid-cols-2', !editing);
+                    grid.classList.toggle('grid-cols-1', editing);
+                });
+            }
+
+            function aiDraftUploadImage(blobInfo, progress) {
+                return new Promise((resolve, reject) => {
+                    const request = new XMLHttpRequest();
+
+                    request.open('POST', '{{ route('admin.tinymce.upload') }}');
+                    request.upload.onprogress = (event) => progress((event.loaded / event.total) * 100);
+                    request.onerror = () => reject('Uploaden van de afbeelding is mislukt.');
+
+                    request.onload = () => {
+                        if (request.status < 200 || request.status >= 300) {
+                            reject('Uploaden van de afbeelding is mislukt.');
+                            return;
+                        }
+
+                        const json = JSON.parse(request.responseText);
+
+                        if (!json || typeof json.location !== 'string') {
+                            reject('Uploaden van de afbeelding gaf een onverwacht antwoord.');
+                            return;
+                        }
+
+                        resolve(json.location);
+                    };
+
+                    const formData = new FormData();
+                    formData.append('_token', '{{ csrf_token() }}');
+                    formData.append('file', blobInfo.blob(), blobInfo.filename());
+
+                    request.send(formData);
+                });
+            }
+
+            function aiDraftPickFile(callback) {
+                const input = document.createElement('input');
+
+                input.setAttribute('type', 'file');
+                input.setAttribute('accept', 'image/*');
+
+                input.onchange = function () {
+                    const file = this.files[0];
+                    const reader = new FileReader();
+
+                    reader.readAsDataURL(file);
+
+                    reader.onload = () => {
+                        const blobCache = tinymce.activeEditor.editorUpload.blobCache;
+                        const blobInfo = blobCache.create('blobid' + new Date().getTime(), file, reader.result.split(',')[1]);
+
+                        blobCache.add(blobInfo);
+
+                        callback(blobInfo.blobUri(), { title: file.name });
+                    };
+                };
+
+                input.click();
+            }
+
+            /**
+             * Mirrors the configuration x-admin::tinymce uses on the product
+             * edit form, so a text is corrected in the editor people know.
+             */
+            function aiDraftEditorConfig() {
+                const dark = document.documentElement.classList.contains('dark');
+
+                return {
+                    menubar: false,
+                    relative_urls: false,
+                    remove_script_host: false,
+                    document_base_url: '{{ asset('/') }}',
+                    plugins: 'image media wordcount save fullscreen code table lists link',
+                    // The admin stylesheet accents the last toolbar group, which on the
+                    // product form holds the Magic AI button; here it holds fullscreen.
+                    toolbar1: 'formatselect | fontsize bold italic strikethrough forecolor backcolor image alignleft aligncenter alignright alignjustify | link hr numlist bullist outdent indent removeformat code table | fullscreen',
+                    image_advtab: true,
+                    directionality: 'ltr',
+                    skin: dark ? 'oxide-dark' : 'oxide',
+                    content_css: dark ? 'dark' : 'default',
+                    images_upload_handler: aiDraftUploadImage,
+                    file_picker_callback: (callback) => aiDraftPickFile(callback),
+                };
+            }
+
+            /**
+             * TinyMCE copies the display of the element it replaces, so a
+             * textarea that is still hidden yields an invisible editor. It is
+             * shown first; TinyMCE then hides it again itself.
+             */
+            function aiDraftAddEditors(card, id) {
+                card.querySelectorAll('[data-proposal-input]').forEach((input) => { input.style.display = ''; });
+
+                tinymce.init({
+                    ...aiDraftEditorConfig(),
+                    selector: '#draft-' + id + ' textarea[data-proposal-input]',
+                });
+            }
+
+            function aiDraftRemoveEditors(card) {
+                card.querySelectorAll('[data-proposal-input]').forEach((input) => {
+                    const editor = tinymce.get(input.id);
+
+                    if (editor) {
+                        editor.remove();
+                    }
+
+                    input.style.display = 'none';
+                });
             }
 
             function aiDraftPost(url, button, body) {
@@ -252,10 +404,81 @@
                 aiDraftPost(url, button)
                     .then((json) => {
                         aiDraftFeedback(button, json.message);
-                        button.closest('[data-draft]').querySelectorAll('button').forEach((other) => { other.hidden = true; });
+                        aiDraftShow(button.closest('[data-draft]').querySelectorAll('[data-review-action], [data-edit-action]'), false);
                     })
                     .catch(() => {});
             }
+
+            function aiDraftEditStart(id, button) {
+                const card = button.closest('[data-draft]');
+
+                aiDraftEditing(card, true);
+                aiDraftAddEditors(card, id);
+            }
+
+            function aiDraftEditCancel(button) {
+                const card = button.closest('[data-draft]');
+
+                aiDraftRemoveEditors(card);
+
+                card.querySelectorAll('[data-proposal-input]').forEach((input) => { input.value = input.defaultValue; });
+
+                aiDraftEditing(card, false);
+            }
+
+            /**
+             * Saving is the approval: the texts go straight to publishing.
+             */
+            function aiDraftEditSave(id, button) {
+                const card = button.closest('[data-draft]');
+                const fields = {};
+
+                card.querySelectorAll('[data-proposal-input]').forEach((input) => {
+                    const editor = tinymce.get(input.id);
+
+                    fields[input.dataset.field] = editor ? editor.getContent() : input.value;
+                });
+
+                const url = '{{ route('admin.tools.ai-descriptions.edit', ['draft' => '__ID__']) }}'.replace('__ID__', id);
+
+                aiDraftPost(url, button, { fields })
+                    .then((json) => {
+                        aiDraftRemoveEditors(card);
+
+                        Object.entries(json.fields || {}).forEach(([code, text]) => {
+                            const proposal = card.querySelector('[data-proposal="' + code + '"]');
+
+                            if (proposal) {
+                                proposal.innerHTML = text;
+                            }
+                        });
+
+                        aiDraftEditing(card, false);
+                        aiDraftShow(card.querySelectorAll('[data-review-action], [data-edit-action]'), false);
+                        aiDraftFeedback(button, json.message);
+                    })
+                    .catch(() => {});
+            }
+
+            /**
+             * The skin is chosen when an editor opens, so an editor that is
+             * already open has to be rebuilt when the admin theme flips.
+             * editor.remove() writes its content back into the textarea, which
+             * the new editor then picks up, so nothing typed is lost.
+             */
+            function aiDraftReskinEditors() {
+                document.querySelectorAll('[data-draft]').forEach((card) => {
+                    if (! card.querySelector('.tox-tinymce')) {
+                        return;
+                    }
+
+                    aiDraftRemoveEditors(card);
+                    aiDraftAddEditors(card, card.dataset.draft);
+                });
+            }
+
+            new MutationObserver(aiDraftReskinEditors)
+                .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
             function aiDraftRevert(id, button) {
                 if (!confirm('De oude tekst terugzetten op dit product?')) {
