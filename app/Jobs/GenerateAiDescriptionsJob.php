@@ -43,17 +43,6 @@ class GenerateAiDescriptionsJob implements ShouldQueue
         $this->onQueue('ai');
     }
 
-    /**
-     * Walks the whole matching set before dispatching, which can take minutes
-     * of pure database work. {@see DisconnectsIdleRedis}
-     *
-     * @return array<int, object>
-     */
-    public function middleware(): array
-    {
-        return [new DisconnectsIdleRedis()];
-    }
-
     public function handle(AiDescriptionService $descriptions): void
     {
         $run = AiDescriptionRun::find($this->runId);
@@ -99,9 +88,15 @@ class GenerateAiDescriptionsJob implements ShouldQueue
                 'status'      => 'completed',
                 'finished_at' => now(),
             ]))
+            /**
+             * Fires on the first product job that fails at queue level (a
+             * timeout, a dead worker), while the rest of the batch is still
+             * queued. The run keeps "processing" until finally(): marking it
+             * failed here made it look finished, and the next run then sat at
+             * 0 done behind this one's remaining jobs on the shared queue.
+             */
             ->catch(fn (Batch $batch, Throwable $exception) => AiDescriptionRun::where('id', $runId)->update([
-                'status' => 'failed',
-                'error'  => mb_substr($exception->getMessage(), 0, 2000),
+                'error' => mb_substr($exception->getMessage(), 0, 2000),
             ]))
             ->finally(function (Batch $batch) use ($runId): void {
                 AiDescriptionRun::where('id', $runId)

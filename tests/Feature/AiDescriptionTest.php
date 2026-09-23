@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\ApplyAiDescriptionsJob;
+use App\Jobs\GenerateAiDescriptionsJob;
 use App\Jobs\GenerateProductDescriptionJob;
 use App\Models\AiDescriptionDraft;
 use App\Models\AiDescriptionRun;
@@ -11,6 +12,9 @@ use App\Services\AI\AiRequest;
 use App\Services\AI\AiResponse;
 use App\Services\AI\AiTextClient;
 use App\Services\AI\ProductDescriptionGenerator;
+use Illuminate\Bus\Batch;
+use Illuminate\Bus\PendingBatch;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 
@@ -1189,4 +1193,40 @@ it('refuses to edit a draft that is still being processed or already published',
     }
 
     Queue::assertNothingPushed();
+});
+
+it('keeps a run processing when one product job fails while the rest of its batch is still queued', function () {
+    Bus::fake();
+
+    makeAiProduct(['productnaam' => 'Diamante 01', 'merk' => 'De Munk']);
+
+    $run = AiDescriptionRun::create(['filters' => [], 'fields' => ['beschrijving_l'], 'status' => 'queued']);
+
+    (new GenerateAiDescriptionsJob($run->id))->handle(app(AiDescriptionService::class));
+
+    $pendingBatch = null;
+
+    Bus::assertBatched(function (PendingBatch $batch) use (&$pendingBatch) {
+        $pendingBatch = $batch;
+
+        return true;
+    });
+
+    $batch = Mockery::mock(Batch::class);
+
+    foreach ($pendingBatch->catchCallbacks() as $callback) {
+        $callback($batch, new RuntimeException('GenerateProductDescriptionJob has timed out.'));
+    }
+
+    expect($run->fresh())
+        ->status->toBe('processing')
+        ->error->toContain('timed out');
+
+    foreach ($pendingBatch->finallyCallbacks() as $callback) {
+        $callback($batch);
+    }
+
+    expect($run->fresh())
+        ->status->toBe('completed')
+        ->finished_at->not->toBeNull();
 });
