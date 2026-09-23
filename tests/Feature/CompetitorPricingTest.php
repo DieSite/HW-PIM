@@ -948,3 +948,119 @@ it('does not log the met-onderkleed cleanup as lost coverage', function () {
 
     @unlink($dbPath);
 });
+
+/**
+ * Write a scraper SQLite database holding these (sku, shop, price_str) rows.
+ *
+ * @param  array<int, array{0: string, 1: string, 2: string}>  $rows
+ */
+function makeScraperDb(array $rows): string
+{
+    $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
+    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
+    $insert = $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)');
+
+    foreach ($rows as [$sku, $shop, $priceStr]) {
+        $insert->execute([$sku, $shop, $priceStr, null, now()->toDateTimeString()]);
+    }
+
+    return $dbPath;
+}
+
+it('does not prune a shop whose crawl broke off halfway', function () {
+    config(['competitor_pricing.prune_brake' => ['min_rows' => 50, 'max_loss_pct' => 50]]);
+
+    foreach (range(1, 60) as $i) {
+        CompetitorPrice::create(['sku' => "CPTEST-GI{$i}", 'shop' => 'afgebroken.nl', 'price' => 900, 'scraped_at' => now()->subDay()]);
+    }
+
+    $dbPath = makeScraperDb(array_map(fn (int $i): array => ["CPTEST-GI{$i}", 'afgebroken.nl', '€ 900,00'], range(1, 10)));
+
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->expectsOutputToContain('Prune overgeslagen voor afgebroken.nl: 50 van 60 prijzen')
+        ->assertSuccessful();
+
+    expect(CompetitorPrice::where('shop', 'afgebroken.nl')->count())->toBe(60)
+        ->and(CompetitorPriceRemoval::where('shop', 'afgebroken.nl')->count())->toBe(0);
+
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true, '--force-prune' => true])
+        ->assertSuccessful();
+
+    expect(CompetitorPrice::where('shop', 'afgebroken.nl')->count())->toBe(10);
+
+    @unlink($dbPath);
+});
+
+it('brakes a mass loss but still prunes a shop that only loses a few prices', function () {
+    config(['competitor_pricing.prune_brake' => ['min_rows' => 50, 'max_loss_pct' => 50]]);
+
+    foreach (range(1, 100) as $i) {
+        CompetitorPrice::create(['sku' => "CPTEST-KL{$i}", 'shop' => 'gezond.nl', 'price' => 900, 'scraped_at' => now()->subDay()]);
+    }
+
+    $dbPath = makeScraperDb(array_map(fn (int $i): array => ["CPTEST-KL{$i}", 'gezond.nl', '€ 900,00'], range(1, 40)));
+
+    // 60 van 100 weg: beide drempels over, dus de rem houdt ze vast.
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->assertSuccessful();
+    expect(CompetitorPrice::where('shop', 'gezond.nl')->count())->toBe(100);
+
+    @unlink($dbPath);
+
+    // 5 van 100 weg: gewoon opruimen, het kleed is daar echt verdwenen.
+    $dbPath = makeScraperDb(array_map(fn (int $i): array => ["CPTEST-KL{$i}", 'gezond.nl', '€ 900,00'], range(1, 95)));
+
+    $this->artisan('pricing:import-competitor-prices', ['--db' => $dbPath, '--no-recompute' => true, '--prune' => true])
+        ->expectsOutputToContain('Pruned 5 competitor prices')
+        ->assertSuccessful();
+    expect(CompetitorPrice::where('shop', 'gezond.nl')->count())->toBe(95);
+
+    @unlink($dbPath);
+});
+
+it('ignores a competitor price the scraper has not confirmed for too long', function () {
+    Queue::fake();
+    config(['competitor_pricing.max_price_age_days' => 14]);
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '850'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+
+    // Een juni-prijs uit de teruggezette snapshot duwt de prijs niet meer.
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'oud.nl', 'price' => 850, 'scraped_at' => now()->subDays(98)]);
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'vers.nl', 'price' => 950, 'scraped_at' => now()->subDays(2)]);
+
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    $variant->refresh();
+    expect($variant->values['common']['prijs']['EUR'])->toBe('950')
+        ->and(ProductPriceHistory::where('sku', $variant->sku)->sole()->competitor_shop)->toBe('vers.nl');
+});
+
+it('hands the configured database path to the scraper', function () {
+    $dir = sys_get_temp_dir().'/cptest-scraper-'.uniqid();
+    mkdir($dir.'/node_modules', 0777, true);
+    mkdir($dir.'/bin');
+
+    $marker = $dir.'/catalog_db.txt';
+    file_put_contents($dir.'/bin/node', "#!/bin/sh\nprintf '%s' \"\$CATALOG_DB\" > '{$marker}'\n");
+    chmod($dir.'/bin/node', 0755);
+
+    $dbPath = makeScraperDb([['CPTEST-V1', 'shopa.nl', '€ 900,00']]);
+
+    config([
+        'competitor_pricing.scraper_dir' => $dir,
+        'competitor_pricing.node_bin'    => $dir.'/bin',
+        'competitor_pricing.db_path'     => $dbPath,
+    ]);
+
+    $this->artisan('pricing:run-competitor-analysis', ['--no-recompute' => true])
+        ->assertSuccessful();
+
+    expect(file_get_contents($marker))->toBe($dbPath);
+
+    @unlink($dbPath);
+    exec('rm -rf '.escapeshellarg($dir));
+});

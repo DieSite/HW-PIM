@@ -14,7 +14,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { normBrand, normModel, parseSize, detectShape } = require('./normalize');
+const { normBrand, normModel, parseSize, detectShape, GENERIC_MODEL_WORDS } = require('./normalize');
 
 function loadCatalog(csvPath) {
   const text = fs.readFileSync(csvPath, 'utf8');
@@ -86,6 +86,56 @@ function loadCatalog(csvPath) {
     }
     const mustHave = [...extra];
     for (const entry of keyEntries) entry.mustHave = mustHave;
+  }
+
+  // En andersom: "kapiti 172" mag niet koppelen op een tekst die de extra
+  // tokens van "kapiti black 172" draagt, want dat is de andere lijn.
+  for (const [key, keyEntries] of models) {
+    const [brand, model] = key.split('|');
+    const tokens = model.split(' ').filter(Boolean);
+    const forbidden = new Set();
+    for (const otherKey of models.keys()) {
+      if (otherKey === key || !otherKey.startsWith(brand + '|')) continue;
+      const otherTokens = otherKey.split('|')[1].split(' ').filter(Boolean);
+      if (otherTokens.length <= tokens.length) continue;
+      if (!tokens.every(t => otherTokens.includes(t))) continue;
+      for (const t of otherTokens) {
+        if (!tokens.includes(t) && !/^\d+$/.test(t)) forbidden.add(t);
+      }
+    }
+    for (const entry of keyEntries) entry.mustNotHave = [...forbidden];
+  }
+
+  // Zonder dessinnummer in de concurrenttekst vergelijken we namen zónder
+  // nummers: "prosper copper" is een deel van "prosper vintage copper", dus
+  // mag Prosper 65 – Copper geen tekst met "vintage" pakken als er geen
+  // nummer bij staat. Zie wordsCarryIdentity in normalize.js.
+  //
+  // Daarnaast: welke woorden onderscheiden dit model van zijn naamgenoten
+  // (zelfde merk, zelfde eerste woord)? "white" komt bij geen andere Prosper
+  // voor en is dus genoeg bewijs; "grey" delen er vier en is het niet.
+  // Voor het verbod tellen ook generieke woorden mee ("vintage" in Vintage
+  // Copper); als bewijs van identiteit niet.
+  const words = model => model.split(' ').filter(t => t && !/^\d+$/.test(t));
+  const telling = ws => ws.filter(t => !GENERIC_MODEL_WORDS.has(t));
+  for (const [key, keyEntries] of models) {
+    const [brand, model] = key.split('|');
+    const own = words(model);
+    const forbidden = new Set();
+    const shared = new Set([own[0]]);
+    for (const otherKey of models.keys()) {
+      if (otherKey === key || !otherKey.startsWith(brand + '|')) continue;
+      const other = words(otherKey.split('|')[1]);
+      if (other[0] !== own[0]) continue;
+      for (const t of other) shared.add(t);
+      if (other.length <= own.length || !own.every(t => other.includes(t))) continue;
+      for (const t of other) if (!own.includes(t)) forbidden.add(t);
+    }
+    for (const entry of keyEntries) {
+      entry.mustNotHaveWithoutNumber = [...forbidden];
+      entry.nameWords = telling(own);
+      entry.distinctWords = telling(own).filter(t => !shared.has(t));
+    }
   }
 
   return { entries, bySku, models, fixedEntries };

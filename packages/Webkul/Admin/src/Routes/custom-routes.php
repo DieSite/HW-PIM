@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomImportController;
 use App\Http\Controllers\PhotoroomController;
 use App\Http\Controllers\Tools\AiDescriptionsController;
 use App\Http\Controllers\Tools\BulkEditController;
+use App\Http\Controllers\Tools\DeliveryTimesController;
 use App\Http\Controllers\Tools\DeMunkStockController;
 use App\Http\Controllers\Tools\ErroredProductsController;
 use App\Http\Controllers\Tools\EurgrosController;
@@ -77,6 +78,9 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::get('/demunk-voorraad/search-products', [DeMunkStockController::class, 'searchProducts'])->name('admin.tools.demunk-voorraad.search-products');
         Route::post('/demunk-voorraad/link', [DeMunkStockController::class, 'link'])->name('admin.tools.demunk-voorraad.link');
         Route::post('/demunk-voorraad/unlink', [DeMunkStockController::class, 'unlink'])->name('admin.tools.demunk-voorraad.unlink');
+
+        Route::get('/levertijden', [DeliveryTimesController::class, 'index'])->name('admin.tools.delivery-times.index');
+        Route::post('/levertijden', [DeliveryTimesController::class, 'update'])->name('admin.tools.delivery-times.update');
     });
 
     Route::prefix('custom')->group(function () {

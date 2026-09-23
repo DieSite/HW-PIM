@@ -338,7 +338,7 @@ it('mails the report at the end of the full pipeline run', function () {
     $dbPath = tempnam(sys_get_temp_dir(), 'cartest_').'.sqlite';
     $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
-    $pdo->exec("INSERT INTO prices VALUES ('{$variant->sku}', 'shopa.nl', '€ 850,00', 'https://shopa.nl/kleed', '2026-07-29 04:00:00')");
+    $pdo->exec("INSERT INTO prices VALUES ('{$variant->sku}', 'shopa.nl', '€ 850,00', 'https://shopa.nl/kleed', '".now()->toDateTimeString()."')");
     $pdo = null;
 
     config()->set('competitor_pricing.db_path', $dbPath);

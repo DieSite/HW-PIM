@@ -2,12 +2,10 @@
 
 namespace App\Jobs;
 
-use Illuminate\Support\Str;
-use Diesite\Monitor\Monitor;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Models\AiDescriptionRun;
 use App\Services\AI\AiDescriptionService;
-use DateTimeInterface;
+use Diesite\Monitor\Monitor;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -30,17 +29,18 @@ class GenerateAiDescriptionsJob implements ShouldQueue
 
     public $timeout = 900;
 
-    public $maxExceptions = 1;
+    /**
+     * Fail fast: one attempt and no retryUntil() deadline. Running the fan-out
+     * a second time would queue every product twice.
+     */
+    public $tries = 1;
+
+    public $failOnTimeout = true;
 
     public function __construct(public readonly int $runId)
     {
         $this->onConnection('redis-ai');
         $this->onQueue('ai');
-    }
-
-    public function retryUntil(): DateTimeInterface
-    {
-        return now()->addMinutes(30);
     }
 
     /**

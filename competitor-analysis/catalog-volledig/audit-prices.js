@@ -21,7 +21,7 @@ const path = require('path');
 const { openDb, deletePrice } = require('./storage');
 const { loadCatalog } = require('./catalog');
 const { CUSTOM_SHOPS } = require('./shops');
-const { isRealPrice, detectShape, modelIdentityMatches, normModel } = require('./normalize');
+const { isRealPrice, detectShape, modelIdentityMatches, normModel, identityOptionsFor } = require('./normalize');
 
 const CSV_PATH = process.env.CATALOG_CSV || path.join(__dirname, '..', '..', 'HW-PIM', 'Result_6.csv');
 
@@ -42,7 +42,7 @@ function judge(row, entry, indexRow, shopCfg = null) {
   const text = normModel(clean) + ' ' + String(row.url ?? '').toLowerCase();
 
   if (!modelIdentityMatches(entry.normModel, text, entry.mustHave,
-      { requireDiscriminator: shopCfg?.requireDiscriminator, colour: entry.colour })) return 'identity';
+      { requireDiscriminator: shopCfg?.requireDiscriminator, ...identityOptionsFor(entry) })) return 'identity';
 
   if ((indexRow.platform ?? 'custom') === 'custom') {
     const pageShape = detectShape(clean, row.url) ?? 'rechthoek';

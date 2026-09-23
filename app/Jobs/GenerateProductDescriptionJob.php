@@ -8,7 +8,6 @@ use App\Models\AiDescriptionRun;
 use App\Models\Product;
 use App\Services\AI\AiDescriptionService;
 use App\Services\AI\ProductDescriptionGenerator;
-use DateTimeInterface;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,14 +25,29 @@ class GenerateProductDescriptionJob implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 300;
+    /**
+     * Outlasts the slowest the model call may legitimately take: two
+     * generator attempts, each up to ai.request.retries HTTP tries of
+     * ai.request.timeout seconds. A shorter timeout makes the worker kill
+     * itself mid-call, which leaves the job reserved until retry_after (an
+     * hour) with nothing in the logs.
+     */
+    public $timeout = 600;
 
     /**
-     * Bounded by a deadline rather than $tries: a worker that is killed burns
-     * an attempt without ever running, so an attempt cap silently turns into
-     * "gave up" for reasons unrelated to this job. {@see docs on redis-ai}
+     * Fail fast: one attempt and no retryUntil() deadline. A worker that dies
+     * mid-call brings the job back after retry_after, and that second
+     * reservation fails it on the spot instead of quietly running it again.
+     * No deadline also means a product that waits hours behind the rest of
+     * its run still gets its turn.
      */
-    public $maxExceptions = 2;
+    public $tries = 1;
+
+    /**
+     * A timeout fails the product right away, with a draft that says so,
+     * instead of leaving it reserved until retry_after.
+     */
+    public $failOnTimeout = true;
 
     /**
      * @param  list<string>  $fields
@@ -45,11 +59,6 @@ class GenerateProductDescriptionJob implements ShouldQueue
     ) {
         $this->onConnection('redis-ai');
         $this->onQueue('ai');
-    }
-
-    public function retryUntil(): DateTimeInterface
-    {
-        return now()->addMinutes(30);
     }
 
     /**

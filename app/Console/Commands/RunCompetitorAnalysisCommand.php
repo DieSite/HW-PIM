@@ -170,6 +170,7 @@ class RunCompetitorAnalysisCommand extends Command
                 (int) config('competitor_pricing.scraper_timeout'),
                 [
                     'CATALOG_CSV'  => $csv,
+                    'CATALOG_DB'   => (string) config('competitor_pricing.db_path'),
                     'CONCURRENCY'  => (string) config('competitor_pricing.concurrency'),
                     'REFRESH_DAYS' => (string) config('competitor_pricing.refresh_days'),
                 ],

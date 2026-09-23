@@ -10,7 +10,7 @@ const fs       = require('node:fs');
 const os       = require('node:os');
 const path     = require('node:path');
 
-const { detectShape, normModel, parseSize, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens, pageMatchesEntry, colorWords, colorsCompatible, sizeMatches } = require('./normalize');
+const { detectShape, productShape, normModel, parseSize, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens, pageMatchesEntry, colorWords, colorsCompatible, sizeMatches } = require('./normalize');
 const { loadCatalog } = require('./catalog');
 
 test('detectShape herkent vormen in modelnaam, maat, titel en slug', () => {
@@ -50,6 +50,18 @@ test('parseSize parseert rechthoek- en rondmaten', () => {
   assert.equal(parseSize('Maatwerk'), null);
   assert.equal(parseSize('Rond Maatwerk'), null);
   assert.equal(parseSize('10 x 15 cm'), null);
+});
+
+test('parseSize leest een ronde doorsnede in meters', () => {
+  // youlikeitwonen.nl, Amado 6474/6282
+  assert.deepEqual(parseSize('Rond 2 meter doorsnede'), { widthCm: 200, heightCm: 200 });
+  assert.deepEqual(parseSize('Rond 2,40 cm Doorsnede'), { widthCm: 240, heightCm: 240 });
+  assert.deepEqual(parseSize('Rond 1.6 m'), { widthCm: 160, heightCm: 160 });
+  assert.deepEqual(parseSize('Rond 240 cm doorsnede'), { widthCm: 240, heightCm: 240 });
+
+  // Een los cijfer zonder eenheid is geen maat: "-2" is een slug-volgnummer.
+  assert.equal(parseSize('vloerkleed-rond-2'), null);
+  assert.equal(parseSize('Rond 2'), null);
 });
 
 test('designNumbers negeert maatparen en product-IDs', () => {
@@ -550,4 +562,257 @@ test('floorpassion leest ook de prijs van een rond kleed', () => {
 
   // Een maat die er niet staat blijft leeg.
   assert.strictEqual(shop.getPrijs(html, 300, 300, 'rond'), null);
+});
+
+test('productShape: een titel met meerdere vormen maakt de kale variant rechthoekig', () => {
+  // youlikeitwonen.nl: één product met rechthoekige én ronde varianten.
+  // detectShape zou 'rond' zeggen en dan telde elke kale "200x290 cm" als rond.
+  assert.strictEqual(productShape('Vloerkleed Spectrum 3333 Rechthoekig & Rond', 'vloerkleed-spectrum-3333-rechthoekig'), 'rechthoek');
+  assert.strictEqual(productShape('Vloerkleed Rechthoekig Amado 6474'), 'rechthoek');
+
+  // Twee vormen zonder rechthoek: een kale maat is niet te plaatsen.
+  assert.strictEqual(productShape('Vloerkleed Anaheim 3434 Rond Of Ovaal', 'vloerkleed-rond-of-ovaal-anaheim-3434'), null);
+
+  // Eén vorm, of geen: zoals detectShape, met rechthoek als standaard.
+  assert.strictEqual(productShape('Diamante 01 Oval', 'diamante-01-oval'), 'ovaal');
+  assert.strictEqual(productShape('Vloerkleed Rond Bouquet Grijs'), 'rond');
+  assert.strictEqual(productShape('Cisco 63', 'karpi-cisco-63'), 'rechthoek');
+});
+
+test('parseSize leest de slugvorm "160-x-230" van WooCommerce-attributen', () => {
+  // caltabellotta.nl: "attribute_pa_maat":"160-x-230" naast "200x290"
+  assert.deepEqual(parseSize('{"attribute_pa_maat":"160-x-230"}'), { widthCm: 160, heightCm: 230 });
+  assert.deepEqual(parseSize('200-x-290-cm'), { widthCm: 200, heightCm: 290 });
+  assert.deepEqual(parseSize('Rechthoek / 160 x 230 cm'), { widthCm: 160, heightCm: 230 });
+});
+
+test('numbersCompatible eist ons dessinnummer, niet zomaar een gedeeld nummer', () => {
+  // dfmwonen.nl: beide delen de collectiecode 300
+  assert.equal(numbersCompatible('kades 4354 300', 'kades kleur 4309 300 vloerkleed-kades-4309-300'), false);
+  assert.equal(numbersCompatible('kades 4309 300', 'kades kleur 4309 300 vloerkleed-kades-4309-300'), true);
+  // Het collectienummer mag ontbreken zolang het dessinnummer er is
+  assert.equal(numbersCompatible('kades 4309 300', 'kades 4309'), true);
+});
+
+test('een basismodel koppelt niet aan de pagina van zijn uitgebreide naamgenoot (mustNotHave)', () => {
+  const csv = [
+    'ERG0415.2,Eurogros,Kapiti 172,170 cm x 230 cm,879',
+    'ERG0427.2,Eurogros,Kapiti Black 172,170 cm x 230 cm,979',
+    'DMC00555.2,De Munk,Dakhla 1,170 cm x 240 cm,999',
+    'DMC00556.2,De Munk,Dakhla Hol 1,170 cm x 240 cm,1099',
+  ].join('\n');
+  const tmp = path.join(os.tmpdir(), `catalog-mustnothave-test-${process.pid}.csv`);
+  fs.writeFileSync(tmp, csv);
+  try {
+    const catalog = loadCatalog(tmp);
+    const kapiti = catalog.bySku.get('ERG0415.2');
+    const black  = catalog.bySku.get('ERG0427.2');
+    assert.deepEqual(kapiti.mustNotHave, ['black']);
+    assert.deepEqual(black.mustNotHave, []);
+
+    // hetdesignhuys / dfmwonen: de Black-pagina hoort bij Kapiti Black, niet bij Kapiti
+    const blackPage = 'Karpet Kapiti Black 172';
+    assert.equal(pageMatchesEntry(blackPage, 'https://x.nl/kapiti-black-172', kapiti), false);
+    assert.equal(pageMatchesEntry(blackPage, 'https://x.nl/kapiti-black-172', black), true);
+    assert.equal(pageMatchesEntry('Karpet Kapiti 172', 'https://x.nl/kapiti-172', kapiti), true);
+
+    assert.equal(pageMatchesEntry('Dakhla Hol 1 Ivory', 'https://x.nl/dakhla-hol-1-ivory', catalog.bySku.get('DMC00555.2')), false);
+
+    // Los woord: "blackpool" is geen "black"
+    assert.equal(pageMatchesEntry('Kapiti 172 Blackpool', 'https://x.nl/kapiti-172', kapiti), true);
+  } finally {
+    fs.unlinkSync(tmp);
+  }
+});
+
+test('WooCommerce: kleur van de variatie, of anders de aangeboden kleuren', () => {
+  const { variantColour, offeredColours, colourIdentity } = require('./indexers/woocommerce.js');
+
+  assert.equal(variantColour({ attributes: { attribute_pa_kleur: 'wolf-grey-23', attribute_formaat: '200x290 cm' } }), 'wolf grey 23');
+  // kledenwereld.nl: lege kleur = één prijs voor elke kleur
+  assert.equal(variantColour({ attributes: { attribute_kleur: '', attribute_formaat: '200x290 cm' } }), '');
+
+  const prosper = { attributes: [
+    { name: 'Formaat', has_variations: true, terms: [{ name: '200x290 cm' }] },
+    { name: 'Kleur', has_variations: true, terms: [{ name: 'Cyprus White 21' }, { name: 'Wolf Grey 23' }] },
+  ] };
+  const offered = offeredColours(prosper);
+  assert.equal(offered, 'cyprus white 21 wolf grey 23');
+  assert.equal(colourIdentity({ attributes: { attribute_kleur: '', attribute_formaat: '200x290 cm' } }, offered), offered);
+
+  // grootinvloeren.nl: Kleur is daar een eigenschap, geen keuze. Die telt niet,
+  // en een product dat niet op kleur varieert krijgt geen kleurtekst.
+  const loveShaggy = { attributes: [
+    { name: 'Afmeting', has_variations: true, terms: [{ name: '160x230' }] },
+    { name: 'Kleur', has_variations: false, terms: [{ name: 'Bruin' }, { name: 'Taupe' }] },
+  ] };
+  assert.equal(offeredColours(loveShaggy), '');
+  assert.equal(colourIdentity({ attributes: { attribute_pa_afmeting: '160x230-2' } }, offeredColours(loveShaggy)), '');
+
+  // Een kleur die de winkel voert koppelt; een kleur die hij niet voert niet
+  assert.equal(numbersCompatible('prosper 23 wolf grey', 'prosper ' + offered), true);
+  assert.equal(numbersCompatible('prosper 69 vintage copper', 'prosper ' + offered), false);
+});
+
+test('zonder dessinnummer bij de concurrent moet een onderscheidend woord kloppen', () => {
+  // karpetwereld.nl: één pagina per Mart Visser-kleur, zonder nummer
+  const tmp = path.join(os.tmpdir(), `catalog-nonumber-test-${process.pid}.csv`);
+  fs.writeFileSync(tmp, [
+    'KP00190.2,Mart Visser|Karpi,Prosper 21 - Cyprus White,200 cm x 290 cm,549',
+    'KP00191.2,Mart Visser|Karpi,Prosper 23 - Wolf Grey,200 cm x 290 cm,549',
+    'KP00192.2,Mart Visser|Karpi,Prosper 24 - Grey Light,200 cm x 290 cm,549',
+    'KP00195.2,Mart Visser|Karpi,Prosper 37 - Indigo Grey,200 cm x 290 cm,549',
+    'KP00197.2,Mart Visser|Karpi,Prosper 63 - Custard Warmth,200 cm x 290 cm,579',
+    'KP00198.2,Mart Visser|Karpi,Prosper 64 - Grey Custard,200 cm x 290 cm,579',
+    'KP00199.2,Mart Visser|Karpi,Prosper 65 - Copper,200 cm x 290 cm,579',
+    'KP00200.2,Mart Visser|Karpi,Prosper 69 - Vintage Copper,200 cm x 290 cm,579',
+  ].join('\n'));
+  try {
+    const catalog = loadCatalog(tmp);
+    const page = (slug) => (sku) => pageMatchesEntry('Mart Visser Prosper', `https://karpetwereld.nl/product/${slug}/`, catalog.bySku.get(sku));
+
+    const wolfGrey = page('vloerkleed-prosper-wolf-grey-mart-visser');
+    assert.equal(wolfGrey('KP00191.2'), true);
+    assert.equal(wolfGrey('KP00195.2'), false);  // Indigo Grey
+    assert.equal(wolfGrey('KP00192.2'), false);  // Grey Light
+    assert.equal(wolfGrey('KP00198.2'), false);  // Grey Custard: geen eigen woord, dus alles nodig
+
+    const vintageCopper = page('vloerkleed-prosper-vintage-copper-mart-visser');
+    assert.equal(vintageCopper('KP00200.2'), true);
+    assert.equal(vintageCopper('KP00199.2'), false);  // Copper ≠ Vintage Copper
+    assert.deepEqual(catalog.bySku.get('KP00199.2').mustNotHaveWithoutNumber, ['vintage']);
+
+    assert.equal(page('vloerkleed-prosper-custard-warmth-mart-visser')('KP00197.2'), true);
+
+    // Wij voeren geen Turquoise Blue, dus "blue" onderscheidt onze Powder Blue
+    // binnen óns assortiment. De concurrent noemt echter "turquise": tegenspraak.
+    const { modelIdentityMatches, identityOptionsFor } = require('./normalize');
+    fs.appendFileSync(tmp, '\nKP00271.2,Mart Visser|Karpi,Prosper 31 - Powder Blue,200 cm x 290 cm,549');
+    const powderBlue = loadCatalog(tmp).bySku.get('KP00271.2');
+    const turquise = 'prosper turquise blue https://karpetwereld.nl/product/vloerkleed-prosper-turquise-blue-mart-visser/';
+    assert.equal(modelIdentityMatches(powderBlue.normModel, turquise, [], { ...identityOptionsFor(powderBlue), competitorModel: 'prosper turquise blue' }), false);
+    const cyprus = loadCatalog(tmp).bySku.get('KP00190.2');
+    assert.equal(modelIdentityMatches(cyprus.normModel, 'prosper cyprus white https://karpetwereld.nl/x/', [], { ...identityOptionsFor(cyprus), competitorModel: 'prosper cyprus white' }), true);
+    // "vintage" is een stijlwoord, geen tegenspraak (Cendre 58 Forest ← "Cendre Vintage Forest")
+    fs.appendFileSync(tmp, '\nKP0083.2,Mart Visser|Karpi,Cendre 58 - Forest,200 cm x 290 cm,649');
+    const forest = loadCatalog(tmp).bySku.get('KP0083.2');
+    assert.equal(modelIdentityMatches(forest.normModel, 'cendre vintage forest https://karpetwereld.nl/x/', [], { ...identityOptionsFor(forest), competitorModel: 'cendre vintage forest' }), true);
+
+    // Een kleur bij een model zonder kleur in de naam is geen tegenspraak
+    // (mooierthuis: "Derbe 72220 Rood"; vijfcijferige nummers tellen niet als dessin)
+    fs.appendFileSync(tmp, '\nERG0137.2,Eurogros,Derbe 72220-300,140 cm x 200 cm,759\nERG0138.2,Eurogros,Derbe-72201-901,140 cm x 200 cm,759');
+    const derbe = loadCatalog(tmp).bySku.get('ERG0137.2');
+    assert.equal(modelIdentityMatches(derbe.normModel, 'derbe 72220 rood https://www.mooierthuis.nl/products/eurogros-derbe-72220', [], { ...identityOptionsFor(derbe), competitorModel: 'derbe 72220 rood' }), true);
+
+    // gigameubel: "wit" is genoeg voor Cyprus White, want geen andere Prosper is wit
+    assert.equal(pageMatchesEntry('Mart Visser Vloerkleed Prosper', 'https://www.gigameubel.nl/mart-visser-vloerkleed-prosper-200x290cm-wit', catalog.bySku.get('KP00190.2')), true);
+
+    // Staat er wél een nummer, dan beslist dat en niet de woorden
+    assert.equal(pageMatchesEntry('Prosper 37 blauwgrijs', 'https://x.nl/prosper-37', catalog.bySku.get('KP00195.2')), true);
+  } finally {
+    fs.unlinkSync(tmp);
+  }
+});
+
+test('woonwebwinkel: prijs = basis + toeslag of korting van de maatoptie', () => {
+  const { CUSTOM_SHOPS } = require('./shops');
+  const shop = CUSTOM_SHOPS.find(s => s.key === 'woonwebwinkel.com');
+  const option = (name, amount) => ({ prices: { finalPrice: { amount } }, type: 'fixed', name });
+  const config = { 414: {
+    2645: option('065x130cm', -260),
+    2650: option('160x230cm', 0),
+    2652: option('200x290cm', 210),
+    2656: option('200x200 cm vierkant', 36),
+    2659: option('200cm rond', 60),
+    8211: option('200x290cm ovaal', 236),
+  } };
+  const html = '<meta property="product:price:amount" content="349"/>'
+    + `<script>{"priceOptions": {"optionConfig": ${JSON.stringify(config)}, "controlContainer": ".field"}}</script>`;
+
+  assert.strictEqual(shop.getPrijs(html, 160, 230, 'rechthoek'), '€ 349,00');
+  assert.strictEqual(shop.getPrijs(html, 200, 290, 'rechthoek'), '€ 559,00');
+  assert.strictEqual(shop.getPrijs(html, 65, 130, 'rechthoek'), '€ 89,00');   // negatieve optie
+  assert.strictEqual(shop.getPrijs(html, 200, 290, 'ovaal'), '€ 585,00');
+  assert.strictEqual(shop.getPrijs(html, 200, 200, 'rond'), '€ 409,00');
+  assert.strictEqual(shop.getPrijs(html, 200, 200, 'rechthoek'), '€ 385,00'); // vierkant
+  assert.strictEqual(shop.getPrijs(html, 170, 240, 'rechthoek'), null);
+
+  // Anaheim 4248 schrijft "200 rond" zonder "cm", en alle vormen staan op één
+  // pagina: de titelcheck mag dan niet op de vorm van de pagina afkeuren.
+  const anaheim = '<meta property="product:price:amount" content="329"/>'
+    + `<script>{"optionConfig": ${JSON.stringify({ 1: { 1: option('200 rond', 50), 2: option('160x230 ovaal', 20) } })}, "x": 1}</script>`;
+  assert.strictEqual(shop.getPrijs(anaheim, 200, 200, 'rond'), '€ 379,00');
+  assert.strictEqual(shop.getPrijs(anaheim, 160, 230, 'ovaal'), '€ 349,00');
+  assert.equal(shop.mixedShapes, true);
+  const ovaal = { normModel: 'anaheim 4248', mustHave: [], shape: 'ovaal' };
+  const title = 'modern gebloemd vloerkleed Anaheim 4248 met hoog-laag structuur';
+  assert.equal(pageMatchesEntry(title, 'https://woonwebwinkel.com/anaheim-4248.html', ovaal), false);
+  assert.equal(pageMatchesEntry(title, 'https://woonwebwinkel.com/anaheim-4248.html', ovaal, { anyShape: true }), true);
+});
+
+test('onlineslaapcomfort: kleden-URL, maat, merk en vertaalde collectienamen', () => {
+  const { CUSTOM_SHOPS } = require('./shops');
+  const { applyWordAliases } = require('./normalize');
+  const shop = CUSTOM_SHOPS.find(s => s.key === 'onlineslaapcomfort.nl');
+  const u = slug => `https://www.onlineslaapcomfort.nl/${slug}`;
+
+  assert.equal(shop.urlFilter.test(u('dekbed-wassen')), false);
+  assert.deepEqual(shop.sizeFromUrl(u('anaheim-3243-200x290-ovaal-5414452131048')), { widthCm: 200, heightCm: 290 });
+  assert.deepEqual(shop.sizeFromUrl(u('antiek-8703-170-x-240-cm-5420073322123')), { widthCm: 170, heightCm: 240 });
+  assert.deepEqual(shop.sizeFromUrl(u('malta-6969-240rond-5414452012545')), { widthCm: 240, heightCm: 240 });
+  assert.deepEqual(shop.sizeFromUrl(u('twilight-2211-200-rond-5414452555165')), { widthCm: 200, heightCm: 200 });
+  assert.equal(shop.detectBrand(u('antiek-8703-170-x-240-cm-5420073322123')), 'Louis De Poortere');
+  assert.equal(shop.detectBrand(u('kapiti-zwart-175-200x300-304879')), 'Eurogros');
+
+  assert.equal(applyWordAliases('vervagende wereld 8261 200x280', shop.slugAliases), 'fading world 8261 200x280');
+  assert.equal(applyWordAliases('antiek 8720', shop.slugAliases), 'antiquarian 8720');
+  // Alleen hele woorden
+  assert.equal(applyWordAliases('antieke stoel', shop.slugAliases), 'antieke stoel');
+});
+
+test('mustHave en mustNotHave kennen kleuren in een andere taal (zwart = black)', () => {
+  // onlineslaapcomfort: "kapiti-zwart-175" is Kapiti Black
+  assert.equal(containsAllTokens('kapiti zwart 175', ['black']), true);
+  const { containsNoWords } = require('./normalize');
+  assert.equal(containsNoWords('kapiti zwart 175', ['black']), false);
+  assert.equal(containsNoWords('kapiti 175', ['black']), true);
+});
+
+test('fetch-prices kiest bij één pagina per maat de URL met de juiste maat', () => {
+  const { urlFitsEntry } = require('./fetch-prices');
+  const { CUSTOM_SHOPS } = require('./shops');
+  const shop = CUSTOM_SHOPS.find(s => s.key === 'onlineslaapcomfort.nl');
+  const entry = { widthCm: 200, heightCm: 290, shape: 'rechthoek' };
+  assert.equal(urlFitsEntry('https://www.onlineslaapcomfort.nl/anaheim-3243-160x230-5414452088045', entry, shop), false);
+  assert.equal(urlFitsEntry('https://www.onlineslaapcomfort.nl/anaheim-3243-200x290-5414452088052', entry, shop), true);
+  assert.equal(urlFitsEntry('https://www.onlineslaapcomfort.nl/anaheim-3243-200x290-ovaal-5414452131048', entry, shop), false);
+  // Winkels zonder maat in de URL: elke URL van het model is goed
+  assert.equal(urlFitsEntry('https://x.nl/twilight', entry, { fromUrl: false }), true);
+});
+
+test('WooCommerce: entities in namen en prijzen van simple producten', () => {
+  const { decodeEntities, storeApiPrice } = require('./indexers/woocommerce.js');
+  // joldersma-wonen: "&#8216;Milano&#8217;" werd "8216 milano 8217", en 8216
+  // telde dan als dessinnummer
+  assert.equal(normModel(decodeEntities('Vloerkleed &#8216;Milano&#8217;')), 'vloerkleed milano');
+  // maxwonen: één product per maat, maat in de naam
+  assert.deepEqual(parseSize(decodeEntities('Vloerkleed Galaxy 10 Beige 140&#215;200 cm')), { widthCm: 140, heightCm: 200 });
+  assert.equal(storeApiPrice({ prices: { price: '78900', currency_minor_unit: 2 } }), 789);
+  assert.equal(storeApiPrice({ prices: { price: '0', currency_minor_unit: 2 } }), null);
+
+  // joldersma: maat alleen als eigenschap; bij meerdere maten voor één prijs niets
+  const { singleSizeAttribute } = require('./indexers/woocommerce.js');
+  assert.deepEqual(singleSizeAttribute({ attributes: [{ name: 'Afmetingen', terms: [{ name: '200X290 cm' }] }] }), { widthCm: 200, heightCm: 290 });
+  assert.equal(singleSizeAttribute({ attributes: [{ name: 'Afmetingen', terms: [{ name: '155 x 230 cm' }, { name: '200 x 290 cm' }] }] }), null);
+  assert.equal(singleSizeAttribute({ attributes: [] }), null);
+});
+
+test('WooCommerce: doorbladeren bekijkt alleen kleden', () => {
+  const { looksLikeRug } = require('./indexers/woocommerce.js');
+  assert.equal(looksLikeRug({ name: 'Salontafel Maya Ray niervormig', categories: [{ name: 'Salontafels' }] }), false);
+  assert.equal(looksLikeRug({ name: 'Vloerkleed Galaxy 10 Beige 200&#215;290 cm', categories: [] }), true);
+  assert.equal(looksLikeRug({ name: 'Royce 63', categories: [{ name: 'Vloerkleden' }] }), true);
+  // maxwonen: kleed zonder "vloerkleed", wel met ons merk in de categorie
+  assert.equal(looksLikeRug({ name: 'Acryl 7274', categories: [{ name: 'Uncategorized Eurogros' }] }, ['Eurogros', 'Karpi']), true);
+  assert.equal(looksLikeRug({ name: 'Acryl 7274', categories: [{ name: 'Uncategorized Eurogros' }] }), false);
 });

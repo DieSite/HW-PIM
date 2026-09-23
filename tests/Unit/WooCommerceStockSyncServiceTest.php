@@ -15,7 +15,16 @@ it('sums the three stock sources and marks instock when positive', function () {
         'sku'            => 'ABC-123',
         'stock_quantity' => 8,
         'stock_status'   => 'instock',
+        'levertijd'      => '',
     ]);
+});
+
+it('sends the delivery time of the variant along with its stock', function () {
+    $update = WooCommerceStockSyncService::stockUpdateFromValues('ABC-127', [
+        'common' => ['voorraad_hw_5_korting' => 1, 'levertijd' => '2 tot 3 dagen'],
+    ]);
+
+    expect($update['levertijd'])->toBe('2 tot 3 dagen');
 });
 
 it('marks onbackorder when the total is zero', function () {

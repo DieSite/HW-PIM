@@ -4,6 +4,7 @@ namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
 use App\Models\Product;
 use App\Services\AfwerkingOptieService;
+use App\Services\DeliveryTimeService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -352,6 +353,7 @@ class Exporter extends AbstractExporter
             $meta = $formatted['meta_data'] ?? [];
             $meta[] = ['key' => 'is_hw_voorraad', 'value' => $uitverkoop > 0 ? 'yes' : 'no'];
             $meta[] = ['key' => 'afhaalkorting_price', 'value' => $discounted];
+            $meta[] = ['key' => DeliveryTimeService::ATTRIBUTE, 'value' => (string) ($item['values']['common'][DeliveryTimeService::ATTRIBUTE] ?? '')];
             $parent = Product::find($formatted['parent_id']);
             if (! is_array($parent->values)) {
                 $values = json_decode($parent->values ?? '', true);

@@ -18,10 +18,12 @@
 const path = require('path');
 const { openDb, getIndexForShop, recordPrice, deletePrice, unpricedSkus, findInIndex } = require('./storage');
 const { loadCatalog }  = require('./catalog');
-const { normBrand, normModel, isRealPrice, fmtEuro, detectShape, modelIdentityMatches, pageMatchesEntry } = require('./normalize');
+const { normBrand, normModel, isRealPrice, fmtEuro, detectShape, modelIdentityMatches, pageMatchesEntry, identityOptionsFor, applyWordAliases } = require('./normalize');
 const { getText, createQueue, sleep } = require('./http');
 const { extractJsonLdPrice, parsePriceStr } = require('./indexers/sitemap');
 const { CUSTOM_SHOPS } = require('./shops');
+
+const { runPerShop } = require('./shop-runner');
 
 const CSV_PATH   = process.env.CATALOG_CSV || path.join(__dirname, '..', '..', 'HW-PIM', 'Result_6.csv');
 const CONCURRENCY = Number(process.env.CONCURRENCY || process.argv.find((_, i) => process.argv[i - 1] === '--concurrency') || 6);
@@ -33,11 +35,34 @@ function rowShape(row) {
   return row.shape ?? detectShape(row.norm_model, row.url) ?? 'rechthoek';
 }
 
-/** Geef het beste index-record voor (shop, entry) terug, of null. Vorm moet overeenkomen. */
-function findUrl(db, shop, entry, requireDiscriminator = false) {
+/**
+ * Klopt de maat en vorm in de URL met deze entry? Alleen voor winkels met één
+ * pagina per maat (`sizeFromUrl`); voor de rest is elke URL van het model goed.
+ */
+function urlFitsEntry(url, entry, shopCfg) {
+  if (!shopCfg?.fromUrl || !shopCfg.sizeFromUrl) return true;
+  const size = shopCfg.sizeFromUrl(url);
+  return !!size && size.widthCm === entry.widthCm && size.heightCm === entry.heightCm
+    && (detectShape(url) ?? 'rechthoek') === entry.shape;
+}
+
+/**
+ * Geef het beste index-record voor (shop, entry) terug, of null. Vorm moet
+ * overeenkomen.
+ *
+ * Bij winkels met één pagina per maat staat hetzelfde model er meerdere keren
+ * in, één keer per maat. Vroeger kwam altijd de eerste terug, en die had
+ * meestal een andere maat, zodat de maatcheck erna hem afkeurde: per model
+ * kreeg zo hooguit één maat een prijs. Daarom de URL met de juiste maat.
+ */
+function findUrl(db, shop, entry, requireDiscriminator = false, shopCfg = null) {
   // Exacte match op normBrand + normModel
-  const rows = findInIndex(db, shop, entry.normBrand, entry.normModel)
-    .filter(r => rowShape(r) === entry.shape);
+  // Winkels met één pagina voor alle vormen (`mixedShapes`): de vorm van de
+  // indexrij zegt dan niets, getPrijs kiest de juiste maatoptie.
+  const shapeFits = r => shopCfg?.mixedShapes || rowShape(r) === entry.shape;
+  const rows = findInIndex(db, shop, entry.normBrand, entry.normModel).filter(shapeFits);
+  const fitting = rows.find(r => urlFitsEntry(r.url, entry, shopCfg));
+  if (fitting) return fitting.url;
   if (rows.length) return rows[0].url;
 
   // Fuzzy: zoek records met hetzelfde brand, check of entry.normModel start met
@@ -47,10 +72,11 @@ function findUrl(db, shop, entry, requireDiscriminator = false) {
   ).all(shop, entry.normBrand);
 
   const entryTokens = entry.normModel.split(' ').filter(Boolean);
-  for (const row of brandRows) {
-    if (rowShape(row) !== entry.shape) continue;
+  const ordered = [...brandRows].sort((a, b) => urlFitsEntry(b.url, entry, shopCfg) - urlFitsEntry(a.url, entry, shopCfg));
+  for (const row of ordered) {
+    if (!shapeFits(row)) continue;
     if (!modelIdentityMatches(entry.normModel, row.norm_model + ' ' + row.url, entry.mustHave,
-        { colour: entry.colour, requireDiscriminator })) continue;
+        { requireDiscriminator, ...identityOptionsFor(entry) })) continue;
     const rowTokens = row.norm_model.split(' ').filter(Boolean);
     const hits = entryTokens.filter(t => rowTokens.includes(t)).length;
     if (hits >= Math.min(2, entryTokens.length) && hits / entryTokens.length >= 0.7) {
@@ -70,8 +96,8 @@ async function fetchOne(db, entry, shopCfg, url) {
 
   // Titel-guard: de slug waarop geïndexeerd is mist soms het dessinnummer dat
   // de paginatitel wél toont — dan is dit tóch de verkeerde productpagina.
-  const pageTitle = html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? '';
-  if (!pageMatchesEntry(pageTitle, url, entry, { requireDiscriminator: shopCfg.requireDiscriminator })) {
+  const pageTitle = applyWordAliases(html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? '', shopCfg.slugAliases);
+  if (!pageMatchesEntry(pageTitle, applyWordAliases(url, shopCfg.slugAliases), entry, { requireDiscriminator: shopCfg.requireDiscriminator, anyShape: !!shopCfg.mixedShapes })) {
     // Positieve afkeuring: gooi een eerder (fout) vastgelegde prijs weg i.p.v.
     // 'n.v.t.' te schrijven, dat de sticky recordPrice zou negeren.
     deletePrice(db, entry.sku, shopCfg.key);
@@ -100,6 +126,17 @@ async function main() {
   const args    = process.argv.slice(2);
   const shopArg = args.filter((_, i) => args[i - 1] === '--shop');
 
+  // Zonder --single: elke winkel in een eigen proces met een eigen tijdslimiet
+  // (shop-runner.js), zodat één trage winkel de rest niet ophoudt.
+  if (!args.includes('--single')) {
+    const keys = CUSTOM_SHOPS
+      .filter(s => shopArg.length ? shopArg.includes(s.key) : !s.browser)
+      .map(s => s.key);
+    await runPerShop(__filename, keys);
+    console.log('\n✅ Prijzen ophalen klaar. Draai nu: node catalog-volledig/excel.js');
+    return;
+  }
+
   const db      = openDb();
   const catalog = loadCatalog(CSV_PATH);
   const enqueue = createQueue(CONCURRENCY);
@@ -122,7 +159,7 @@ async function main() {
       if (!entry) continue;
 
       // Zoek URL op in index
-      const url = findUrl(db, shopCfg.key, entry, shopCfg.requireDiscriminator);
+      const url = findUrl(db, shopCfg.key, entry, shopCfg.requireDiscriminator, shopCfg);
       if (!url) {
         // Niet in index = shop verkoopt dit model waarschijnlijk niet
         recordPrice(db, sku, shopCfg.key, 'n.v.t.', null);
@@ -157,4 +194,6 @@ async function main() {
   console.log('\n✅ Prijzen ophalen klaar. Draai nu: node catalog-volledig/excel.js');
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
+
+module.exports = { findUrl, urlFitsEntry };

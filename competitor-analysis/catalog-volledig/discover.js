@@ -8,7 +8,7 @@
  * De feitelijke prijsbepaling gebeurt elders (fetch-prices.js of de spec).
  */
 
-const { normBrand, slugMatchScore, detectShape, modelIdentityMatches } = require('./normalize');
+const { normBrand, slugMatchScore, detectShape, modelIdentityMatches, identityOptionsFor, applyWordAliases } = require('./normalize');
 const { upsertIndex } = require('./storage');
 const { filterByKeywords } = require('./indexers/sitemap');
 
@@ -31,6 +31,9 @@ function indexUrls(db, shopCfg, catalog, rawUrls) {
   const matched = new Map();
 
   for (const url of productUrls) {
+    // Alleen productpagina's van kleden (winkels met een gemengd assortiment
+    // en zonder merk in de URL, zoals onlineslaapcomfort.nl).
+    if (shopCfg.urlFilter && !shopCfg.urlFilter.test(url)) continue;
     const brand = shopCfg.detectBrand?.(url) ?? null;
     if (!brand) continue;
     const nb = normBrand(brand);
@@ -40,7 +43,7 @@ function indexUrls(db, shopCfg, catalog, rawUrls) {
     // string, en dan matcht er per definitie geen enkel model. Zo indexeerde
     // vivaldixl.nl nul van zijn 1.001 sitemap-URL's zonder één foutmelding.
     const slug = url.split('?')[0].split('#')[0].split('/').filter(Boolean).pop()?.split('.')[0] ?? '';
-    const slugNorm = slug.toLowerCase().replace(/[-_]/g, ' ');
+    const slugNorm = applyWordAliases(slug.toLowerCase().replace(/[-_]/g, ' '), shopCfg.slugAliases);
 
     // Zoek best-matchende model in de catalogus. De modelnaam zelf moet in de
     // slug staan en kleurnummers mogen niet botsen — sfeerwoorden als
@@ -50,7 +53,7 @@ function indexUrls(db, shopCfg, catalog, rawUrls) {
     for (const [modelKey, keyEntries] of catalog.models) {
       if (!modelKey.startsWith(nb + '|')) continue;
       const catModel = modelKey.split('|')[1];
-      if (!modelIdentityMatches(catModel, slugNorm, keyEntries[0]?.mustHave, { ...identityOpts, colour: keyEntries[0]?.colour })) continue;
+      if (!modelIdentityMatches(catModel, slugNorm, keyEntries[0]?.mustHave, { ...identityOpts, ...identityOptionsFor(keyEntries[0]) })) continue;
       const score = slugMatchScore(slugNorm, brand, catModel);
       if (score > bestScore && score >= 50) { bestScore = score; bestModel = catModel; }
     }

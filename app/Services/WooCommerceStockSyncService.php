@@ -29,8 +29,10 @@ class WooCommerceStockSyncService
     /**
      * Build a single stock update payload from a product, mirroring the stock
      * calculation in WooCommerce\Helpers\Exporters\Product\Exporter::formatData().
+     * The delivery time rides along because it follows the stock (see
+     * DeliveryTimeService); an empty one makes the shop drop the variation's.
      *
-     * @return array{sku: ?string, stock_quantity: int, stock_status: string}
+     * @return array{sku: ?string, stock_quantity: int, stock_status: string, levertijd: string}
      */
     public static function buildStockUpdate(Product $product): array
     {
@@ -39,7 +41,7 @@ class WooCommerceStockSyncService
 
     /**
      * @param  array<string, mixed>  $values
-     * @return array{sku: ?string, stock_quantity: int, stock_status: string}
+     * @return array{sku: ?string, stock_quantity: int, stock_status: string, levertijd: string}
      */
     public static function stockUpdateFromValues(?string $sku, array $values): array
     {
@@ -53,13 +55,14 @@ class WooCommerceStockSyncService
             'sku'            => $sku,
             'stock_quantity' => $quantity,
             'stock_status'   => $quantity > 0 ? 'instock' : 'onbackorder',
+            'levertijd'      => (string) ($common[DeliveryTimeService::ATTRIBUTE] ?? ''),
         ];
     }
 
     /**
      * Send stock updates to WooCommerce in batches of at most BATCH_SIZE.
      *
-     * @param  array<int, array{sku: ?string, stock_quantity: int, stock_status: string}>  $updates
+     * @param  array<int, array{sku: ?string, stock_quantity: int, stock_status: string, levertijd: string}>  $updates
      */
     public function pushUpdates(array $updates): void
     {
@@ -111,7 +114,7 @@ class WooCommerceStockSyncService
 
     /**
      * @param  array{shopUrl: string, consumerKey: string, consumerSecret: string}  $credential
-     * @param  array<int, array{sku: ?string, stock_quantity: int, stock_status: string}>  $batch
+     * @param  array<int, array{sku: ?string, stock_quantity: int, stock_status: string, levertijd: string}>  $batch
      */
     protected function sendBatch(string $endpoint, array $credential, array $batch): void
     {

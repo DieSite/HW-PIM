@@ -34,6 +34,7 @@ yarn-error.log
 /competitor-analysis/node_modules
 /competitor-analysis/results*
 /competitor-analysis/.pw-browsers
+/competitor-analysis/catalog-volledig/data/*.db
 /competitor-analysis/catalog-volledig/data/*.db-shm
 /competitor-analysis/catalog-volledig/data/*.db-wal
 .DS_Store

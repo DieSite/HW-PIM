@@ -237,6 +237,12 @@ return [
         'route'      => 'admin.tools.demunk-voorraad.index',
         'sort'       => 14,
         'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.delivery-times',
+        'name'       => 'Levertijden',
+        'route'      => 'admin.tools.delivery-times.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
     ],
 
     /**

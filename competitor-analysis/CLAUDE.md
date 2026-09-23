@@ -358,6 +358,131 @@ meegeeft.
 toevoegen. De recipes zijn dezelfde als in de karpetten-suite, hergebruikt en
 gegeneraliseerd over alle modellen i.p.v. 8 hardcoded.
 
+**youlikeitwonen.nl** (Shopify, toegevoegd 2026-09-23) zet zijn eigen naam als
+vendor en noemt nergens een merk. Daarvoor kent een Shopify-entry nu
+`fallbackBrand` (merk voor producten zonder merkbewijs) en `productTags`
+(alleen producten met die tag, hier `vloerkleed` — de winkel verkoopt ook
+verf). Hun ~40 kleden zijn Eurogros op Mad Men/Bouquet na, en die voeren wij
+niet. Tweede valkuil daar: één product heet "Spectrum 3333 Rechthoekig & Rond"
+met kale rechthoekmaten naast "Rond 200 cm". `detectShape` op de titel zei
+'rond', dus alle rechthoeken vielen weg. `productShape()` in `normalize.js`
+bepaalt nu de vorm voor een variant zonder eigen vormwoord: rechthoek als die
+in de titel staat, `null` (niet koppelen) bij "Rond of Ovaal". Derde valkuil:
+ronde maten in meters ("Rond 2 meter doorsnede", "Rond 2,40 cm doorsnede"
+= 2,40 m). `parseSize` leest een getal onder de 10 mét eenheid als meters;
+zonder eenheid niet, want in een slug ("…-rond-2") is dat een volgnummer.
+Eerste run: 118 prijzen, alle 118 tegen de live varianten nagelopen;
+vloerkledenloods en hetdesignhuys geven met de nieuwe code exact dezelfde 2.933
+rijen als ervoor, en geen enkele catalogusmaat parseert anders.
+
+**Winkels erbij (2026-09-23): dfmwonen.nl, mooierthuis.nl (Shopify),
+kledenwereld.nl, caltabellotta.nl, disena.nl (WooCommerce), plus een hercontrole van
+vloerkledenvoordelig.nl** (nog steeds 0: hun Karpi-lijnen voeren wij niet).
+**mokana.nl** zit achter een Vercel Security Checkpoint (429, ook headless
+Chromium komt er na 10 s niet voorbij) en valt onder dezelfde afspraak als de
+Cloudflare-shops: niet omzeilen, dus niet opgenomen. Wat daarvoor nodig was,
+en wat het in de bestaande voorraad blootlegde:
+
+- **`vendorAliases`** (Shopify): dfmwonen en mooierthuis zetten de
+  distributeur als vendor. Fading World, Antiquarian, Meditation e.d. staan
+  daar als "Eurogros" terwijl ze bij ons onder Louis De Poortere vallen.
+- **Dessinnummer alleen in de handle** (dfmwonen: "Vloerkleed Acampo Grijs
+  Multicolor" → `vloerkleed-acampo-2626`). De token-drempel keek alleen naar de
+  titel en miste zo 1.085 maten; handle-tokens tellen nu mee (als hele tokens).
+- **"Default Title"**: product zonder opties, maat in de titel. Alleen het
+  laatste " - "-segment, want `parseSize` leest "Kleur 175 - 170 x 230" als
+  175×170.
+- **`collection`, `pageDelayMs` en herhaalpogingen** (Shopify): mooierthuis
+  geeft na ~6 snelle pagina's een 429-botcheck. Vroeger stopte het bladeren
+  dan stil en leek de winkel 1.500 producten zonder één Eurogros-kleed te
+  hebben (het zijn er 451). Nu: alleen `/collections/vloerkleden`, 5 s pauze,
+  drie herhaalpogingen, en daarna een fout ("index is ONVOLLEDIG") in plaats
+  van een stille halve index.
+- **`parseSize` las "160-x-230" niet** (WooCommerce-slug), ondanks het
+  commentaar. Raakte elke Woo-winkel: karpetwereld.nl leverde daardoor nul
+  prijzen en levert er nu ~500.
+- **Kleur per WooCommerce-variatie** (`colourIdentity` in
+  `indexers/woocommerce.js`). kledenwereld.nl: één product per model met een
+  Kleur × Formaat-matrix en één prijs per maat voor elke kleur
+  (`attribute_kleur: ""`). Dan telt de lijst kleuren waaruit je kunt KIEZEN
+  (`has_variations`), zodat een kleur die de winkel niet voert geen prijs
+  krijgt. Een beschrijvend kleurattribuut telt niet: grootinvloeren zet
+  "Kleur: Bruin, Taupe" op de lichtbruin-pagina.
+
+Vier nieuwe matchguards, gemeten tegen een kopie van de volledige voorraad
+(9.768 rijen): ze keuren **23 bestaande rijen** af, allemaal aantoonbaar fout,
+en **geen enkele terechte**:
+
+- **`mustNotHave`** (spiegel van `mustHave`, in `catalog.js`): bestaat naast
+  "Kapiti 172" ook "Kapiti Black 172", dan is een tekst met "black" niet ons
+  basismodel. Ulva 171–177 droeg bij hetdesignhuys de prijs van de Ulva
+  Black-pagina's, Kapiti 171 bij karpettenkelder, Dakhla 1 die van Dakhla Hol
+  1, en grootinvloeren prijsde Kapiti/Ulva met de Black-pagina.
+- **`numbersCompatible` eist ons eerste dessinnummer**, niet één willekeurig
+  gedeeld nummer: "Kades 4354-300" en "4309-300" delen de collectiecode 300.
+- **Zonder dessinnummer bij de concurrent** (`wordsCarryIdentity`) moet een
+  woord staan dat ons model van zijn naamgenoten onderscheidt
+  (`distinctWords`: "white" voor Prosper 21, niet "grey" dat vier Prospers
+  delen), en geen woord van een langere naamgenoot ("Prosper 65 Copper" ≠ "69
+  Vintage Copper"). karpetwereld heeft per Mart Visser-kleur een pagina zonder
+  nummer, en daar kwamen Indigo Grey, Grey Light en Grey Custard op de Wolf
+  Grey-pagina uit. In de Shopify- en Woo-indexers (waar de modelnaam van de
+  concurrent schoon is) geldt daarnaast `unexplainedWords`: hun naam mag geen
+  woord bevatten dat de onze niet verklaart. Wij voeren geen Turquoise Blue, dus
+  "blue" onderscheidt onze 31 Powder Blue; toch is "Prosper Turquise Blue" een
+  ander kleed.
+- De identiteitsopties per catalogusentry gaan via `identityOptionsFor(entry)`
+  naar alle zeven aanroepplekken, zodat die niet uit elkaar lopen.
+
+meubelcity levert daarnaast 24 rijen minder, en ook dat is terecht: Plush
+voeren ze alleen in 24/55/69 en Bilal in 11/21/23, maar vroeger kregen alle
+Plush- en Bilal-kleuren uit ons PIM de prijs van die pagina's.
+
+**disena.nl** (WooCommerce, ~1.000 kleden) hernoemt het grootste deel: "Rivali
+9326", "Freenvi 9210", "Ushak 8894" — echte dessinnummers, verzonnen namen.
+Alleen de 78 kleden onder hun echte naam (Kapiti Black, Spectrum, Viotta,
+Marshall…) zijn met zekerheid te koppelen; die leveren 272 prijzen, alle 272
+live nagelopen. Om ze te vinden **bladert de Woo-indexer nu altijd de
+catalogus door**, niet alleen als de merkzoekopdracht níéts oplevert: disena
+zet "Louis De Poortere" in 17 titels en daardoor werden de andere ~980 kleden
+nooit bekeken. **Koppelen op alleen het dessinnummer is bewust niet gebouwd:**
+Eurogros hergebruikt kleurcodes over modellen heen ("Ace 6979" zou op onze
+"Axil 6979" landen, "Sirla 951" én "Freoni 951" allebei op Raisa 951).
+
+**Looptijd en tijdslimieten (2026-09-23).** De nachtelijke job start
+`run.js` met een harde limiet in PHP (`competitor_pricing.scraper_timeout`,
+60 min). Raakt die, dan sterft het proces en is de nacht verloren: geen
+import, geen rapport. Met 33 winkels na elkaar in één proces zaten we daar
+ruim boven (lokaal gemeten: 12 Shopify/Woo-winkels 71 min, maxwonen alleen 66
+min door 429's). Daarom:
+
+- **Elke winkel in een eigen kindproces** (`shop-runner.js`), 4 tegelijk
+  (`SHOP_CONCURRENCY`), elk met een eigen limiet (`SHOP_TIMEOUT_MIN`, 12).
+  Loopt een winkel uit, dan wordt alleen dat proces gestopt; wat hij al
+  opsloeg blijft staan en de rest loopt door. `index-shops.js` en
+  `fetch-prices.js` zijn zonder `--single` de regisseur, met `--single` doen ze
+  één winkel. Na elke stap volgt een overzicht "Duur per winkel".
+- **Totaalbudget in `run.js`** (`SCRAPER_BUDGET_MIN`, 50): indexeren moet
+  klaar zijn op 60% ervan, prijzen ophalen op 90%. Winkels die dan nog lopen
+  worden gestopt, nog niet gestarte overgeslagen. Zo eindigt node altijd vóór
+  de PHP-limiet en wordt er altijd geïmporteerd. **Verhoog je
+  `scraper_timeout`, verhoog dan ook `SCRAPER_BUDGET_MIN`** (en houd het
+  eronder).
+- **WooCommerce-prijzen via de Store API in batches** van 100 variaties
+  (`flushPending` in `indexers/woocommerce.js`) in plaats van één
+  productpagina per product. Winkels die de variaties niet in de API zetten
+  (kledenwereld "elke kleur", meubelcity Plush) vallen terug op de pagina.
+  Valkuil: met een lege of onbekende `include`-lijst geeft de API willekeurige
+  variaties terug, dus alleen gevraagde ids tellen.
+- Een gestopte winkel verliest niets: prijzen zijn sticky, en de PIM-import
+  (`--prune`) verwijdert alleen wat niet meer in de SQLite staat. Hij valt wel
+  op in de verversingsgraad van het rapport.
+
+**Nog open, bewust:** caltabellotta verkoopt Louis De Poortere "Medallion Pink
+Flash" e.d. zonder dessinnummer, terwijl ons PIM alleen "Fading World
+Medallion 8261" kent. Die kleurnaam→nummer-vertaling bestaat nergens in het
+PIM, dus die kleden blijven daar ongekoppeld.
+
 **Cloudflare-shops** (`browser: true` → bommelwonen.nl, lowikmeubelen.nl) worden
 in de node-pipeline overgeslagen en via een **Playwright-spec**
 (`catalog-volledig/specs/browser-shops.spec.js`, config

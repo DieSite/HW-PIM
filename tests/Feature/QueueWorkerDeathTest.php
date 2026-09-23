@@ -1,6 +1,8 @@
 <?php
 
+use App\Jobs\GenerateProductDescriptionJob;
 use App\Jobs\ScrapeHordeurenCompetitorJob;
+use App\Models\AiDescriptionDraft;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\WorkerOptions;
@@ -213,6 +215,47 @@ it('still fails a deadline-bounded job once it genuinely throws maxExceptions ti
     expect(DeadlineBoundedProbeJob::$handled)->toBe(3)
         ->and($failures)->toHaveCount(1)
         ->and($failures[0]['message'])->toBe('probe failure');
+});
+
+/**
+ * An AI run queues every product at once and four workers take hours to get
+ * through them. A retryUntil() deadline is stamped at dispatch, so a 30-minute
+ * one failed everything still waiting after half an hour as "attempted too
+ * many times" without calling the model: 3117 of 3498 products in run #1.
+ */
+it('still runs an AI product job that waited hours behind the rest of its run', function () {
+    $queue = bootWorkerDeathQueue();
+
+    dispatch(
+        (new GenerateProductDescriptionJob(999999999, ['beschrijving_l']))
+            ->onConnection(WORKER_DEATH_CONNECTION)
+            ->onQueue($queue)
+    );
+
+    $this->travel(8)->hours();
+
+    expect(runOneJobCapturingFailures($queue))->toBe([])
+        ->and(AiDescriptionDraft::where('product_id', 999999999)->value('error'))
+        ->toContain('bestaat niet meer');
+});
+
+it('fails an AI product job whose worker was killed instead of running it again', function () {
+    $queue = bootWorkerDeathQueue();
+
+    dispatch(
+        (new GenerateProductDescriptionJob(999999999, ['beschrijving_l']))
+            ->onConnection(WORKER_DEATH_CONNECTION)
+            ->onQueue($queue)
+    );
+
+    killWorkerMidJob($queue);
+
+    $failures = runOneJobCapturingFailures($queue);
+
+    expect($failures)->toHaveCount(1)
+        ->and($failures[0]['class'])->toBe(MaxAttemptsExceededException::class)
+        ->and(AiDescriptionDraft::where('product_id', 999999999)->value('status'))
+        ->toBe(AiDescriptionDraft::STATUS_FAILED);
 });
 
 /**

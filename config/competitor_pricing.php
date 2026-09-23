@@ -73,6 +73,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Maximum age of a competitor price that may set our price
+    |--------------------------------------------------------------------------
+    |
+    | The scraper database is sticky: a failed fetch keeps the last real price
+    | with its old scraped_at. That protects us against one bad night, but
+    | without a limit a price the competitor stopped charging months ago keeps
+    | pushing ours down. On 23-09-2026 a deploy restored the June snapshot
+    | and ~4.000 prices from 17-06 (bommelwonen, lowikmeubelen — Cloudflare
+    | shops we have not scraped since) were live again.
+    |
+    | Older prices stay stored (and visible in the report) but no longer
+    | count in CompetitorPricingService::recompute().
+    |
+    */
+    'max_price_age_days' => (int) env('COMPETITOR_PRICING_MAX_PRICE_AGE_DAYS', 14),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prune brake per shop
+    |--------------------------------------------------------------------------
+    |
+    | `--prune` deletes stored prices the scrape no longer reports. When one
+    | shop's crawl breaks off halfway that is not "the competitor stopped
+    | selling these rugs" but "we did not look": on 23-09-2026
+    | grootinvloeren.nl stopped after 233 prices and pruning removed 1.016
+    | couplings. A shop that would lose at least `min_rows` prices AND at
+    | least `max_loss_pct` percent of what it has stored is left untouched
+    | (its prices then age out via max_price_age_days if it stays broken).
+    | `--force-prune` overrides the brake for a deliberate cleanup.
+    |
+    */
+    'prune_brake' => [
+        'min_rows'     => (int) env('COMPETITOR_PRICING_PRUNE_BRAKE_MIN_ROWS', 50),
+        'max_loss_pct' => (float) env('COMPETITOR_PRICING_PRUNE_BRAKE_MAX_LOSS_PCT', 50),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Hordeuren (plissé screen doors) on-demand analysis
     |--------------------------------------------------------------------------
     |

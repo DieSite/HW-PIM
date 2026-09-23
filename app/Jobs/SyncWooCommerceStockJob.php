@@ -2,13 +2,13 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Services\WooCommerceStockSyncService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 /**
  * Pushes a batch of stock-only updates to WooCommerce via the lightweight
@@ -24,7 +24,7 @@ class SyncWooCommerceStockJob implements ShouldQueue
     public int $timeout = 120;
 
     /**
-     * @param  array<int, array{sku: ?string, stock_quantity: int, stock_status: string}>  $updates
+     * @param  array<int, array{sku: ?string, stock_quantity: int, stock_status: string, levertijd: string}>  $updates
      */
     public function __construct(public array $updates) {}
 

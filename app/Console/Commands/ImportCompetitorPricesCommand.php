@@ -16,7 +16,8 @@ class ImportCompetitorPricesCommand extends Command
     protected $signature = 'pricing:import-competitor-prices
                             {--db= : Path to the scraper SQLite database (defaults to config)}
                             {--no-recompute : Only import competitor prices, skip price recomputation}
-                            {--prune : Delete competitor prices that no longer exist in the scraper database}';
+                            {--prune : Delete competitor prices that no longer exist in the scraper database}
+                            {--force-prune : Prune even shops that would lose most of their prices (bypasses the per-shop brake)}';
 
     /**
      * @var string
@@ -268,11 +269,50 @@ class ImportCompetitorPricesCommand extends Command
             $scraped[$row['sku'].'|'.$row['shop']] = true;
         }
 
-        return CompetitorPrice::query()
-            ->get(['id', 'sku', 'shop'])
-            ->reject(fn (CompetitorPrice $price): bool => isset($scraped[$price->sku.'|'.$price->shop]))
-            ->pluck('id')
-            ->values();
+        $stored = CompetitorPrice::query()->get(['id', 'sku', 'shop']);
+
+        $stale = $stored->reject(fn (CompetitorPrice $price): bool => isset($scraped[$price->sku.'|'.$price->shop]));
+
+        if (! $this->option('force-prune')) {
+            $braked = $this->brakedShops($stored->countBy('shop')->all(), $stale->countBy('shop')->all());
+            $stale = $stale->reject(fn (CompetitorPrice $price): bool => isset($braked[$price->shop]));
+        }
+
+        return $stale->pluck('id')->values();
+    }
+
+    /**
+     * Shops whose crawl evidently broke off, so their missing prices must not
+     * be read as "no longer sold". A shop is braked when it would lose at
+     * least `min_rows` prices AND at least `max_loss_pct` of what is stored.
+     *
+     * @param  array<string, int>  $storedPerShop
+     * @param  array<string, int>  $stalePerShop
+     * @return array<string, true>
+     */
+    private function brakedShops(array $storedPerShop, array $stalePerShop): array
+    {
+        $minRows = (int) config('competitor_pricing.prune_brake.min_rows', 50);
+        $maxLossPct = (float) config('competitor_pricing.prune_brake.max_loss_pct', 50);
+
+        $braked = [];
+
+        foreach ($stalePerShop as $shop => $lost) {
+            $lossPct = $lost / $storedPerShop[$shop] * 100;
+
+            if ($lost < $minRows || $lossPct < $maxLossPct) {
+                continue;
+            }
+
+            $braked[$shop] = true;
+
+            $this->warn(sprintf(
+                'Prune overgeslagen voor %s: %d van %d prijzen (%d%%) ontbreken in deze scrape — waarschijnlijk een afgebroken crawl. Gebruik --force-prune als ze echt weg moeten.',
+                $shop, $lost, $storedPerShop[$shop], round($lossPct),
+            ));
+        }
+
+        return $braked;
     }
 
     /**

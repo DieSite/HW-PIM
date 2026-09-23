@@ -24,6 +24,7 @@ const { fetchSitemapUrls, fetchListUrls } = require('./indexers/sitemap');
 const { indexUrls }   = require('./discover');
 const { SHOPIFY_SHOPS, WOOCOMMERCE_SHOPS, CUSTOM_SHOPS } = require('./shops');
 const { sleep } = require('./http');
+const { runPerShop } = require('./shop-runner');
 
 const CSV_PATH = process.env.CATALOG_CSV || path.join(__dirname, '..', '..', 'HW-PIM', 'Result_6.csv');
 
@@ -69,21 +70,38 @@ async function main() {
   const args    = process.argv.slice(2);
   const shopArg = args.filter((_, i) => args[i - 1] === '--shop');
   const reset   = args.includes('--reset');
+  const single  = args.includes('--single');
 
   const db      = openDb();
   const catalog = loadCatalog(CSV_PATH);
   console.log(`Catalogus: ${catalog.entries.length} regels, ${catalog.fixedEntries.length} vaste maten, ${catalog.models.size} unieke modellen`);
 
-  // Prijzen van SKU's die de catalogus verlaten hebben komen nooit meer langs
-  // de scraper en zouden dus met hun oude scraped_at blijven staan.
-  const { pruned, skipped } = pruneUnknownSkus(db, catalog.bySku.keys());
-  if (skipped) {
-    console.warn('  ⚠ catalogus te klein — opruimen van onbekende SKU-prijzen overgeslagen');
-  } else if (pruned) {
-    console.log(`  ${pruned} prijzen opgeruimd van SKU's die niet meer in de catalogus staan`);
+  if (!single) {
+    // Prijzen van SKU's die de catalogus verlaten hebben komen nooit meer langs
+    // de scraper en zouden dus met hun oude scraped_at blijven staan.
+    const { pruned, skipped } = pruneUnknownSkus(db, catalog.bySku.keys());
+    if (skipped) {
+      console.warn('  ⚠ catalogus te klein — opruimen van onbekende SKU-prijzen overgeslagen');
+    } else if (pruned) {
+      console.log(`  ${pruned} prijzen opgeruimd van SKU's die niet meer in de catalogus staan`);
+    }
+
+    // Elke winkel in een eigen proces met een eigen tijdslimiet (shop-runner.js):
+    // een winkel die uitloopt of vastloopt houdt de rest niet meer op.
+    const keys = [...SHOPIFY_SHOPS, ...WOOCOMMERCE_SHOPS, ...CUSTOM_SHOPS]
+      .filter(s => !s.browser)
+      .map(s => s.key)
+      .filter(k => !shopArg.length || shopArg.includes(k));
+    if (!keys.length) {
+      console.error('Geen shops gevonden (controleer --shop argument)');
+      process.exit(1);
+    }
+    await runPerShop(__filename, keys, reset ? ['--reset'] : []);
+    console.log('\n✅ Indexering klaar. Draai nu: node catalog-volledig/fetch-prices.js');
+    return;
   }
 
-  // Bepaal welke shops we draaien
+  // Bepaal welke shops we draaien (met --single: precies één)
   const runShops = shopArg.length
     ? [...SHOPIFY_SHOPS, ...WOOCOMMERCE_SHOPS, ...CUSTOM_SHOPS].filter(s => shopArg.includes(s.key))
     : [...SHOPIFY_SHOPS, ...WOOCOMMERCE_SHOPS, ...CUSTOM_SHOPS];
@@ -108,6 +126,11 @@ async function main() {
           bySku:         catalog.bySku,
           requireDiscriminator: shopCfg.requireDiscriminator,
           sizeAliases:   shopCfg.sizeAliases,
+          fallbackBrand: shopCfg.fallbackBrand,
+          productTags:   shopCfg.productTags,
+          vendorAliases: shopCfg.vendorAliases,
+          collection:    shopCfg.collection,
+          pageDelayMs:   shopCfg.pageDelayMs,
         });
         console.log(`  ✅ ${result.indexed} producten geïndexeerd, ${result.priced} prijzen opgeslagen`);
 
@@ -120,6 +143,7 @@ async function main() {
           catalogModels: catalog.models,
           bySku:         catalog.bySku,
           requireDiscriminator: shopCfg.requireDiscriminator,
+          pageDelayMs:   shopCfg.pageDelayMs,
         });
         console.log(`  ✅ ${result.indexed} producten geïndexeerd, ${result.priced} prijzen opgeslagen`);
 
@@ -134,12 +158,10 @@ async function main() {
       }
     } catch (e) {
       console.error(`  ❌ fout bij ${shopCfg.key}: ${e.message}`);
+      process.exitCode = 1;
     }
 
-    await sleep(1000); // respecteer de shop
   }
-
-  console.log('\n✅ Indexering klaar. Draai nu: node catalog-volledig/fetch-prices.js');
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

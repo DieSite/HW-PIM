@@ -6,6 +6,8 @@ use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Monitor\AlertFailedJob;
 use App\Monitor\HorizonQueueStats;
 use App\Services\AI\AiSettings;
+use App\Services\DeliveryTimeService;
+use Diesite\Monitor\Metrics\QueueStats;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Queue\Events\JobFailed as QueueJobFailed;
 use Illuminate\Support\Facades\Artisan;
@@ -14,7 +16,6 @@ use Illuminate\Support\Facades\ParallelTesting;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
-use Diesite\Monitor\Metrics\QueueStats;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\ImageManager;
@@ -73,6 +74,16 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Event::listen(QueueJobFailed::class, [AlertFailedJob::class, 'handle']);
+
+        /**
+         * Keep a variant's delivery time in step with its stock on every save:
+         * the stock imports, the stock tools and the product form all save the
+         * model. Registered on both classes, as Eloquent names model events
+         * after the concrete class.
+         */
+        foreach ([WebkulProduct::class, \App\Models\Product::class] as $productModel) {
+            $productModel::saving(fn (WebkulProduct $product) => app(DeliveryTimeService::class)->applyTo($product));
+        }
 
         Event::listen('unopim.admin.catalog.product.edit.form.after', function (ViewRenderEventManager $event) {
             $product = $event->getParam('product');

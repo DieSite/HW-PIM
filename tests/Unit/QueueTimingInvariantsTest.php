@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\ApplyAiDescriptionsJob;
+use App\Jobs\ApplyDeliveryTimesJob;
 use App\Jobs\ApplyDeMunkStockJob;
 use App\Jobs\ApplyPhotoroomTransformationJob;
 use App\Jobs\BulkEditProductsJob;
@@ -46,6 +47,7 @@ function queueTimingJobFactories(): array
 {
     return [
         ApplyAiDescriptionsJob::class          => fn () => new ApplyAiDescriptionsJob([1]),
+        ApplyDeliveryTimesJob::class           => fn () => new ApplyDeliveryTimesJob(),
         ApplyDeMunkStockJob::class             => fn () => new ApplyDeMunkStockJob(['BASIC']),
         ApplyPhotoroomTransformationJob::class => fn () => new ApplyPhotoroomTransformationJob(1, 'afbeelding'),
         BulkEditProductsJob::class             => fn () => new BulkEditProductsJob([], [], false, 0),
@@ -239,7 +241,7 @@ it('keeps every WithoutOverlapping lock expiry at or below the connection retry_
  *
  * @var list<string>
  */
-const DEADLINE_BOUNDED_CONNECTIONS = ['redis-hordeuren'];
+const DEADLINE_BOUNDED_CONNECTIONS = ['redis-hordeuren', 'redis-ai'];
 
 it('bounds long-running jobs by a deadline or by an explicit single attempt', function () {
     foreach (queueTimingJobFactories() as $class => $factory) {
@@ -298,6 +300,27 @@ it('gives the hordeuren scrape exactly one attempt and no retry deadline', funct
     expect((new RunHordeurenAnalysisJob('rapport@voorbeeld.nl'))->retryUntil()->getTimestamp())
         ->toBeGreaterThan(now()->getTimestamp());
 });
+
+it('gives an AI product job more time than its model calls may take', function () {
+    $generatorAttempts = 2;
+    $retrySleepSeconds = 2;
+
+    $worstCase = $generatorAttempts
+        * config('ai.request.retries')
+        * (config('ai.request.timeout') + $retrySleepSeconds);
+
+    expect((new GenerateProductDescriptionJob(1, ['beschrijving_l'], 1))->timeout)
+        ->toBeGreaterThan($worstCase);
+});
+
+it('gives the AI run and its product jobs one attempt and fails them on a timeout', function (ShouldQueue $job) {
+    expect($job->tries)->toBe(1)
+        ->and($job->failOnTimeout)->toBeTrue()
+        ->and(method_exists($job, 'retryUntil'))->toBeFalse();
+})->with([
+    'run'     => fn () => new GenerateAiDescriptionsJob(1),
+    'product' => fn () => new GenerateProductDescriptionJob(1, ['beschrijving_l'], 1),
+]);
 
 it('covers every queueable class with a factory so new jobs cannot dodge the invariants', function () {
     $scanned = collect(glob(app_path('Jobs/*.php')))

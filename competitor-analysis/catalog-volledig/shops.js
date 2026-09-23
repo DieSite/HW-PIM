@@ -47,6 +47,52 @@ const SHOPIFY_SHOPS = [
     // geen enkele op 80 x 160.
     sizeAliases: [{ from: [80, 160], to: [80, 150] }],
   },
+  {
+    key:    'youlikeitwonen.nl',
+    base:   'https://youlikeitwonen.nl',
+    brands: ['Eurogros'],
+    // Vendor is overal "You Like It Wonen" en geen titel noemt een merk
+    // ("Vloerkleed Spectrum 3333 Rechthoekig & Rond"). Hun ~40 kleden zijn op
+    // twee lijnen na (Mad Men, Bouquet — die voeren wij niet) allemaal
+    // Eurogros: Amado/Anaheim/Glow/Spectrum/Vienna, geverifieerd 23-09-2026.
+    // De modelguards (naam + dessinnummer) doen daarna het echte werk.
+    fallbackBrand: 'Eurogros',
+    productTags:   ['vloerkleed'],
+  },
+  {
+    key:    'dfmwonen.nl',
+    base:   'https://dfmwonen.nl',
+    brands: ['Eurogros'],
+    // Vendor is de distributeur: Fading World, Antiquarian, Meditation, Cities
+    // e.d. staan er als "Eurogros", terwijl ze in ons PIM onder Louis De
+    // Poortere vallen (geverifieerd 23-09-2026, ~370 kleden).
+    vendorAliases: { Eurogros: ['Louis De Poortere'] },
+  },
+  {
+    key:    'mooierthuis.nl',
+    base:   'https://www.mooierthuis.nl',
+    brands: ['Eurogros'],
+    // ~10.000 producten; na ~6 snelle pagina's volgt een 429-botcheck. De
+    // collectie "vloerkleden" (605 kleden, 451 Eurogros) is 3 pagina's, en
+    // daartussen pauzeren we ruim.
+    collection:    'vloerkleden',
+    pageDelayMs:   5000,
+    // Net als bij dfmwonen: Fading World, Antiquarian, Meditation e.d. staan
+    // er als vendor Eurogros.
+    vendorAliases: { Eurogros: ['Louis De Poortere'] },
+  },
+  {
+    key:    'mt-sfeeridee.nl',
+    base:   'https://mt-sfeeridee.nl',
+    brands: ['Eurogros'],
+    // Vendor is de eigen winkelnaam; ~360 kleden, vrijwel allemaal Eurogros
+    // plus Louis De Poortere (Structures, Cities, Nuance). 6.500 producten in
+    // totaal, dus alleen de collectie.
+    fallbackBrand: 'Eurogros',
+    vendorAliases: { Eurogros: ['Louis De Poortere'] },
+    collection:    'vloerkleden',
+    pageDelayMs:   2000,
+  },
 ];
 
 // ── WooCommerce ───────────────────────────────────────────────────────────────
@@ -76,6 +122,44 @@ const WOOCOMMERCE_SHOPS = [
     key:    'grootinvloeren.nl',
     base:   'https://www.grootinvloeren.nl',
     brands: ['Eurogros'],
+  },
+  {
+    // Eén product per model met een Kleur × Formaat-matrix; de prijs hangt
+    // alleen aan de maat ("attribute_kleur": ""). Zie offeredColours in
+    // indexers/woocommerce.js.
+    key:    'kledenwereld.nl',
+    base:   'https://kledenwereld.nl',
+    brands: ['Mart Visser', 'Karpi'],
+  },
+  {
+    // Merk staat alleen in de categorie, niet in de titel ("Vloerkleed Royce
+    // 63"), dus de indexer valt terug op het doorbladeren van de catalogus.
+    key:    'caltabellotta.nl',
+    base:   'https://www.caltabellotta.nl',
+    brands: ['Karpi', 'Louis De Poortere'],
+  },
+  {
+    // ~1.000 kleden, veel onder een eigen fantasienaam ("Rivali 9326",
+    // "Freenvi 9210") met het echte dessinnummer. Alleen de kleden onder hun
+    // echte naam ("Kapiti Black 172") zijn met zekerheid te koppelen.
+    key:    'disena.nl',
+    base:   'https://disena.nl',
+    brands: ['Eurogros', 'Louis De Poortere'],
+  },
+  {
+    // ~65 kleden van Eurogros, Mart Visser en Desso tussen de meubels.
+    key:    'joldersma-wonen.nl',
+    base:   'https://joldersma-wonen.nl',
+    brands: ['Eurogros', 'Mart Visser', 'Desso'],
+  },
+  {
+    // ~175 kleden, vooral Galaxy (Eurogros) en Plush (Karpi); geen merk in
+    // de titels, dus de catalogus wordt doorgebladerd (7.600 producten).
+    key:    'maxwonen.nl',
+    base:   'https://www.maxwonen.nl',
+    brands: ['Eurogros', 'Karpi'],
+    // 429 na ~120 snelle productpagina's
+    pageDelayMs: 1500,
   },
 ];
 
@@ -416,6 +500,97 @@ const CUSTOM_SHOPS = [
     },
     detectBrand(_url) { return 'De Munk'; },
     overridesWoocommerce: true, // dit shop staat ook in WOOCOMMERCE_SHOPS; custom getPrijs overschrijft
+  },
+
+  // ── woonwebwinkel.com (Magento, maat als custom option) ─────────────────
+  //
+  // Eén pagina per model; de maat is een Magento "custom option" met een
+  // toeslag of korting t.o.v. de basisprijs (Twilight 2211: basis € 349 =
+  // 160x230, "200x290cm" +€ 210, "065x130cm" −€ 260, "200cm rond" +€ 60).
+  // De getoonde <option>-lijst mist de negatieve bedragen; optionConfig in de
+  // pagina heeft ze allemaal.
+  {
+    key:        'woonwebwinkel.com',
+    base:       'https://woonwebwinkel.com',
+    brands:     ['Eurogros', 'Louis De Poortere'],
+    sitemapUrl: 'https://woonwebwinkel.com/sitemap.xml',
+    brandKeys:  ['vloerkleed', 'karpet', 'tapijt'],
+    // Alle vormen op één pagina ("200 rond", "160x230 ovaal"): de vorm komt
+    // uit de maatoptie, niet uit de pagina.
+    mixedShapes: true,
+    getPrijs(html, w, h, shape = 'rechthoek') {
+      const base = Number(html.match(/property="product:price:amount" content="([\d.]+)"/i)?.[1]);
+      const config = html.match(/"optionConfig":\s*(\{[\s\S]*?\}\}\})\s*,/)?.[1];
+      if (!base || !config) return null;
+      let options;
+      try { options = JSON.parse(config); } catch { return null; }
+      for (const group of Object.values(options)) {
+        for (const option of Object.values(group)) {
+          const name = String(option?.name ?? '').toLowerCase();
+          const optionShape = /ovaal/.test(name) ? 'ovaal' : /rond/.test(name) ? 'rond' : 'rechthoek';
+          const size = name.match(/(\d{2,3})\s*x\s*(\d{2,3})/);
+          const round = name.match(/(\d{2,3})\s*(?:cm)?\s*rond/);
+          const [ow, oh] = size ? [Number(size[1]), Number(size[2])] : round ? [Number(round[1]), Number(round[1])] : [];
+          if (ow === w && oh === h && optionShape === shape) {
+            return fmt(base + Number(option.prices?.finalPrice?.amount ?? 0));
+          }
+        }
+      }
+      return null;
+    },
+    detectBrand(url) {
+      if (/fading-world|structures|atlantic|antique|antiquarian|medaillon|meditation|cities|sakura|nuance|papercut|chess|fresque/i.test(url)) return 'Louis De Poortere';
+      return 'Eurogros';
+    },
+    slugAliases: { medaillon: 'medallion' },
+  },
+
+  // ── onlineslaapcomfort.nl (Magento, één pagina per maat) ────────────────
+  //
+  // Beddenwinkel met 12.414 URL's; de kleden staan er als
+  // "anaheim-3243-200x290-ovaal-5414452131048": model, dessin, maat, vorm en
+  // EAN (of een eigen nummer) in de URL. Prijs uit de product:price-meta.
+  // Louis De Poortere-kleden hebben EAN-prefix 5420073 en machinevertaalde
+  // namen ("vervagende-wereld-8261" = Fading World Medallion 8261); de
+  // vertaaltabel hieronder maakt ze koppelbaar, het dessinnummer moet nog
+  // steeds kloppen.
+  {
+    key:        'onlineslaapcomfort.nl',
+    base:       'https://www.onlineslaapcomfort.nl',
+    brands:     ['Eurogros', 'Louis De Poortere'],
+    sitemapUrl: 'https://www.onlineslaapcomfort.nl/media/sitemap/onlineslaapcomfort_sitemap.xml',
+    brandKeys:  undefined,
+    urlFilter:  /-(?:\d{2,3}-?x-?\d{2,3}(?:-cm)?|\d{3}-?rond)(?:-ovaal)?-\d{6,}$/,
+    fromUrl:    true,
+    getPrijs:   null,
+    sizeFromUrl(url) {
+      const r = url.match(/-(\d{2,3})-?x-?(\d{2,3})(?:-cm)?(?:-ovaal)?-\d{6,}$/);
+      if (r) return { widthCm: Number(r[1]), heightCm: Number(r[2]) };
+      const d = url.match(/-(\d{3})-?rond-\d{6,}$/);
+      return d ? { widthCm: Number(d[1]), heightCm: Number(d[1]) } : null;
+    },
+    detectBrand(url) {
+      return /-5420073\d+$/.test(url) ? 'Louis De Poortere' : 'Eurogros';
+    },
+    slugAliases: {
+      'vervagende wereld': 'fading world',
+      'atlantische strepen': 'atlantic streaks',
+      antiek: 'antiquarian',
+      structuren: 'structures',
+      meditatie: 'meditation',
+      lagune: 'lagoon',
+      koraal: 'coral',
+      steden: 'cities',
+      londen: 'london',
+      parijs: 'paris',
+      schemering: 'twilight',
+      schaakspel: 'chess',
+      schaak: 'chess',
+      papierknip: 'papercut',
+      fresco: 'fresque',
+      kreeft: 'lobster',
+      tijger: 'tiger',
+    },
   },
 
   // ── bommelwonen.nl (Shopware 6, Cloudflare) ───────────────────────────────

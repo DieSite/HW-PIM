@@ -87,6 +87,34 @@ function detectShape(...parts) {
   return null;
 }
 
+const RE_RECHTHOEK = new RegExp(AFTER_DIGIT + 'rechthoek(?:ig|ige)?\\b');
+
+/**
+ * Vorm van een PRODUCT (Shopify/Woo) waarvan de varianten verschillende vormen
+ * kunnen zijn. Dit is de vorm die een variant zonder eigen vormwoord krijgt.
+ *
+ * youlikeitwonen.nl noemt één product "Spectrum 3333 Rechthoekig & Rond" met
+ * varianten "200x290 cm" én "Rond 200 cm". `detectShape` op die titel zegt
+ * 'rond', waardoor elke kale rechthoekmaat als rond telde en nergens meer op
+ * matchte. Noemt de titel meerdere vormen, dan is een kale variant de
+ * rechthoek — mits die in de titel staat. "Rond of Ovaal" zonder rechthoek is
+ * écht dubbelzinnig: dan null, en moet elke variant zijn vorm zelf noemen.
+ *
+ * @returns {'rechthoek'|'ovaal'|'rond'|'loper'|'organisch'|null}
+ */
+function productShape(...parts) {
+  const s = parts.filter(Boolean).join(' ').toLowerCase().replace(/[-_]/g, ' ');
+  const shapes = new Set([
+    RE_OVAAL.test(s) && 'ovaal',
+    (RE_ROND.test(s) || /ø|⌀/.test(s)) && 'rond',
+    RE_LOPER.test(s) && 'loper',
+    RE_ORGANISCH.test(s) && 'organisch',
+  ].filter(Boolean));
+  if (shapes.size === 0) return 'rechthoek';
+  if (shapes.size === 1 && !RE_RECHTHOEK.test(s)) return [...shapes][0];
+  return RE_RECHTHOEK.test(s) ? 'rechthoek' : null;
+}
+
 /**
  * Normalize model name for fuzzy matching. Shape words are stripped: the
  * shape is a separate match-dimension (detectShape), so "Diamante 01 Oval"
@@ -109,7 +137,10 @@ function normModel(raw) {
 function parseSize(str) {
   if (!str) return null;
   const s = String(str);
-  const m = s.match(/(\d+)\s*(?:cm)?\s*[-x×]\s*(\d+)\s*(?:cm)?/i);
+  // "-x-" is de slugvorm van WooCommerce-attributen ("attribute_pa_maat":
+  // "160-x-230"). Zonder die vorm bleef bij caltabellotta.nl alleen de ene
+  // maat over die ze als "200x290" schrijven.
+  const m = s.match(/(\d+)\s*(?:cm)?\s*(?:-?[x×]-?|-)\s*(\d+)\s*(?:cm)?/i);
   if (m) {
     const w = Number(m[1]), h = Number(m[2]);
     // Sanity check: plausible rug sizes 50–600 cm
@@ -117,12 +148,26 @@ function parseSize(str) {
     return { widthCm: w, heightCm: h };
   }
   const r = s.match(/(?:\brond\b|\bronde\b|\bround\b|ø|⌀)[^0-9]{0,10}(\d{2,3})/i)
+         || roundInMeters(s)
          || s.match(/(\d{2,3})\s*(?:cm)?\s*(?:\brond\b|\bronde\b|\bround\b)/i);
   if (r) {
     const d = Number(r[1]);
     if (d >= 50 && d <= 600) return { widthCm: d, heightCm: d };
   }
   return null;
+}
+
+/**
+ * Doorsnede in meters: youlikeitwonen.nl schrijft "Rond 2 meter doorsnede" en
+ * zelfs "Rond 2,40 cm doorsnede" (bedoeld: 2,40 m). Een getal onder de 10 met
+ * een eenheid erachter is dus meters. Zónder eenheid telt het niet: in een
+ * WooCommerce-slug als "240rond-2" is die 2 een volgnummer, geen maat.
+ *
+ * @returns {[string, string]|null}  zelfde vorm als een match: [_, cm]
+ */
+function roundInMeters(s) {
+  const m = s.match(/(?:\brond\b|\bronde\b|\bround\b|ø|⌀)[^0-9]{0,10}(\d(?:[.,]\d{1,2})?)\s*(?:m|meter|cm)\b/i);
+  return m ? [m[0], String(Math.round(parseFloat(m[1].replace(',', '.')) * 100))] : null;
 }
 
 /** Format cm dimensions as a size key. */
@@ -161,10 +206,15 @@ function designNumbers(str) {
  * True als kleur-/dessinnummers elkaar niet tegenspreken. Zonder nummers aan
  * één van beide kanten is er geen oordeel (true). Voorkomt dat "Brush 13" de
  * prijs van de "…-69"-kleurvariant krijgt.
+ *
+ * `a` is ONS model. Zijn eerste nummer is het dessinnummer en dat moet in `b`
+ * staan; één willekeurig gedeeld nummer is niet genoeg. "Kades 4354-300" en
+ * "Kades 4309-300" delen de collectiecode 300, en zo kreeg de 4354 bij
+ * dfmwonen.nl de prijs van de 4309-pagina.
  */
 function numbersCompatible(a, b) {
   const na = designNumbers(a), nb = designNumbers(b);
-  return !na.length || !nb.length || na.some(n => nb.includes(n));
+  return !na.length || !nb.length || nb.includes(na[0]);
 }
 
 /**
@@ -262,7 +312,7 @@ function hasDiscriminator(catModel, text, colour = '') {
  * `requireDiscriminator` (per shop ingesteld in shops.js) maakt de koppeling
  * bewijs-gedreven in plaats van tegenspraak-gedreven.
  */
-function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator = false, colour = '' } = {}) {
+function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator = false, colour = '', mustNotHave = [], nameWords, distinctWords, mustNotHaveWithoutNumber = [], competitorModel } = {}) {
   return hasModelNameToken(text, catModel)
     && numbersCompatible(catModel, text)
     // LET OP: de PIM-kleur (`Kleuren` op de parent) gaat NIET in deze
@@ -273,13 +323,129 @@ function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator =
     // Als POSITIEF bewijs is hij wél bruikbaar — zie hasDiscriminator.
     && colorsCompatible(catModel, text)
     && containsAllTokens(text, mustHave)
+    && containsNoWords(text, mustNotHave)
+    && wordsCarryIdentity(catModel, text, { nameWords, distinctWords, forbidden: mustNotHaveWithoutNumber, competitorModel })
     && (! requireDiscriminator || hasDiscriminator(catModel, text, colour));
+}
+
+/**
+ * De identiteitsopties die bij één catalogusentry horen, zodat de
+ * aanroepplekken ze niet elk los hoeven door te geven.
+ */
+function identityOptionsFor(entry) {
+  return {
+    colour: entry?.colour ?? '',
+    mustNotHave: entry?.mustNotHave ?? [],
+    mustNotHaveWithoutNumber: entry?.mustNotHaveWithoutNumber ?? [],
+    nameWords: entry?.nameWords,
+    distinctWords: entry?.distinctWords,
+  };
+}
+
+/**
+ * Noemt de concurrent geen dessinnummer terwijl ons model er wel een heeft,
+ * dan zijn de woorden de enige identiteit — en is één gedeeld kleurwoord te
+ * weinig. karpetwereld.nl heeft per Mart Visser-kleur een pagina zonder
+ * nummer ("vloerkleed-prosper-wolf-grey"); "Prosper 37 – Indigo Grey",
+ * "24 – Grey Light" en "64 – Grey Custard" kwamen daar allemaal op uit.
+ *
+ * Dan moet er een woord in staan dat ons model van zijn naamgenoten
+ * onderscheidt (`distinctWords`, uit loadCatalog: "white" voor Prosper 21, want
+ * geen andere Prosper is wit; niet "grey"). Heeft het model zo'n woord niet,
+ * dan alle woorden van de naam. Kleurwoorden mogen in een andere taal
+ * (white ≡ wit). En geen woord van een langere naamgenoot: "Prosper 65 –
+ * Copper" is niet "Prosper 69 – Vintage Copper".
+ *
+ * Zonder catalogusinformatie (`nameWords` ontbreekt) geen oordeel.
+ */
+function wordsCarryIdentity(catModel, text, { nameWords, distinctWords = [], forbidden = [], competitorModel } = {}) {
+  if (!nameWords) return true;
+  if (!designNumbers(catModel).length || designNumbers(text).length) return true;
+
+  const tokens = new Set(String(text ?? '').toLowerCase().split(/[^a-z0-9]+/));
+  const textColours = colorWords(text);
+  const present = t => tokens.has(t) || (COLOR_ALIASES[t] !== undefined && textColours.includes(COLOR_ALIASES[t]));
+
+  const identified = distinctWords.length ? distinctWords.some(present) : nameWords.every(present);
+  return identified && !forbidden.some(w => tokens.has(w)) && !unexplainedWords(catModel, competitorModel).length;
+}
+
+/** Woorden van merken, die in een concurrenttitel niets over het model zeggen. */
+const BRAND_WORDS = new Set(
+  Object.entries(BRAND_ALIASES).flat().join(' ').split(/[^a-z]+/).filter(Boolean)
+);
+
+/**
+ * Woorden in de modelnaam van de CONCURRENT die onze naam niet verklaart.
+ *
+ * "Distinct" gaat over óns assortiment: wij voeren geen Prosper 33 Turquoise
+ * Blue, dus "blue" onderscheidt onze 31 Powder Blue van zijn naamgenoten. Maar
+ * karpetwereld.nl noemt zijn pagina "Prosper Turquise Blue", en "turquise"
+ * staat nergens in onze naam: dat is tegenspraak. Alleen bruikbaar waar de
+ * modelnaam van de concurrent schoon is (titel zonder merk, uit de Shopify- en
+ * WooCommerce-indexers); paginatitels en slugs dragen te veel ruis.
+ */
+function unexplainedWords(catModel, competitorModel) {
+  if (!competitorModel) return [];
+  const ours = new Set(String(catModel).split(' '));
+  const ourColours = colorWords(catModel);
+  return String(competitorModel).split(' ').filter(t => t
+    && !/\d/.test(t)
+    && !ours.has(t)
+    && !GENERIC_MODEL_WORDS.has(t)
+    && !BRAND_WORDS.has(t)
+    // Een kleurwoord spreekt alleen tegen als onze naam zelf een kleur noemt:
+    // "Derbe 72220-300" noemt er geen, dus "Derbe 72220 Rood" is geen
+    // tegenspraak (en 72220 telt als vijfcijferig nummer niet als dessin).
+    && !(COLOR_ALIASES[t] !== undefined && (!ourColours.length || ourColours.includes(COLOR_ALIASES[t]))));
+}
+
+/**
+ * True als geen van deze woorden als los woord in de tekst staat. Spiegel van
+ * `mustHave`: bestaat naast "Kapiti 172" ook "Kapiti Black 172", dan is een
+ * tekst met "black" de Black-lijn en niet ons basismodel (€ 989 tegen € 935 bij
+ * dfmwonen.nl, en wie het laatst schreef won). Als los woord, anders sneuvelt
+ * "blackpool" op "black".
+ */
+function containsNoWords(text, words) {
+  const tokens = new Set(String(text ?? '').toLowerCase().split(/[^a-z0-9]+/));
+  const colours = colorWords(text);
+  return !(words ?? []).some(w => tokens.has(w) || sameColour(w, colours));
 }
 
 /** True als alle (verplichte) tokens in de tekst voorkomen. Lege lijst = altijd true. */
 function containsAllTokens(text, tokens) {
   const t = String(text ?? '').toLowerCase();
-  return (tokens ?? []).every(tok => t.includes(tok));
+  const colours = colorWords(t);
+  return (tokens ?? []).every(tok => t.includes(tok) || sameColour(tok, colours));
+}
+
+/**
+ * Is `word` een kleur die (in een andere taal) al in de tekst staat?
+ * onlineslaapcomfort.nl noemt Kapiti Black "kapiti-zwart-175": zonder dit
+ * miste "Kapiti Black" zijn verplichte "black", en pakte het gewone Kapiti 175
+ * de pagina van de Black-lijn.
+ */
+function sameColour(word, textColours) {
+  return COLOR_ALIASES[word] !== undefined && textColours.includes(COLOR_ALIASES[word]);
+}
+
+/**
+ * Vervang hele woorden/woordgroepen volgens een vertaaltabel per winkel.
+ * onlineslaapcomfort.nl machinevertaalt de collectienamen ("vervagende wereld"
+ * = Fading World, "antiek" = Antiquarian); het dessinnummer staat er nog wel
+ * bij, dus de identiteitscheck blijft even streng.
+ *
+ * @param {string} text
+ * @param {Object<string, string>} [aliases]  { "vervagende wereld": "fading world" }
+ */
+function applyWordAliases(text, aliases) {
+  let out = String(text ?? '');
+  for (const [from, to] of Object.entries(aliases ?? {})) {
+    const pattern = from.split(' ').map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s_-]+');
+    out = out.replace(new RegExp(`(^|[^a-z])${pattern}(?=[^a-z]|$)`, 'gi'), (_, pre) => pre + to);
+  }
+  return out;
 }
 
 /**
@@ -289,12 +455,14 @@ function containsAllTokens(text, tokens) {
  * de prijs van de "Pink Flash 8261"-pagina. HTML-entities worden gestript
  * zodat "&#9193;" geen nep-dessinnummer wordt.
  */
-function pageMatchesEntry(title, url, entry, opts = {}) {
+function pageMatchesEntry(title, url, entry, { anyShape = false, ...opts } = {}) {
   const clean = String(title ?? '').replace(/&#\d+;/g, ' ').replace(/&[a-z]+;/gi, ' ');
   const text = normModel(clean) + ' ' + String(url ?? '').toLowerCase();
   const pageShape = detectShape(clean, url) ?? 'rechthoek';
-  return modelIdentityMatches(entry.normModel, text, entry.mustHave, { colour: entry.colour ?? '', ...opts })
-    && pageShape === (entry.shape ?? 'rechthoek');
+  // `anyShape`: één pagina voor alle vormen (woonwebwinkel.com); dan beslist
+  // getPrijs over de vorm, want die leest de vorm per maatoptie.
+  return modelIdentityMatches(entry.normModel, text, entry.mustHave, { ...identityOptionsFor(entry), ...opts })
+    && (anyShape || pageShape === (entry.shape ?? 'rechthoek'));
 }
 
 /**
@@ -350,6 +518,6 @@ module.exports = {
   sizeMatches,
   normBrand, normModel, parseSize, sizeKey, fmtEuro, euroNum,
   isRealPrice, isVanaf, matchScore, extractModel, slugMatchScore, BRAND_ALIASES,
-  detectShape, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens,
+  detectShape, productShape, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens, containsNoWords, applyWordAliases, identityOptionsFor, wordsCarryIdentity,
   pageMatchesEntry, colorWords, colorsCompatible, modelIdentityMatches, hasDiscriminator, GENERIC_MODEL_WORDS,
 };
