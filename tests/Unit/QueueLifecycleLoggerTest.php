@@ -4,6 +4,7 @@ use App\Jobs\GenerateProductDescriptionJob;
 use App\Jobs\ScrapeHordeurenCompetitorJob;
 use App\Listeners\QueueLifecycleLogger;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobPopped;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Jobs\RedisJob;
@@ -129,4 +130,23 @@ it('stays quiet at shutdown when every attempt reported back', function () {
     $logger->onFinished(new JobProcessed('redis-ai', $job));
 
     $logger->onShutdown();
+});
+
+it('reports a job the worker reserved but never started when the process exits', function () {
+    $logger = new QueueLifecycleLogger();
+    $logged = [];
+
+    Log::shouldReceive('channel')->with('queue')->andReturn($channel = Mockery::mock());
+    $channel->shouldReceive('critical')->andReturnUsing(function (string $message, array $context) use (&$logged): void {
+        $logged[] = $context;
+    });
+    \Sentry::shouldReceive('captureMessage')->once();
+
+    $logger->onPopped(new JobPopped('redis-ai', lifecycleProcessingJobDouble('uuid-popped')));
+
+    $logger->onShutdown();
+
+    expect($logged)->toHaveCount(1)
+        ->and($logged[0]['uuid'])->toBe('uuid-popped')
+        ->and($logged[0]['phase'])->toBe('popped');
 });

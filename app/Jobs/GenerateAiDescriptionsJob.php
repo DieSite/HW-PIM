@@ -43,6 +43,17 @@ class GenerateAiDescriptionsJob implements ShouldQueue
         $this->onQueue('ai');
     }
 
+    /**
+     * Walks the whole matching set before dispatching, which can take minutes
+     * of pure database work. {@see DisconnectsIdleRedis}
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new DisconnectsIdleRedis()];
+    }
+
     public function handle(AiDescriptionService $descriptions): void
     {
         $run = AiDescriptionRun::find($this->runId);

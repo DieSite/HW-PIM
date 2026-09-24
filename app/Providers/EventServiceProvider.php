@@ -18,6 +18,7 @@ class EventServiceProvider extends ServiceProvider
      */
     protected $subscribe = [
         \App\Listeners\QueueLifecycleLogger::class,
+        \App\Listeners\RefreshIdleRedisConnections::class,
     ];
 
     /**

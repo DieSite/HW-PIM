@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Exceptions\Handler;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Monitor\AlertFailedJob;
 use App\Monitor\HorizonQueueStats;
@@ -20,8 +21,6 @@ use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\DriverInterface;
-use Laravel\Horizon\Events\JobFailed as HorizonJobFailed;
-use Sentry\Laravel\Integration;
 use Webkul\Product\Models\Product as WebkulProduct;
 use Webkul\Theme\ViewRenderEventManager;
 
@@ -65,12 +64,13 @@ class AppServiceProvider extends ServiceProvider
             Artisan::call('db:seed');
         });
 
-        Event::listen(HorizonJobFailed::class, function (HorizonJobFailed $event) {
-            Integration::captureUnhandledException($event->exception);
-        });
-
+        /**
+         * Catches failures the worker never report()s, such as a job calling
+         * $this->fail(). Horizon's own JobFailed carries the same exception, so
+         * listening to it as well only sent every failure twice.
+         */
         Event::listen(QueueJobFailed::class, function (QueueJobFailed $event) {
-            Integration::captureUnhandledException($event->exception);
+            Handler::captureInSentry($event->exception);
         });
 
         Event::listen(QueueJobFailed::class, [AlertFailedJob::class, 'handle']);

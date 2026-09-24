@@ -3,10 +3,12 @@
 namespace App\Exceptions;
 
 use Dotenv\Exception\InvalidFileException;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Sentry\Laravel\Integration;
 use Throwable;
+use WeakMap;
 
 class Handler extends ExceptionHandler
 {
@@ -20,6 +22,45 @@ class Handler extends ExceptionHandler
         'password',
         'password_confirmation',
     ];
+
+    /**
+     * Exceptions already sent to Sentry in this process.
+     *
+     * @var WeakMap<Throwable, true>|null
+     */
+    private static ?WeakMap $sentToSentry = null;
+
+    /**
+     * Sentry is wired here rather than in register(): the handler actually
+     * bound is Webkul\Core\Exceptions\Handler, whose register() replaces this
+     * class's without calling parent — which silently kept every report()ed
+     * exception (worker-loop errors, uncaught request exceptions) out of Sentry.
+     */
+    public function __construct(Container $container)
+    {
+        parent::__construct($container);
+
+        $this->reportable(function (Throwable $e): void {
+            self::captureInSentry($e);
+        });
+    }
+
+    /**
+     * A failed job reaches Sentry both through the JobFailed event and through
+     * the worker's report(); the same exception object is only sent once.
+     */
+    public static function captureInSentry(Throwable $e): void
+    {
+        self::$sentToSentry ??= new WeakMap();
+
+        if (isset(self::$sentToSentry[$e])) {
+            return;
+        }
+
+        self::$sentToSentry[$e] = true;
+
+        Integration::captureUnhandledException($e);
+    }
 
     /**
      * Render an exception into an HTTP response.
@@ -50,13 +91,4 @@ class Handler extends ExceptionHandler
         return parent::render($request, $exception);
     }
 
-    /**
-     * Register the exception handling callbacks for the application.
-     */
-    public function register(): void
-    {
-        $this->reportable(function (Throwable $e) {
-            Integration::captureUnhandledException($e);
-        });
-    }
 }

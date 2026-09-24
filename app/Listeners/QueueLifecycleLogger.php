@@ -5,6 +5,7 @@ namespace App\Listeners;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobPopped;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobReleasedAfterException;
@@ -58,6 +59,7 @@ class QueueLifecycleLogger
     public function subscribe(Dispatcher $events): array
     {
         return [
+            JobPopped::class                 => 'onPopped',
             JobProcessing::class             => 'onStarted',
             JobProcessed::class              => 'onFinished',
             JobTimedOut::class               => 'onTimedOut',
@@ -67,13 +69,28 @@ class QueueLifecycleLogger
         ];
     }
 
+    /**
+     * Tracks the job from the moment the worker reserves it, not only once it
+     * starts: an attempt that dies in between never logs "job started", and
+     * would otherwise leave no line at all.
+     */
+    public function onPopped(JobPopped $event): void
+    {
+        if ($event->job === null) {
+            return;
+        }
+
+        self::$inFlight[(string) $event->job->uuid()] = $this->context($event->connectionName, $event->job) + ['phase' => 'popped'];
+        $this->registerShutdownHook();
+    }
+
     public function onStarted(JobProcessing $event): void
     {
         self::$startedAt[(string) $event->job->uuid()] = microtime(true);
 
         $context = $this->context($event->connectionName, $event->job);
 
-        self::$inFlight[(string) $event->job->uuid()] = $context;
+        self::$inFlight[(string) $event->job->uuid()] = $context + ['phase' => 'started'];
         $this->registerShutdownHook();
         $this->reportStaleRelease($context);
 
@@ -125,15 +142,12 @@ class QueueLifecycleLogger
 
     /**
      * A worker stops on its own for a reason (memory limit, lost connection,
-     * SIGTERM from a Horizon restart); only a stop with work still running, or
-     * with a non-zero status, is worth a line.
+     * SIGTERM from a Horizon scale-down or restart). Logged every time: the
+     * absence of this line before a death is itself the clue that the process
+     * was killed rather than stopped.
      */
     public function onWorkerStopping(WorkerStopping $event): void
     {
-        if ($event->status === 0 && self::$inFlight === []) {
-            return;
-        }
-
         Log::channel('queue')->warning('worker stopping', [
             'status'   => $event->status,
             'pid'      => getmypid(),
