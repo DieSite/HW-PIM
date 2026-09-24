@@ -9,6 +9,7 @@ use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobReleasedAfterException;
 use Illuminate\Queue\Events\JobTimedOut;
+use Illuminate\Queue\Events\WorkerStopping;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\TimeoutExceededException;
 use Illuminate\Support\Facades\Log;
@@ -21,6 +22,12 @@ use Sentry\State\Scope;
  * "timed out" died mid-flight. The MaxAttemptsExceededException that surfaces
  * retry_after seconds later is a symptom of that death, not the cause — when
  * one is seen, the failure line carries a "likely_cause" hint saying so.
+ *
+ * Every line carries the worker pid and the release directory it runs from, so
+ * the attempt that died can be tied to a process. A worker that exits while an
+ * attempt is still running (a PHP fatal, exit(), a lost connection) reports it
+ * from its shutdown hook, and one running a release other than the deployed
+ * "current" says so once — only SIGKILL still leaves no trace of its own.
  */
 class QueueLifecycleLogger
 {
@@ -34,6 +41,18 @@ class QueueLifecycleLogger
     private static array $startedAt = [];
 
     /**
+     * Context of the attempts this worker is running, reported if the process
+     * exits before they finish.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private static array $inFlight = [];
+
+    private static bool $shutdownHookRegistered = false;
+
+    private static bool $staleReleaseReported = false;
+
+    /**
      * @return array<class-string, string>
      */
     public function subscribe(Dispatcher $events): array
@@ -44,6 +63,7 @@ class QueueLifecycleLogger
             JobTimedOut::class               => 'onTimedOut',
             JobReleasedAfterException::class => 'onReleased',
             JobFailed::class                 => 'onFailed',
+            WorkerStopping::class            => 'onWorkerStopping',
         ];
     }
 
@@ -52,6 +72,10 @@ class QueueLifecycleLogger
         self::$startedAt[(string) $event->job->uuid()] = microtime(true);
 
         $context = $this->context($event->connectionName, $event->job);
+
+        self::$inFlight[(string) $event->job->uuid()] = $context;
+        $this->registerShutdownHook();
+        $this->reportStaleRelease($context);
 
         Log::channel('queue')->info('job started', $context);
 
@@ -65,19 +89,19 @@ class QueueLifecycleLogger
     public function onFinished(JobProcessed $event): void
     {
         Log::channel('queue')->info('job finished', $this->context($event->connectionName, $event->job));
-        unset(self::$startedAt[(string) $event->job->uuid()]);
+        $this->forget((string) $event->job->uuid());
     }
 
     public function onTimedOut(JobTimedOut $event): void
     {
         Log::channel('queue')->warning('job timed out', $this->context($event->connectionName, $event->job));
-        unset(self::$startedAt[(string) $event->job->uuid()]);
+        $this->forget((string) $event->job->uuid());
     }
 
     public function onReleased(JobReleasedAfterException $event): void
     {
         Log::channel('queue')->warning('job released after exception', $this->context($event->connectionName, $event->job));
-        unset(self::$startedAt[(string) $event->job->uuid()]);
+        $this->forget((string) $event->job->uuid());
     }
 
     public function onFailed(JobFailed $event): void
@@ -96,7 +120,104 @@ class QueueLifecycleLogger
         }
 
         Log::channel('queue')->error('job failed', $context);
-        unset(self::$startedAt[(string) $event->job->uuid()]);
+        $this->forget((string) $event->job->uuid());
+    }
+
+    /**
+     * A worker stops on its own for a reason (memory limit, lost connection,
+     * SIGTERM from a Horizon restart); only a stop with work still running, or
+     * with a non-zero status, is worth a line.
+     */
+    public function onWorkerStopping(WorkerStopping $event): void
+    {
+        if ($event->status === 0 && self::$inFlight === []) {
+            return;
+        }
+
+        Log::channel('queue')->warning('worker stopping', [
+            'status'   => $event->status,
+            'pid'      => getmypid(),
+            'release'  => basename(base_path()),
+            'inFlight' => array_keys(self::$inFlight),
+        ]);
+    }
+
+    /**
+     * Runs when the worker process ends. Anything still in flight at that
+     * point died with the process: without this line the only trace is the
+     * MaxAttemptsExceededException that surfaces retry_after seconds later.
+     */
+    public function onShutdown(): void
+    {
+        if (self::$inFlight === []) {
+            return;
+        }
+
+        $error = error_get_last();
+
+        foreach (self::$inFlight as $context) {
+            $context['runtime'] = isset($context['uuid'], self::$startedAt[$context['uuid']])
+                ? round(microtime(true) - self::$startedAt[$context['uuid']], 1)
+                : null;
+            $context['last_error'] = $error !== null ? "{$error['message']} in {$error['file']}:{$error['line']}" : null;
+
+            Log::channel('queue')->critical('worker exited mid-job', $context);
+
+            \Sentry::captureMessage(
+                "Queue worker exited while running {$context['job']}: ".($context['last_error'] ?? 'no PHP error recorded'),
+                \Sentry\Severity::error(),
+            );
+        }
+
+        self::$inFlight = [];
+
+        \Sentry\SentrySdk::getCurrentHub()->getClient()?->flush();
+    }
+
+    private function registerShutdownHook(): void
+    {
+        if (self::$shutdownHookRegistered) {
+            return;
+        }
+
+        self::$shutdownHookRegistered = true;
+
+        register_shutdown_function(fn () => $this->onShutdown());
+    }
+
+    /**
+     * Deploys switch the "current" symlink but do not restart Horizon, so a
+     * worker can keep running an older release — including one that has since
+     * been pruned from disk, where the first class it still has to load kills
+     * it without a word.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function reportStaleRelease(array $context): void
+    {
+        if (self::$staleReleaseReported) {
+            return;
+        }
+
+        $current = realpath(dirname(base_path(), 2).'/current');
+
+        if ($current === false || $current === realpath(base_path())) {
+            return;
+        }
+
+        self::$staleReleaseReported = true;
+
+        Log::channel('queue')->warning('worker runs a stale release', $context + ['current' => basename($current)]);
+
+        \Sentry::captureMessage(
+            sprintf('Queue worker %d runs release %s while current is %s — run php artisan horizon:terminate.', getmypid(), basename(base_path()), basename($current)),
+            \Sentry\Severity::warning(),
+        );
+    }
+
+    private function forget(string $uuid): void
+    {
+        unset(self::$startedAt[$uuid], self::$inFlight[$uuid]);
     }
 
     /**
@@ -132,7 +253,7 @@ class QueueLifecycleLogger
     }
 
     /**
-     * @return array{job: string, uuid: ?string, connection: string, queue: ?string, attempt: int, seconds_since_dispatch: ?float, runtime: ?float}
+     * @return array{job: string, uuid: ?string, connection: string, queue: ?string, attempt: int, seconds_since_dispatch: ?float, runtime: ?float, pid: int|false, release: string}
      */
     private function context(string $connectionName, Job $job): array
     {
@@ -148,6 +269,8 @@ class QueueLifecycleLogger
             'attempt'                => $job->attempts(),
             'seconds_since_dispatch' => $pushedAt !== null ? round(microtime(true) - $pushedAt, 1) : null,
             'runtime'                => $start !== null ? round(microtime(true) - $start, 1) : null,
+            'pid'                    => getmypid(),
+            'release'                => basename(base_path()),
         ];
     }
 }

@@ -1,8 +1,11 @@
 <?php
 
+use App\Jobs\GenerateProductDescriptionJob;
 use App\Jobs\ScrapeHordeurenCompetitorJob;
 use App\Listeners\QueueLifecycleLogger;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Jobs\RedisJob;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Log;
@@ -69,4 +72,61 @@ it('still points at a silently killed worker for jobs that bound retries by atte
 
     expect($context['likely_cause'])->toContain('died silently')
         ->and($context['likely_cause'])->toContain("retry_after={$retryAfter}s");
+});
+
+/**
+ * The attempt that dies is the one worth seeing; its MaxAttemptsExceededException
+ * only arrives retry_after seconds later, from another process.
+ */
+function lifecycleProcessingJobDouble(string $uuid): RedisJob
+{
+    $job = Mockery::mock(RedisJob::class);
+
+    $job->shouldReceive('payload')->andReturn(['pushedAt' => microtime(true) - 5]);
+    $job->shouldReceive('uuid')->andReturn($uuid);
+    $job->shouldReceive('resolveName')->andReturn(GenerateProductDescriptionJob::class);
+    $job->shouldReceive('getQueue')->andReturn('ai');
+    $job->shouldReceive('attempts')->andReturn(1);
+
+    return $job;
+}
+
+it('reports an attempt that is still running when the worker process exits', function () {
+    $logger = new QueueLifecycleLogger();
+    $logged = [];
+
+    Log::shouldReceive('channel')->with('queue')->andReturn($channel = Mockery::mock());
+    $channel->shouldReceive('info', 'warning');
+    $channel->shouldReceive('critical')->andReturnUsing(function (string $message, array $context) use (&$logged): void {
+        $logged[] = [$message, $context];
+    });
+
+    \Sentry::shouldReceive('captureMessage')->once()->with(Mockery::pattern('/GenerateProductDescriptionJob/'), Mockery::any());
+
+    $logger->onStarted(new JobProcessing('redis-ai', lifecycleProcessingJobDouble('uuid-died')));
+    $logger->onStarted(new JobProcessing('redis-ai', $finished = lifecycleProcessingJobDouble('uuid-done')));
+    $logger->onFinished(new JobProcessed('redis-ai', $finished));
+
+    $logger->onShutdown();
+
+    expect($logged)->toHaveCount(1)
+        ->and($logged[0][0])->toBe('worker exited mid-job')
+        ->and($logged[0][1]['uuid'])->toBe('uuid-died')
+        ->and($logged[0][1]['pid'])->toBe(getmypid())
+        ->and($logged[0][1]['release'])->toBe(basename(base_path()))
+        ->and($logged[0][1])->toHaveKey('last_error');
+});
+
+it('stays quiet at shutdown when every attempt reported back', function () {
+    $logger = new QueueLifecycleLogger();
+
+    Log::shouldReceive('channel')->with('queue')->andReturn($channel = Mockery::mock());
+    $channel->shouldReceive('info', 'warning');
+    $channel->shouldNotReceive('critical');
+    \Sentry::shouldReceive('captureMessage')->never();
+
+    $logger->onStarted(new JobProcessing('redis-ai', $job = lifecycleProcessingJobDouble('uuid-ok')));
+    $logger->onFinished(new JobProcessed('redis-ai', $job));
+
+    $logger->onShutdown();
 });

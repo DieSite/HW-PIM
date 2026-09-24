@@ -7,6 +7,7 @@ use App\Exceptions\ParentHasNoVariantsException;
 use App\Exceptions\WoocommerceBadGatewayException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
+use App\Exceptions\WoocommerceProductSkuInLookupTableException;
 use App\Exceptions\WoocommerceTimeoutException;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
@@ -210,6 +211,15 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 'product_sync_error',
                 $e->getMessage()
             );
+        } catch (WoocommerceProductSkuInLookupTableException $e) {
+            Log::info("SKU {$e->sku} is still claimed in the WooCommerce lookup table. Deleting the trashed product and retrying.");
+            $this->deleteAndRetry(
+                fn () => $this->findAndDeleteTrashedWooCommerceProductBySku($e->sku),
+                $e->sku,
+                $productData,
+                'product_sync_error',
+                "SKU {$e->sku} bestaat al in de WooCommerce zoektabel en kon niet automatisch worden vrijgemaakt. Controleer of het product in de prullenbak van WooCommerce staat, verwijder het daar definitief en probeer opnieuw."
+            );
         } catch (WoocommerceTimeoutException|WoocommerceBadGatewayException $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
@@ -228,9 +238,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         } catch (\Exception $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
-            $errorMessage = str_contains($e->getMessage(), 'zoektabel')
-                ? "SKU {$this->batch->sku} bestaat al in de WooCommerce zoektabel. Het product staat waarschijnlijk in de prullenbak van WooCommerce. Verwijder het daar eerst definitief en probeer opnieuw."
-                : $e->getMessage();
+            $errorMessage = $e->getMessage();
             $additional['product_sync_error'] = $errorMessage;
             $product->additional = $additional;
             $product->save();
@@ -467,6 +475,25 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         $this->deleteConflictingWooCommerceProduct($productId);
     }
 
+    /**
+     * The regular SKU search skips trashed products, yet WooCommerce's SKU lock
+     * on create still sees them, so the trashed copy has to go before re-creating.
+     */
+    private function findAndDeleteTrashedWooCommerceProductBySku(string $sku): void
+    {
+        $results = $this->connectorService->requestApiAction(
+            'getProductWithSku',
+            [],
+            ['sku' => $sku, 'status' => 'trash', 'credential' => $this->credential['id']]
+        );
+
+        if (! isset($results[0]['id'])) {
+            throw new \Exception("Could not find a trashed WooCommerce product with SKU {$sku}.");
+        }
+
+        $this->deleteConflictingWooCommerceProduct((string) $results[0]['id']);
+    }
+
     private function deleteConflictingWooCommerceProduct(string $externalId, string $fallbackSku = ''): void
     {
         $credentialId = $this->credential['id'];
@@ -546,6 +573,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 if ($param === 'default_attributes[0][option]') {
                     throw new ParentHasNoVariantsException($productData['sku']);
                 }
+            } elseif (str_contains($result['message'] ?? '', 'zoektabel') || str_contains($result['message'] ?? '', 'lookup table')) {
+                throw new WoocommerceProductSkuInLookupTableException($productData['sku']);
             } else {
                 throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
             }
