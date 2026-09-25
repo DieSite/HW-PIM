@@ -112,14 +112,21 @@ class AdminApiServiceProvider extends ServiceProvider
     {
         Passport::loadKeysFrom(__DIR__.'/../Secrets/Oauth');
 
-        Passport::$passwordGrantEnabled = true;
+        /**
+         * The keys ship with the git checkout, which cannot carry 0600 permissions.
+         */
+        Passport::$validateKeyPermissions = false;
+
+        Passport::enablePasswordGrant();
         Passport::useClientModel(\Webkul\AdminApi\Models\Client::class);
 
-        // Set access token TTL
-        Passport::tokensExpireIn(Carbon::now()->addMinutes(60));
+        /**
+         * A day, so MCP connectors and API integrations sign in at most once
+         * a day instead of every hour.
+         */
+        Passport::tokensExpireIn(Carbon::now()->addDay());
 
-        // // Set refresh token TTL
-        Passport::refreshTokensExpireIn(Carbon::now()->addMinutes(60));
+        Passport::refreshTokensExpireIn(Carbon::now()->addDay());
 
         $this->app->bind(\Laravel\Passport\ClientRepository::class, \Webkul\AdminApi\Repositories\ClientRepository::class);
     }

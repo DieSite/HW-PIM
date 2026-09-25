@@ -9,6 +9,7 @@ use App\Monitor\HorizonQueueStats;
 use App\Services\AI\AiSettings;
 use App\Services\DeliveryTimeService;
 use Diesite\Monitor\Metrics\QueueStats;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Queue\Events\JobFailed as QueueJobFailed;
 use Illuminate\Support\Facades\Artisan;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\ParallelTesting;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passport\Passport;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\ImageManager;
@@ -48,6 +50,18 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Schema::defaultStringLength(191);
+
+        /**
+         * OAuth consent screen for MCP clients (Passport 13 ships no views).
+         * Guests on /oauth/authorize log in first via mcp.oauth.login, which
+         * keeps the pending authorization as the intended URL. There is no
+         * route named "login", so every other guest goes to the admin login.
+         */
+        Passport::authorizationView('mcp.authorize');
+
+        AuthenticationException::redirectUsing(fn ($request) => $request->is('oauth/*')
+            ? route('mcp.oauth.login')
+            : route('admin.session.create'));
 
         /**
          * Ceiling on outgoing WooCommerce product writes, one slot per

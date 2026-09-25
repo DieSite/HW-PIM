@@ -91,4 +91,15 @@ class Handler extends ExceptionHandler
         return parent::render($request, $exception);
     }
 
+    /**
+     * MCP endpoints answer JSON (a 401 with the OAuth challenge instead of a
+     * login redirect) whatever Accept header the client sends.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     */
+    protected function shouldReturnJson($request, Throwable $e): bool
+    {
+        return $request->is('mcp/*') && ! $request->is('mcp/login')
+            || parent::shouldReturnJson($request, $e);
+    }
 }

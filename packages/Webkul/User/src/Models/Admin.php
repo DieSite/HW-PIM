@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
@@ -17,7 +18,7 @@ use Webkul\Core\Models\LocaleProxy;
 use Webkul\User\Contracts\Admin as AdminContract;
 use Webkul\User\Database\Factories\AdminFactory;
 
-class Admin extends Authenticatable implements AdminContract, AuditableContract
+class Admin extends Authenticatable implements AdminContract, AuditableContract, OAuthenticatable
 {
     use Auditable, HasApiTokens, HasFactory, Notifiable;
 

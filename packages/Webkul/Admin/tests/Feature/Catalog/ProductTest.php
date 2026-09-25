@@ -149,7 +149,7 @@ it('should return the edit page for simple product successfully', function () {
         ->assertSeeText(trans('admin::app.catalog.products.edit.title'))
         ->assertSeeText(trans('admin::app.catalog.products.edit.save-btn'))
         ->assertSeeText(trans('admin::app.catalog.products.edit.categories.title'))
-        ->assertSeeText(trans('admin::app.catalog.products.edit.links.title'))
+        ->assertDontSeeText(trans('admin::app.catalog.products.edit.links.title'))
         ->assertDontSeeText(trans('admin::app.catalog.products.edit.types.configurable.empty-title'));
 });
 
@@ -250,7 +250,11 @@ it('should search the products with sku successfully', function () {
         ->assertOk();
 });
 
-it('should return validation error when setting duplicate variant configurable attribute value', function () {
+/**
+ * HW removed the duplicate variant check from the admin save on purpose
+ * (f68d15d8): the variant is saved with the given axis value.
+ */
+it('should save a variant even when its configurable attribute value duplicates another variant', function () {
     $this->loginAsAdmin();
 
     $configurableProduct = Product::factory()->configurable()->withVariantProduct()->create();
@@ -269,11 +273,11 @@ it('should return validation error when setting duplicate variant configurable a
     ];
 
     $this->put(route('admin.catalog.products.update', $newProduct->id), $data)
-        ->assertSessionHas('warning', trans('admin::app.catalog.products.edit.types.configurable.create.variant-already-exists'));
+        ->assertSessionMissing('warning');
 
     $newProduct->refresh();
 
-    $this->assertNotEquals($newProduct->values['common'][$attribute->code] ?? '', $attribute->options->first()->code);
+    $this->assertEquals($attribute->options->first()->code, $newProduct->values['common'][$attribute->code] ?? '');
 });
 
 it('should create a new variant product for a configurable product without removing existing variant', function () {

@@ -19,6 +19,17 @@ it('should not display the magic ai tab if does not have permission', function (
         ->assertDontSeeText(trans('admin::app.configuration.index.general.magic-ai.settings.title'));
 });
 
+it('should not let another configuration section permission open the magic ai tab', function () {
+    $this->loginWithPermissions('custom', ['configuration', 'configuration.image-editor']);
+
+    $this->get(route('admin.configuration.edit', ['general', 'magic_ai']))
+        ->assertSeeText('Unauthorized')
+        ->assertDontSeeText(trans('admin::app.configuration.index.general.magic-ai.settings.title'));
+
+    $this->get(route('admin.configuration.edit', ['image_editor', 'settings']))
+        ->assertOk();
+});
+
 it('should display the integration index page if has permission', function () {
     $this->loginWithPermissions('custom', ['configuration', 'configuration.integrations']);
 

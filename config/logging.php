@@ -97,6 +97,17 @@ return [
             'level'  => 'info',
             'days'   => 30,
         ],
+
+        /**
+         * Every product write made through the MCP server (admin, sku, action,
+         * changed attributes), written by App\Services\Mcp\ProductUpsertService.
+         */
+        'mcp' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/mcp.log'),
+            'level'  => 'info',
+            'days'   => 90,
+        ],
     ],
 
 ];

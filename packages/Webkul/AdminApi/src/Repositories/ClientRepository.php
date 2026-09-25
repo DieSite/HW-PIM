@@ -2,6 +2,7 @@
 
 namespace Webkul\AdminApi\Repositories;
 
+use Laravel\Passport\Client;
 use Laravel\Passport\ClientRepository as BaseClientRepository;
 use Laravel\Passport\Passport;
 
@@ -10,10 +11,10 @@ class ClientRepository extends BaseClientRepository
     /**
      * Get a client by the given ID.
      *
-     * @param  int|string  $id
-     * @return \Laravel\Passport\Client|null
+     * When the request carries a `username` (password grant), the client is only
+     * returned if it belongs to that admin.
      */
-    public function find($id)
+    public function find(string|int $id): ?Client
     {
         $client = Passport::client();
 
@@ -32,14 +33,23 @@ class ClientRepository extends BaseClientRepository
 
     /**
      * Get an active client by the given ID.
-     *
-     * @param  int|string  $id
-     * @return \Laravel\Passport\Client|null
      */
-    public function findActive($id)
+    public function findActive(string|int $id): ?Client
     {
         $client = $this->find($id);
 
         return $client && ! $client->revoked ? $client : null;
+    }
+
+    /**
+     * Create a confidential password grant client owned by the given admin.
+     */
+    public function createPasswordGrantClientForAdmin(int $adminId, string $name, ?string $provider = null): Client
+    {
+        $client = $this->createPasswordGrantClient($name, $provider, confidential: true);
+
+        $client->forceFill(['user_id' => $adminId])->save();
+
+        return $client;
     }
 }

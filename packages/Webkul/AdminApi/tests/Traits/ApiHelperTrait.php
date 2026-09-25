@@ -2,8 +2,8 @@
 
 namespace Webkul\AdminApi\Tests\Traits;
 
-use Laravel\Passport\ClientRepository;
 use Webkul\AdminApi\Models\Apikey;
+use Webkul\AdminApi\Repositories\ClientRepository;
 use Webkul\User\Models\Admin;
 
 trait ApiHelperTrait
@@ -15,10 +15,8 @@ trait ApiHelperTrait
     {
         $admin = Admin::factory()->create(['email' => 'test@testingApi.com', 'password' => bcrypt('password')]);
 
-        $clientRepo = new ClientRepository();
-
-        $client = $clientRepo->createPasswordGrantClient(
-            $admin->id, 'Client for Testing the api', env('APP_URL'), 'admins'
+        $client = app(ClientRepository::class)->createPasswordGrantClientForAdmin(
+            $admin->id, 'Client for Testing the api', 'admins'
         );
 
         Apikey::factory()->create(['permission_type' => $permissionType, 'admin_id' => $admin->id, 'oauth_client_id' => $client->getKey(), 'permissions' => $permissions]);

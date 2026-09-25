@@ -157,7 +157,9 @@ class SimpleProductController extends ProductController
             $product = $this->updateProduct($data, $product);
 
             Event::dispatch('catalog.product.update.after', $product);
-            Event::dispatch('catalog.product.update.after', $product->parent);
+            if ($product->parent) {
+                Event::dispatch('catalog.product.update.after', $product->parent);
+            }
 
             return $this->successResponse(
                 trans('admin::app.catalog.products.update-success'),

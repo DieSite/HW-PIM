@@ -79,7 +79,7 @@ it('should update Attribute group', function () {
 
     $attributeGroup = AttributeGroup::factory()->create();
 
-    $locales = Locale::where('status', 1)->limit(3);
+    $locales = Locale::where('status', 1)->limit(3)->pluck('code');
     $data = [];
     foreach ($locales as $locale) {
         $data[$locale] = ['name' => $locale.fake()->word()];

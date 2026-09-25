@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Webkul\AdminApi\Models\Apikey;
 
 it('should return the intergration datagrid page', function () {
@@ -171,10 +173,7 @@ it('should generate secret key and client id for a integration', function () {
 
     $data = $response->json();
 
-    $this->assertDatabaseHas('oauth_clients', [
-        'id'     => $data['oauth_client_id'],
-        'secret' => $data['secret_key'],
-    ]);
+    expect(Hash::check($data['secret_key'], DB::table('oauth_clients')->where('id', $data['oauth_client_id'])->value('secret')))->toBeTrue();
 });
 
 it('should regenerate secret key for a integration', function () {
@@ -196,10 +195,7 @@ it('should regenerate secret key for a integration', function () {
 
     $data = $response->json();
 
-    $this->assertDatabaseHas('oauth_clients', [
-        'id'     => $oauthClientId,
-        'secret' => $data['secret_key'],
-    ]);
+    expect(Hash::check($data['secret_key'], DB::table('oauth_clients')->where('id', $oauthClientId)->value('secret')))->toBeTrue();
 });
 
 it('should revoke the integration succesfully on delete', function () {

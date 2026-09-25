@@ -16,11 +16,7 @@ trait OauthClientGenerator
         $providers = array_keys(config('auth.providers'));
         $provider = $providers[0];
 
-        $client = $this->clients->createPasswordGrantClient(
-            $user_id, $name, 'http://localhost', $provider
-        );
-
-        return $client;
+        return $this->clients->createPasswordGrantClientForAdmin($user_id, $name, $provider);
     }
 
     /**
@@ -30,7 +26,7 @@ trait OauthClientGenerator
      */
     public function regenerateSecret(Client $client)
     {
-        $client = $this->clients->regenerateSecret($client);
+        $this->clients->regenerateSecret($client);
 
         return $client;
     }

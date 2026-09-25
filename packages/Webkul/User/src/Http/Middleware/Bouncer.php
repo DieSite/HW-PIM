@@ -3,6 +3,7 @@
 namespace Webkul\User\Http\Middleware;
 
 use Illuminate\Support\Facades\Route;
+use Webkul\Core\Tree;
 
 class Bouncer
 {
@@ -92,8 +93,15 @@ class Bouncer
             return;
         }
 
-        if (isset($acl->roles[Route::currentRouteName()])) {
-            bouncer()->allow($acl->roles[Route::currentRouteName()]);
+        $routeName = Route::currentRouteName();
+        $params = array_filter(Route::current()?->parameters() ?? [], 'is_scalar');
+
+        $key = $acl->roles[Tree::aclRouteKey((string) $routeName, $params)]
+            ?? $acl->roles[$routeName]
+            ?? null;
+
+        if ($key !== null) {
+            bouncer()->allow($key);
         }
     }
 }

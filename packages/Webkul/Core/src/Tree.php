@@ -81,12 +81,34 @@ class Tree
         } elseif ($type == 'acl') {
             $item['name'] = trans($item['name']);
 
-            $this->roles[$item['route']] = $item['key'];
+            /**
+             * Entries that share a route but differ by params (the
+             * configuration sections) get a route|params key; they only claim
+             * the bare route when no other entry has, so one section's
+             * permission no longer governs all of them.
+             */
+            if (! empty($item['params'])) {
+                $this->roles[static::aclRouteKey($item['route'], $item['params'])] = $item['key'];
+
+                $this->roles[$item['route']] ??= $item['key'];
+            } else {
+                $this->roles[$item['route']] = $item['key'];
+            }
         }
 
         $children = str_replace('.', '.children.', $item['key']);
 
         core()->array_set($this->items, $children, $item);
+    }
+
+    /**
+     * The roles key of an ACL entry bound to specific route parameters.
+     *
+     * @param  array<int|string, mixed>  $params
+     */
+    public static function aclRouteKey(string $route, array $params): string
+    {
+        return $route.'|'.implode('/', array_map('strval', array_values($params)));
     }
 
     /**

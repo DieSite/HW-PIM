@@ -6,7 +6,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\Rule;
-use Laravel\Passport\ClientRepository;
+use Webkul\AdminApi\Repositories\ClientRepository;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\AdminApi\DataGrids\Integrations\ApiKeysDataGrid;
 use Webkul\AdminApi\Repositories\ApiKeyRepository;
@@ -244,13 +244,12 @@ class ApiKeysController extends Controller
     {
         $oauthClientId = $apiKey->oauthClients?->getKey();
         $clientId = $apiKey->oauthClients?->getKey();
-        $secretKey = $oauthClientId ? $this->maskClientIdAndScreatKey($apiKey->oauthClients?->secret) : $apiKey->oauthClients?->secret;
 
         return [
             'apiKey'          => $apiKey,
             'oauth_client_id' => $oauthClientId,
             'client_id'       => $clientId,
-            'secret_key'      => $secretKey,
+            'secret_key'      => null,
             'permissionTypes' => json_encode($this->apiKeyRepository->getPermissionTypes()),
         ];
     }
