@@ -136,6 +136,36 @@ it('sends a guest from the authorize screen through the MCP login and back', fun
         ->and($returnedQuery)->toEqualCanonicalizing($expectedQuery);
 });
 
+/**
+ * HUIS-EN-WONEN-PIM-4T: with APP_DEBUG off, UnoPim's exception handler sent
+ * every non-admin guest to the non-existent shop login route.
+ */
+it('sends guests to the MCP login and answers MCP with a 401 when debug is off', function () {
+    config(['app.debug' => false]);
+    $this->app->singleton(\Illuminate\Contracts\Debug\ExceptionHandler::class, fn ($app) => new \Webkul\Core\Exceptions\Handler($app));
+
+    $client = registerMcpClient();
+
+    $this->get('/oauth/authorize?'.http_build_query([
+        'client_id'             => $client['client_id'],
+        'redirect_uri'          => MCP_REDIRECT,
+        'response_type'         => 'code',
+        'scope'                 => 'mcp:use',
+        'code_challenge'        => str_repeat('a', 43),
+        'code_challenge_method' => 'S256',
+    ]))->assertRedirect(route('mcp.oauth.login'));
+
+    $this->post('/mcp/products', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'], ['Accept' => 'text/event-stream'])
+        ->assertUnauthorized()
+        ->assertHeader('WWW-Authenticate');
+
+    $this->get(route('admin.dashboard.index'))->assertRedirect(route('admin.session.create'));
+
+    $token = mcpAccessToken(McpCatalogFixture::admin());
+
+    mcpCall($token, 'tools/list')->assertOk()->assertSee('upsert-products');
+});
+
 it('issues a token through the authorization code flow and serves the tools with it', function () {
     McpCatalogFixture::rug('MCP-E2E', ['merk' => 'Eurogros']);
 

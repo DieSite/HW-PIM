@@ -55,8 +55,14 @@ class Handler extends BaseHandler
                 return response()->json(['error' => trans('admin::app.errors.401.message')], 401);
             }
 
+            /**
+             * The PIM has no shop login. Anything outside the admin (OAuth
+             * authorize, MCP) gets Laravel's own response: a JSON 401 or the
+             * redirect set by AuthenticationException::redirectUsing() in
+             * AppServiceProvider.
+             */
             if ($path !== 'admin') {
-                return redirect()->guest(route('shop.customer.session.index'));
+                return $this->unauthenticated($request, $exception);
             }
 
             return redirect()->guest(route('admin.session.create'));
