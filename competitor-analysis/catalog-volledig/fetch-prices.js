@@ -47,6 +47,24 @@ function urlFitsEntry(url, entry, shopCfg) {
 }
 
 /**
+ * Hoeveel woorden draagt de naam van deze indexrij die ons model niet
+ * verklaart? Merk, maat en getallen tellen niet mee.
+ *
+ * Een winkel kan twee kleden hebben die allebei op ons model passen:
+ * vloerkledenvoordelig verkoopt "Karpi Rousseau 36" (€ 429,20) én "Karpi
+ * Hotel Rousseau 36" (€ 398,25). Dan hoort "Rousseau 36" bij de eerste,
+ * dezelfde regel als `unexplainedWords` in de Shopify- en Woo-indexers. Een
+ * kleurnaam die alleen de concurrent noemt ("Babylon 8545 Alhambra") doet
+ * er niet toe zolang er maar één kandidaat is.
+ */
+function extraNameWords(row, entry) {
+  const ours = new Set([...entry.normModel.split(' '), ...String(entry.normBrand ?? '').split(' ')]);
+  return String(row.title ?? '').toLowerCase().split(/[^a-z]+/)
+    .filter(w => w.length >= 3 && !ours.has(w) && !['vloerkleed', 'karpet', 'louis', 'poortere', 'karpi', 'mart', 'visser'].includes(w))
+    .length;
+}
+
+/**
  * Geef het beste index-record voor (shop, entry) terug, of null. Vorm moet
  * overeenkomen.
  *
@@ -60,7 +78,8 @@ function findUrl(db, shop, entry, requireDiscriminator = false, shopCfg = null) 
   // Winkels met één pagina voor alle vormen (`mixedShapes`): de vorm van de
   // indexrij zegt dan niets, getPrijs kiest de juiste maatoptie.
   const shapeFits = r => shopCfg?.mixedShapes || rowShape(r) === entry.shape;
-  const rows = findInIndex(db, shop, entry.normBrand, entry.normModel).filter(shapeFits);
+  const rows = findInIndex(db, shop, entry.normBrand, entry.normModel).filter(shapeFits)
+    .sort((a, b) => extraNameWords(a, entry) - extraNameWords(b, entry));
   const fitting = rows.find(r => urlFitsEntry(r.url, entry, shopCfg));
   if (fitting) return fitting.url;
   if (rows.length) return rows[0].url;
@@ -196,4 +215,4 @@ async function main() {
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
 
-module.exports = { findUrl, urlFitsEntry };
+module.exports = { findUrl, urlFitsEntry, extraNameWords };

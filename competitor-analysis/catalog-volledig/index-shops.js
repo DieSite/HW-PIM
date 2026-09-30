@@ -143,6 +143,7 @@ async function main() {
           catalogModels: catalog.models,
           bySku:         catalog.bySku,
           requireDiscriminator: shopCfg.requireDiscriminator,
+          slugAliases:   shopCfg.slugAliases,
           pageDelayMs:   shopCfg.pageDelayMs,
         });
         console.log(`  ✅ ${result.indexed} producten geïndexeerd, ${result.priced} prijzen opgeslagen`);

@@ -25,6 +25,41 @@ const fmt = n => {
   return `€ ${p.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?=,))/g, '.')}`;
 };
 
+/**
+ * Louis De Poortere Fading World Medallion: kleurnaam → dessinnummer. Ons PIM
+ * kent alleen het nummer ("Fading World Medallion 8261"); sommige winkels
+ * alleen de naam. Bron: vloerkledenvoordelig.nl, dat beide in de URL zet
+ * ("fading-world-medaillon-pink-flash-8261"), voor alle 16 Medallions die wij
+ * voeren (30-09-2026). De spelvarianten zijn die van caltabellotta.nl
+ * ("Greyjeans", "Grey Forsest", "Salt Pepper").
+ *
+ * Steeds met "medallion" ervoor: "stone", "jade" en "scarlet" zijn ook
+ * gewone kleurwoorden. "jade oyster" staat vóór "jade", anders wordt het
+ * "8258 oyster".
+ */
+const MEDALLION_COLOUR_NUMBERS = Object.fromEntries(Object.entries({
+  'blue night':      8254,
+  'grey turquoise':  8255,
+  'grey turqoise':   8255,
+  'grey ebony':      8257,
+  'jade oyster':     8259,
+  'jade':            8258,
+  'scarlet':         8260,
+  'pink flash':      8261,
+  'mineral black':   8263,
+  'salt and pepper': 8383,
+  'salt pepper':     8383,
+  'grey yellow':     9062,
+  'grey jeans':      9065,
+  'greyjeans':       9065,
+  'grey forest':     9066,
+  'grey forsest':    9066,
+  'salmon':          9067,
+  'spring moss':     9145,
+  'majestic forest': 9146,
+  'stone':           9148,
+}).map(([colour, number]) => [`medallion ${colour}`, `fading world medallion ${number}`]));
+
 // ── Shopify ──────────────────────────────────────────────────────────────────
 
 const SHOPIFY_SHOPS = [
@@ -137,6 +172,9 @@ const WOOCOMMERCE_SHOPS = [
     key:    'caltabellotta.nl',
     base:   'https://www.caltabellotta.nl',
     brands: ['Karpi', 'Louis De Poortere'],
+    // Fading World Medallion verkopen ze alleen onder de kleurnaam
+    // ("Vloerkleed Medallion Pink Flash"), zonder dessinnummer.
+    slugAliases: MEDALLION_COLOUR_NUMBERS,
   },
   {
     // ~1.000 kleden, veel onder een eigen fantasienaam ("Rivali 9326",
@@ -284,27 +322,37 @@ const CUSTOM_SHOPS = [
     },
   },
 
-  // ── vloerkledenvoordelig.nl (maat in URL -> JSON-LD/meta) ────────────────
+  // ── vloerkledenvoordelig.nl (ASP.NET, maatkeuze op de productpagina) ─────
   {
     key:        'vloerkledenvoordelig.nl',
     base:       'https://www.vloerkledenvoordelig.nl',
-    brands:     ['Karpi', 'Mart Visser'],
-    // Kaal /sitemap.xml geeft hier een HTML-pagina (200, geen <loc>); de
-    // echte productsitemap zit achter ?type=products — 6.045 URL's.
-    sitemapUrl: 'https://www.vloerkledenvoordelig.nl/sitemap.xml?type=products',
-    brandKeys:  ['karpi', 'mart-visser'],
-    fromUrl:    true,
-    getPrijs:   null,
-    sizeFromUrl(url) {
-      // "…-200x290_724709.html"
-      const m = url.match(/[_-](\d{2,3})x(\d{2,3})[_.]/) || url.match(/(\d{2,3})x(\d{2,3})/);
-      return m ? { widthCm: Number(m[1]), heightCm: Number(m[2]) } : null;
+    brands:     ['Karpi', 'Mart Visser', 'Louis De Poortere'],
+    // Géén sitemap: `sitemap.xml?type=products` is verouderd. Hij mist hun
+    // hele Louis De Poortere-assortiment (228 kleden, o.a. Fading World
+    // Babylon 8545), en de LDP-URL's die er wél in staan geven een 404
+    // (geverifieerd 30-09-2026). Het overzicht met `showall=true` zet de hele
+    // actuele catalogus (~1.500 kleden) in één pagina, één link per kleed.
+    listUrl:    'https://www.vloerkledenvoordelig.nl/vloerkleden/alle-soorten.html?showall=true',
+    listPages:  1,
+    linkRe:     /\/vloerkleden\/alle-soorten\/[a-z0-9-]+_\d+\.html/,
+    brandKeys:  ['karpi', 'mart-visser', 'louis-de-poortere'],
+    // Elke productpagina heeft een keuzelijst met álle maten van het kleed:
+    // <option value="615924">140 x 200 (€ 395,10)</option>. De maat in de URL
+    // is alleen de voorgeselecteerde. Alleen rechthoeken: ronde of ovale
+    // kleden van onze merken voeren ze niet, en een optie noemt geen vorm.
+    getPrijs(html, w, h, shape = 'rechthoek') {
+      if (shape !== 'rechthoek') return null;
+      const m = html.match(new RegExp(`<option[^>]*>\\s*${w} x ${h} \\(€\\s*([\\d.,]+)\\)`, 'i'));
+      return m ? fmt(parsePriceStr(m[1])) : null;
     },
     detectBrand(url) {
-      if (/karpi/i.test(url))      return 'Karpi';
-      if (/mart-visser/i.test(url)) return 'Mart Visser';
+      if (/louis-de-poortere/i.test(url)) return 'Louis De Poortere';
+      if (/karpi/i.test(url))             return 'Karpi';
+      if (/mart-visser/i.test(url))       return 'Mart Visser';
       return null;
     },
+    // "fading-world-medaillon-pink-flash-8261" = Fading World Medallion 8261
+    slugAliases: { medaillon: 'medallion' },
   },
 
   // ── woonboulevardpoortvliet.nl (maat in URL -> JSON-LD) ──────────────────

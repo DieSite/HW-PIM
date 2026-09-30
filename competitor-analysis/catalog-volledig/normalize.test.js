@@ -816,3 +816,76 @@ test('WooCommerce: doorbladeren bekijkt alleen kleden', () => {
   assert.equal(looksLikeRug({ name: 'Acryl 7274', categories: [{ name: 'Uncategorized Eurogros' }] }, ['Eurogros', 'Karpi']), true);
   assert.equal(looksLikeRug({ name: 'Acryl 7274', categories: [{ name: 'Uncategorized Eurogros' }] }), false);
 });
+
+test('vloerkledenvoordelig: actuele catalogus, LDP en prijs uit de maatkeuzelijst', () => {
+  const { CUSTOM_SHOPS } = require('./shops');
+  const { applyWordAliases } = require('./normalize');
+  const shop = CUSTOM_SHOPS.find(s => s.key === 'vloerkledenvoordelig.nl');
+
+  // Geen verouderde sitemap meer, maar het "toon alles"-overzicht
+  assert.equal(shop.sitemapUrl, undefined);
+  assert.match(shop.listUrl, /showall=true/);
+  const link = '/vloerkleden/alle-soorten/louis-de-poortere-fading-world-babylon-8545-alhambra-80x150_615923.html';
+  assert.equal(`href="${link}?returnurl=%2f"`.match(shop.linkRe)[0], link);
+
+  assert.equal(shop.detectBrand(link), 'Louis De Poortere');
+  assert.equal(shop.detectBrand('/vloerkleden/alle-soorten/karpi-babylon-12-120x180_724852.html'), 'Karpi');
+  assert.equal(shop.detectBrand('/vloerkleden/alle-soorten/brinker-carpets-feel-good-200x290_1.html'), null);
+
+  // Alle maten staan op elke pagina; de maat in de URL is alleen de voorselectie
+  const html = `<select name="ctl00$Layout$ddlFormats">
+		<option selected="selected" value="615923">80 x 150 (€ 170,10)</option>
+		<option value="615924">140 x 200 (€ 395,10)</option>
+		<option value="615927">230 x 330 (€ 1079,10)</option>
+	</select>`;
+  assert.equal(shop.getPrijs(html, 80, 150), '€ 170,10');
+  assert.equal(shop.getPrijs(html, 140, 200), '€ 395,10');
+  assert.equal(shop.getPrijs(html, 230, 330), '€ 1.079,10');
+  assert.equal(shop.getPrijs(html, 200, 290), null);
+  assert.equal(shop.getPrijs(html, 140, 200, 'rond'), null);
+
+  // "medaillon" in hun slugs
+  const slug = applyWordAliases('louis de poortere fading world medaillon pink flash 8261 80x150 397999', shop.slugAliases);
+  const entry = { normModel: 'fading world medallion 8261', mustHave: [], shape: 'rechthoek' };
+  assert.equal(pageMatchesEntry('Louis De Poortere Fading World Medaillon Pink Flash 8261 80x150', slug, entry), true);
+  assert.equal(pageMatchesEntry(slug, slug, { ...entry, normModel: 'fading world medallion 8254' }), false);
+});
+
+test('caltabellotta: Medallion-kleurnaam wordt het dessinnummer uit ons PIM', () => {
+  const { WOOCOMMERCE_SHOPS } = require('./shops');
+  const { applyWordAliases, modelIdentityMatches } = require('./normalize');
+  const { slugAliases } = WOOCOMMERCE_SHOPS.find(s => s.key === 'caltabellotta.nl');
+  const alias = name => normModel(applyWordAliases(name, slugAliases));
+
+  assert.equal(alias('Vloerkleed Medallion Pink Flash'), 'vloerkleed fading world medallion 8261');
+  // "jade oyster" is een ander kleed dan "jade"
+  assert.equal(alias('Vloerkleed Medallion Jade Oyster'), 'vloerkleed fading world medallion 8259');
+  assert.equal(alias('Vloerkleed Medallion Jade'), 'vloerkleed fading world medallion 8258');
+  // hun spelfouten
+  assert.equal(alias('Vloerkleed Medallion Greyjeans'), 'vloerkleed fading world medallion 9065');
+  assert.equal(alias('Vloerkleed Medallion Grey Forsest'), 'vloerkleed fading world medallion 9066');
+  assert.equal(alias('Vloerkleed Medallion Salt Pepper'), 'vloerkleed fading world medallion 8383');
+  // in de permalink net zo
+  assert.equal(applyWordAliases('https://www.caltabellotta.nl/vloerkleed-medallion-stone/', slugAliases),
+    'https://www.caltabellotta.nl/vloerkleed-fading world medallion 9148/');
+  // Alleen in combinatie met "medallion": een gewoon stenen kleed blijft wat het is
+  assert.equal(alias('Vloerkleed Royce 63 Stone'), 'vloerkleed royce 63 stone');
+  assert.equal(alias('Set Medallion op Doorleefd Hout'), 'set medallion op doorleefd hout');
+
+  const text = alias('Vloerkleed Medallion Jade Oyster');
+  assert.equal(modelIdentityMatches('fading world medallion 8259', text, []), true);
+  assert.equal(modelIdentityMatches('fading world medallion 8258', text, []), false);
+});
+
+test('fetch-prices kiest bij twee kandidaten het kleed zonder onverklaard naamwoord', () => {
+  const { extraNameWords } = require('./fetch-prices');
+  const entry = { normBrand: 'karpi', normModel: 'rousseau 36' };
+  const hotel = { title: 'karpi-hotel-rousseau-36-160x230_727156' };
+  const plain = { title: 'karpi-rousseau-36-160x230_729432' };
+  assert.equal(extraNameWords(plain, entry), 0);
+  assert.equal(extraNameWords(hotel, entry), 1);
+  assert.deepEqual([hotel, plain].sort((a, b) => extraNameWords(a, entry) - extraNameWords(b, entry)), [plain, hotel]);
+  // Merk en maat tellen niet mee
+  assert.equal(extraNameWords({ title: 'louis-de-poortere-fading-world-babylon-8545-80x150_615923' },
+    { normBrand: 'louis de poortere', normModel: 'fading world babylon 8545' }), 0);
+});

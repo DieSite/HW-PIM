@@ -377,7 +377,8 @@ rijen als ervoor, en geen enkele catalogusmaat parseert anders.
 
 **Winkels erbij (2026-09-23): dfmwonen.nl, mooierthuis.nl (Shopify),
 kledenwereld.nl, caltabellotta.nl, disena.nl (WooCommerce), plus een hercontrole van
-vloerkledenvoordelig.nl** (nog steeds 0: hun Karpi-lijnen voeren wij niet).
+vloerkledenvoordelig.nl** (toen nog 0 — die conclusie was fout, zie
+"vloerkledenvoordelig en de Medallions" hieronder).
 **mokana.nl** zit achter een Vercel Security Checkpoint (429, ook headless
 Chromium komt er na 10 s niet voorbij) en valt onder dezelfde afspraak als de
 Cloudflare-shops: niet omzeilen, dus niet opgenomen. Wat daarvoor nodig was,
@@ -478,10 +479,42 @@ min door 429's). Daarom:
   (`--prune`) verwijdert alleen wat niet meer in de SQLite staat. Hij valt wel
   op in de verversingsgraad van het rapport.
 
-**Nog open, bewust:** caltabellotta verkoopt Louis De Poortere "Medallion Pink
-Flash" e.d. zonder dessinnummer, terwijl ons PIM alleen "Fading World
-Medallion 8261" kent. Die kleurnaam→nummer-vertaling bestaat nergens in het
-PIM, dus die kleden blijven daar ongekoppeld.
+**vloerkledenvoordelig en de Medallions (2026-09-30).** vloerkledenvoordelig.nl
+leverde nul prijzen, en de verklaring "hun Karpi-lijnen voeren wij niet" klopte
+niet. Twee echte oorzaken:
+
+- **De sitemap is verouderd.** `sitemap.xml?type=products` mist hun hele
+  Louis De Poortere-assortiment (228 kleden), en de LDP-URL's die er wél in
+  staan geven een 404. De winkel indexeert nu via het overzicht
+  `alle-soorten.html?showall=true` (`listUrl`, ~1.500 kleden in één pagina).
+  `fetchListUrls` maakt daarvoor relatieve links absoluut.
+- **Het merkfilter miste LDP.** `brands` noemde alleen Karpi en Mart Visser.
+
+De prijs komt nu uit de maatkeuzelijst op de productpagina
+(`<option>140 x 200 (€ 395,10)</option>`). Die bevat alle maten; de maat in de
+URL is alleen de voorselectie. Eerste run: 304 kleden, **1.421 prijzen** (543
+LDP, 878 Karpi). 30 steekproefprijzen live nagelopen, alle 30 exact; 99% ligt
+op 75–110% van onze adviesprijs. De ene uitschieter (Sisal Gold 22 90×160, €108
+tegen onze €229) is echt, en ons PIM is daar vreemd: 90×160 is bij ons duurder
+dan 130×190.
+
+**Valkuil: Karpi "Hotel X" naast "X".** Ritz 23, Romain 23, Rousseau 36/62 en
+Russel 62 staan er twee keer, met verschillende prijzen ("Karpi Rousseau 36"
+€429,20, "Karpi Hotel Rousseau 36" €398,25). Beide passen op ons "Rousseau 36",
+en de eerste indexrij won. `findUrl` (fetch-prices.js) geeft nu voorrang aan de
+kandidaat met de minste naamwoorden die ons model niet verklaart
+(`extraNameWords`), dezelfde regel als `unexplainedWords` in de Shopify- en
+Woo-indexers.
+
+**caltabellotta-Medallions.** Zij verkopen "Medallion Pink Flash" zonder
+nummer; ons PIM kent alleen "Fading World Medallion 8261". vloerkledenvoordelig
+zet naam én nummer in de URL ("fading-world-medaillon-pink-flash-8261"), en
+daaruit komt `MEDALLION_COLOUR_NUMBERS` in shops.js: alle 16 Medallions die wij
+voeren, plus de spelfouten van caltabellotta ("Greyjeans", "Grey Forsest").
+De Woo-indexer kent daarvoor nu ook `slugAliases` (naam en permalink). De
+sleutels beginnen bewust met "medallion", want "stone", "jade" en "scarlet"
+zijn ook gewone kleurwoorden. caltabellotta: 19 → 34 kleden, 80 → 156 prijzen;
+alle 76 Medallionprijzen tegen de Store API nagelopen, alle 76 exact.
 
 **Cloudflare-shops** (`browser: true` → bommelwonen.nl, lowikmeubelen.nl) worden
 in de node-pipeline overgeslagen en via een **Playwright-spec**

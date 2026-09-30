@@ -24,7 +24,7 @@
  */
 
 const { getText, getJson, sleep } = require('../http');
-const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore, detectShape, modelIdentityMatches, identityOptionsFor } = require('../normalize');
+const { normBrand, normModel, parseSize, fmtEuro, extractModel, matchScore, detectShape, modelIdentityMatches, identityOptionsFor, applyWordAliases } = require('../normalize');
 const { upsertIndex, recordPrice } = require('../storage');
 
 /** Bovengrens op het doorbladeren, zodat een winkel met een enorme catalogus de run niet opeet. */
@@ -118,7 +118,7 @@ async function wooSearch(base, search, page) {
   return [];
 }
 
-async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator, pageDelayMs = 150 }) {
+async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, requireDiscriminator, slugAliases, pageDelayMs = 150 }) {
   const identityOpts = { requireDiscriminator };
   const normBrands  = brands.map(b => normBrand(b));
   let indexed = 0, priced = 0, seen = 0, failedPages = 0, apiBatches = 0;
@@ -172,7 +172,7 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, 
 
       for (const p of products) {
         if (done.has(p.id) || !looksLikeRug(p, brands)) continue;
-        const name = p.name ?? '';
+        const name = applyWordAliases(p.name ?? '', slugAliases);
 
         for (let bi = 0; bi < brands.length; bi++) {
           const nb = normBrands[bi];
@@ -228,9 +228,12 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, 
 
   /** Indexeer één product en leg de variantprijzen vast die bij ons passen. */
   async function indexProduct(p, brand, nb) {
-    const name         = decodeEntities(p.name ?? '');
+    // `slugAliases` (shops.js): caltabellotta noemt "Fading World Medallion
+    // 8261" alleen "Medallion Pink Flash"; de tabel zet het nummer erin.
+    const name         = applyWordAliases(decodeEntities(p.name ?? ''), slugAliases);
     const model        = normModel(extractModel(name, brand));
     const url          = p.permalink ?? `${base}/?p=${p.id}`;
+    const idUrl        = applyWordAliases(url.toLowerCase(), slugAliases);
     const productShape = detectShape(name, url) ?? 'rechthoek';
 
     upsertIndex(db, { shop, normBrand: nb, normModel: model, title: name, url, platform: 'woocommerce', shape: productShape });
@@ -246,7 +249,7 @@ async function indexWooCommerce(db, { shop, base, brands, catalogModels, bySku, 
         const fwdHits   = catTokens.filter(t => model.includes(t)).length;
         const revHits   = modTokens.filter(t => catModel.includes(t)).length;
         if (fwdHits < Math.min(2, catTokens.length) && revHits < Math.min(2, modTokens.length)) continue;
-        const idText = model + ' ' + url.toLowerCase() + ' ' + colourText;
+        const idText = model + ' ' + idUrl + ' ' + colourText;
         for (const entry of entries) {
           if (entry.widthCm === size.widthCm && entry.heightCm === size.heightCm && entry.shape === shape
               && modelIdentityMatches(catModel, idText, entry.mustHave, { ...identityOpts, ...identityOptionsFor(entry), competitorModel: model })) {

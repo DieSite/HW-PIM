@@ -153,7 +153,8 @@ async function fetchListUrls({ listUrl, listPages = 50, listPageParam = 'p', lin
     // kan tussen twee verzoeken van volgorde wisselen en dan bevat een pagina
     // alleen al geziene producten. Op "geen nieuwe" stoppen kapte de crawl van
     // karpettenshop op 184 van de ~700 producten af.
-    const opPagina = [...html.matchAll(new RegExp(linkRe.source, 'g'))].map(m => m[0]);
+    // Relatieve links (vloerkledenvoordelig: "/vloerkleden/…") absoluut maken.
+    const opPagina = [...html.matchAll(new RegExp(linkRe.source, 'g'))].map(m => new URL(m[0], listUrl).href);
     for (const u of opPagina) found.add(u);
 
     leeg = opPagina.length === 0 ? leeg + 1 : 0;
