@@ -58,8 +58,8 @@ class UncoveredRugsSheet implements FromGenerator, ShouldAutoSize, WithColumnFor
     public function columnFormats(): array
     {
         return [
-            'G' => NumberFormat::FORMAT_CURRENCY_EUR_SIMPLE,
-            'H' => NumberFormat::FORMAT_CURRENCY_EUR_SIMPLE,
+            'G' => NumberFormat::FORMAT_CURRENCY_EUR,
+            'H' => NumberFormat::FORMAT_CURRENCY_EUR,
         ];
     }
 

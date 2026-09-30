@@ -2,19 +2,18 @@
 
 namespace Webkul\DebugBar\DataCollector;
 
-use DebugBar\DataCollector\AssetProvider;
 use DebugBar\DataCollector\DataCollector;
 use DebugBar\DataCollector\DataCollectorInterface;
-use DebugBar\DataCollector\PDO\PDOCollector;
 use DebugBar\DataCollector\Renderable;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Str;
 use Konekt\Concord\Facades\Concord;
 
 /**
  * Collector for UnoPim's Module Collector
  */
-class ModuleCollector extends DataCollector implements AssetProvider, DataCollectorInterface, Renderable
+class ModuleCollector extends DataCollector implements DataCollectorInterface, Renderable
 {
     public $models = [];
 
@@ -27,10 +26,8 @@ class ModuleCollector extends DataCollector implements AssetProvider, DataCollec
     /**
      * @return void
      */
-    public function __construct(
-        Dispatcher $events,
-        PDOCollector $pdoCollector
-    ) {
+    public function __construct(Dispatcher $events)
+    {
         $events->listen('eloquent.*', function ($event, $models) {
             if (Str::contains($event, 'eloquent.retrieved')) {
                 foreach (array_filter($models) as $model) {
@@ -48,11 +45,11 @@ class ModuleCollector extends DataCollector implements AssetProvider, DataCollec
         });
 
         app()['db']->listen(
-            function ($query, $bindings = null, $time = null, $connectionName = null) use ($pdoCollector) {
+            function ($query) {
                 $this->queries[] = [
                     'sql'          => $this->addQueryBindings($query),
                     'duration'     => $query->time,
-                    'duration_str' => $pdoCollector->formatDuration($query->time),
+                    'duration_str' => $this->getDataFormatter()->formatDuration($query->time / 1000),
                     'connection'   => $query->connection->getDatabaseName(),
                 ];
             }
@@ -60,7 +57,7 @@ class ModuleCollector extends DataCollector implements AssetProvider, DataCollec
     }
 
     /**
-     * @param  \Illuminate\Database\Events\QueryExecuted  $query
+     * @param  QueryExecuted  $query
      * @return string
      */
     public function addQueryBindings($query)
@@ -124,9 +121,12 @@ class ModuleCollector extends DataCollector implements AssetProvider, DataCollec
     }
 
     /**
-     * {@inheritdoc}
+     * Modules keyed by namespace, each rendered by the data formatter so the
+     * built-in variable-list widget can show it.
+     *
+     * @return array{count: int, data: array<string, string>}
      */
-    public function collect()
+    public function collect(): array
     {
         $modules = [];
 
@@ -142,21 +142,21 @@ class ModuleCollector extends DataCollector implements AssetProvider, DataCollec
                 || count($views)
                 || count($queries)
             ) {
-                $modules[] = [
-                    'name'    => $module->getNamespaceRoot(),
+                $modules[$module->getNamespaceRoot()] = $this->getDataFormatter()->formatVar([
                     'models'  => $models,
                     'views'   => $views,
-                    'queries' => $queries,
-                ];
+                    'queries' => array_map(
+                        fn (array $query): string => "{$query['sql']} ({$query['duration_str']}, {$query['connection']})",
+                        $queries,
+                    ),
+                ]);
             }
         }
 
-        $data = [
-            'count'   => count($modules),
-            'modules' => $modules,
+        return [
+            'count' => count($modules),
+            'data'  => $modules,
         ];
-
-        return $data;
     }
 
     /**
@@ -243,44 +243,34 @@ class ModuleCollector extends DataCollector implements AssetProvider, DataCollec
         return $tables;
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public function getName()
+    public function getName(): string
     {
         return 'modules';
     }
 
     /**
-     * {@inheritDoc}
+     * @return array<string, array<string, mixed>>
      */
-    public function getWidgets()
+    public function getWidgets(): array
     {
+        $widget = match (true) {
+            $this->isJsonVarDumperUsed() => 'PhpDebugBar.Widgets.JsonVariableListWidget',
+            $this->isHtmlVarDumperUsed() => 'PhpDebugBar.Widgets.HtmlVariableListWidget',
+            default                      => 'PhpDebugBar.Widgets.VariableListWidget',
+        };
+
         return [
             'modules'       => [
-                'icon'    => 'cubes',
-                'widget'  => 'PhpDebugBar.Widgets.ModulesWidget',
-                'map'     => 'modules',
-                'default' => '[]',
+                'icon'    => 'box',
+                'widget'  => $widget,
+                'map'     => 'modules.data',
+                'default' => '{}',
             ],
 
             'modules:badge' => [
                 'map'     => 'modules.count',
                 'default' => 0,
             ],
-        ];
-    }
-
-    /**
-     * @return array
-     */
-    public function getAssets()
-    {
-        return [
-            'base_path' => __DIR__.'/../Resources/',
-            'base_url'  => __DIR__.'/../Resources/',
-            'css'       => 'widgets/modules/widget.css',
-            'js'        => 'widgets/modules/widget.js',
         ];
     }
 }

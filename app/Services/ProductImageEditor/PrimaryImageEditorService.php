@@ -4,6 +4,7 @@ namespace App\Services\ProductImageEditor;
 
 use App\Services\ProductImageEditor\Concerns\HandlesDamValues;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Format;
 use Webkul\DAM\Models\Asset;
 use Webkul\DAM\Repositories\AssetResourceMappingRepository;
 use Webkul\Product\Models\Product;
@@ -77,13 +78,13 @@ class PrimaryImageEditorService
 
         $primaryAsset = $this->writer->store(
             $source,
-            (string) $this->compositor->render($sourceContents, $transform, $iconContents, true)->toJpeg($quality),
+            (string) $this->compositor->render($sourceContents, $transform, $iconContents, true)->encodeUsingFormat(Format::JPEG, quality: $quality),
             'hw',
         );
 
         $noLogoAsset = $this->writer->store(
             $source,
-            (string) $this->compositor->render($sourceContents, $transform, $iconContents, false)->toJpeg($quality),
+            (string) $this->compositor->render($sourceContents, $transform, $iconContents, false)->encodeUsingFormat(Format::JPEG, quality: $quality),
             'zonder-logo',
         );
 
@@ -240,7 +241,7 @@ class PrimaryImageEditorService
 
             $stripped = $this->writer->store(
                 $asset,
-                (string) $this->compositor->removeShapeOutline($contents, $shape)->toJpeg($quality),
+                (string) $this->compositor->removeShapeOutline($contents, $shape)->encodeUsingFormat(Format::JPEG, quality: $quality),
                 'geen-rand',
             );
 

@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Services\CompetitorCoverageAnalyzer;
+use Maatwebsite\Excel\Concerns\Export;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
@@ -12,7 +13,7 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
  * zodat meteen te zien is wat data-onderhoud oplevert en wat er per definitie
  * buiten valt.
  */
-class CompetitorCoverageExport implements WithMultipleSheets
+class CompetitorCoverageExport implements Export, WithMultipleSheets
 {
     /**
      * Eén teller, gedeeld door beide bladen. Het samenvattingsblad komt als

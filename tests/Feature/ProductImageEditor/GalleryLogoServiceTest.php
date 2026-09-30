@@ -3,6 +3,7 @@
 use App\Models\AssetLogoVariant;
 use App\Services\ProductImageEditor\GalleryLogoService;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Format;
 use Intervention\Image\ImageManager;
 use Webkul\Core\Models\CoreConfig;
 use Webkul\DAM\Models\Asset;
@@ -14,7 +15,7 @@ function makeGalleryAsset(?string $fileName = null, ?string $bytes = null): Asse
     static $counter = 0;
     $counter++;
 
-    $bytes ??= (string) app(ImageManager::class)->create(800, 1000)->fill('cc8844')->toJpeg();
+    $bytes ??= (string) app(ImageManager::class)->createImage(800, 1000)->fill('cc8844')->encodeUsingFormat(Format::JPEG);
 
     $fileName ??= "gallery-image-{$counter}.jpg";
     $path = "wp-content/Images/{$fileName}";
@@ -37,7 +38,7 @@ beforeEach(function () {
     config()->set('product_image_editor.enabled', true);
     config()->set('product_image_editor.primary_attribute', 'afbeelding');
 
-    $icon = (string) app(ImageManager::class)->create(50, 50)->fill('0000ff')->toPng();
+    $icon = (string) app(ImageManager::class)->createImage(50, 50)->fill('0000ff')->encodeUsingFormat(Format::PNG);
     Storage::disk(config('filesystems.default'))->put('configuration/hw-icon.png', $icon);
 
     CoreConfig::create([
@@ -74,12 +75,12 @@ it('stamps the HW logo on every gallery image and rewires the product', function
 
         // Original dimensions are preserved; the icon sits in the bottom-left
         // (source 800x1000 -> icon box roughly x 35..148, y 852..965).
-        $image = app(ImageManager::class)->read(Storage::disk('private')->get($variant->path));
+        $image = app(ImageManager::class)->decode(Storage::disk('private')->get($variant->path));
 
         // JPEG compression may shift channels by a unit, so allow a small tolerance.
         [$red, $green, $blue] = array_map(
             fn ($channel) => $channel->value(),
-            $image->pickColor(60, 900)->channels(),
+            $image->colorAt(60, 900)->channels(),
         );
 
         expect($image->width())->toBe(800)
@@ -172,11 +173,11 @@ it('visually recognises a manually stamped image and never re-stamps it', functi
     // sized ~15% larger and placed slightly differently than the automatic one.
     $manager = app(ImageManager::class);
 
-    $image = $manager->create(800, 1000)->fill('cc8844');
-    $manualStamp = $manager->create(50, 50)->fill('0000ff')->resize(130, 130);
-    $image->place($manualStamp, 'top-left', 42, 1000 - 42 - 130);
+    $image = $manager->createImage(800, 1000)->fill('cc8844');
+    $manualStamp = $manager->createImage(50, 50)->fill('0000ff')->resize(130, 130);
+    $image->insert($manualStamp, 42, 1000 - 42 - 130);
 
-    $manuallyStamped = makeGalleryAsset(null, (string) $image->toJpeg());
+    $manuallyStamped = makeGalleryAsset(null, (string) $image->encodeUsingFormat(Format::JPEG));
 
     $product = Product::factory()->simple()->create([
         'values' => ['common' => ['afbeelding' => (string) $manuallyStamped->id]],

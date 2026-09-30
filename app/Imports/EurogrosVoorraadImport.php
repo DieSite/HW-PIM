@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Services\ProductService;
 use App\Services\WooCommerceStockSyncService;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Model;
 use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
@@ -20,7 +21,7 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
 {
     use Importable;
 
-    public function model(array $row)
+    public function model(array $row): Model|array|null
     {
         if (! isset($row['ean']) || ! isset($row['vrd'])) {
             return null;
@@ -70,7 +71,7 @@ class EurogrosVoorraadImport implements ShouldQueue, ToModel, WithChunkReading, 
         return 60;
     }
 
-    public function uniqueBy()
+    public function uniqueBy(): string|array
     {
         return 'ean';
     }

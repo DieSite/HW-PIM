@@ -355,6 +355,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             );
 
             if (! isset($existingVariation[0])) {
+                $existingVariation = $this->previouslySyncedVariation($productData['sku'], $parentExternalId);
+            }
+
+            if (! isset($existingVariation[0])) {
                 $result = $this->connectorService->requestApiAction(
                     self::ACTION_ADD_VARIATION,
                     $productData,
@@ -396,6 +400,10 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             );
 
             if (! isset($existingProduct[0])) {
+                $existingProduct = $this->previouslySyncedProduct($productData['sku']);
+            }
+
+            if (! isset($existingProduct[0])) {
                 $result = $this->connectorService->requestApiAction(
                     self::ACTION_ADD,
                     $productData,
@@ -411,6 +419,82 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         $this->handleWoocommerceResponse($result, $productData);
+    }
+
+    /**
+     * The WooCommerce variation this variant was synced to last time. The SKU
+     * lookup misses it once the variant's SKU has changed, e.g. from the
+     * temporary-sku-* a copied product starts with to its real SKU, and
+     * adding a new variation would leave the old one behind as a duplicate
+     * of the same size.
+     *
+     * @return array<int, array<string, mixed>> Empty when there is none to reuse
+     */
+    private function previouslySyncedVariation(string $sku, mixed $parentExternalId): array
+    {
+        $externalId = $this->lastSyncedExternalId($sku);
+
+        if ($externalId === null) {
+            return [];
+        }
+
+        $variation = $this->connectorService->requestApiAction(
+            'getVariationById',
+            [],
+            ['product' => $parentExternalId, 'variationid' => $externalId]
+        );
+
+        $belongsToParent = ($variation['code'] ?? null) === 200
+            && (string) ($variation['parent_id'] ?? '') === (string) $parentExternalId;
+
+        return $belongsToParent && $this->isFreeToTake($variation['sku'] ?? '', $sku) ? [$variation] : [];
+    }
+
+    /**
+     * The WooCommerce product this parent was synced to last time; see
+     * previouslySyncedVariation().
+     *
+     * @return array<int, array<string, mixed>> Empty when there is none to reuse
+     */
+    private function previouslySyncedProduct(string $sku): array
+    {
+        $externalId = $this->lastSyncedExternalId($sku);
+
+        if ($externalId === null) {
+            return [];
+        }
+
+        $product = $this->connectorService->requestApiAction('getProduct', [], ['id' => $externalId]);
+
+        $isLiveParent = ($product['code'] ?? null) === 200
+            && empty($product['parent_id'])
+            && ($product['status'] ?? null) !== 'trash';
+
+        return $isLiveParent && $this->isFreeToTake($product['sku'] ?? '', $sku) ? [$product] : [];
+    }
+
+    /**
+     * The WooCommerce id of the last successful sync of the PIM product that
+     * now has this SKU. Sync events are stored per PIM product, so they keep
+     * the link when the SKU changes.
+     */
+    private function lastSyncedExternalId(string $sku): ?string
+    {
+        return Product::whereSku($sku)->first()
+            ?->wooCommerceSyncEvents()
+            ->where('status', WooCommerceSyncEventStatus::Success)
+            ->whereNotNull('external_id')
+            ->value('external_id');
+    }
+
+    /**
+     * Whether the WooCommerce object with this SKU may be taken over by the
+     * PIM product with $sku: not when another PIM product has that SKU now,
+     * because the object belongs to that product.
+     */
+    private function isFreeToTake(string $wooCommerceSku, string $sku): bool
+    {
+        return $wooCommerceSku === '' || $wooCommerceSku === $sku || ! Product::whereSku($wooCommerceSku)->exists();
     }
 
     private function deleteAndRetry(callable $deleteFn, string $sku, ?array $productData, string $errorKey, mixed $errorValue): void

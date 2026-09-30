@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HW-PIM is a customized fork of [UnoPim](https://unopim.com/), an open-source Product Information Management (PIM) system built on Laravel 12. It is extended with integrations for Bol.com, WooCommerce, Eurogros (a vendor), and Digital Ocean Spaces for file storage.
+HW-PIM is a customized fork of [UnoPim](https://unopim.com/), an open-source Product Information Management (PIM) system built on Laravel 13. It is extended with integrations for Bol.com, WooCommerce, Eurogros (a vendor), and Digital Ocean Spaces for file storage.
 
 ## Common Commands
 
@@ -163,17 +163,17 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
 - php - 8.3.12
-- laravel/framework (LARAVEL) - v12
+- laravel/framework (LARAVEL) - v13
 - laravel/horizon (HORIZON) - v5
-- laravel/passport (PASSPORT) - v12
+- laravel/passport (PASSPORT) - v13
 - laravel/prompts (PROMPTS) - v0
 - laravel/sanctum (SANCTUM) - v4
 - laravel/socialite (SOCIALITE) - v5
 - laravel/boost (BOOST) - v2
 - laravel/mcp (MCP) - v0
 - laravel/pint (PINT) - v1
-- pestphp/pest (PEST) - v3
-- phpunit/phpunit (PHPUNIT) - v11
+- pestphp/pest (PEST) - v4
+- phpunit/phpunit (PHPUNIT) - v12
 
 ## Skills Activation
 

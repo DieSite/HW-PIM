@@ -6,6 +6,7 @@ use Maatwebsite\Excel\Concerns\FromGenerator;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class DataGridExport implements FromGenerator, WithCustomCsvSettings, WithStyles
 {
@@ -106,7 +107,7 @@ class DataGridExport implements FromGenerator, WithCustomCsvSettings, WithStyles
         ];
     }
 
-    public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)
+    public function styles(Worksheet $sheet): ?array
     {
         return [
             1 => [

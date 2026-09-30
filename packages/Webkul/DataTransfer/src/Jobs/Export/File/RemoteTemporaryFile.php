@@ -115,7 +115,7 @@ class RemoteTemporaryFile extends TemporaryFile
     /**
      * @param  string|resource  $contents
      */
-    public function put($contents)
+    public function put($contents): void
     {
         $this->disk()->put($this->filename, $contents);
     }

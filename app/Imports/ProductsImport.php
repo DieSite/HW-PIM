@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Category;
 use App\Models\Product;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\Importable;
@@ -20,7 +21,7 @@ class ProductsImport implements ToModel, WithCalculatedFormulas, WithChunkReadin
 {
     use Importable;
 
-    public function model(array $row)
+    public function model(array $row): Model|array|null
     {
 
         $type = 'simple';
@@ -156,7 +157,7 @@ class ProductsImport implements ToModel, WithCalculatedFormulas, WithChunkReadin
         ]);
     }
 
-    public function uniqueBy()
+    public function uniqueBy(): string|array
     {
         return 'code';
     }

@@ -1,17 +1,18 @@
 <?php
 
 use App\Services\ProductImageEditor\ImageCompositor;
+use Intervention\Image\Format;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\ImageInterface;
 
 function compositorPng(int $width, int $height, string $color): string
 {
-    return (string) app(ImageManager::class)->create($width, $height)->fill($color)->toPng();
+    return (string) app(ImageManager::class)->createImage($width, $height)->fill($color)->encodeUsingFormat(Format::PNG);
 }
 
 function compositorHexAt(ImageInterface $image, int $x, int $y): string
 {
-    return ltrim($image->pickColor($x, $y)->toHex(), '#');
+    return ltrim($image->colorAt($x, $y)->toHex(), '#');
 }
 
 function compositorTransform(array $overrides = []): array
@@ -33,10 +34,10 @@ function compositorTransform(array $overrides = []): array
  */
 function compositorTwoTone(): string
 {
-    $image = app(ImageManager::class)->create(400, 600)->fill('0000ff');
-    $image->place(app(ImageManager::class)->create(400, 300)->fill('ff0000'), 'top-left', 0, 0);
+    $image = app(ImageManager::class)->createImage(400, 600)->fill('0000ff');
+    $image->insert(app(ImageManager::class)->createImage(400, 300)->fill('ff0000'), 0, 0);
 
-    return (string) $image->toPng();
+    return (string) $image->encodeUsingFormat(Format::PNG);
 }
 
 beforeEach(function () {
@@ -244,7 +245,7 @@ function compositorRondComposite(ImageCompositor $compositor, bool $outline, str
         compositorTransform(['shape' => 'rond', 'rect' => $rondRect, 'outline' => $outline]),
         null,
         false,
-    )->toJpeg(90);
+    )->encodeUsingFormat(Format::JPEG, quality: 90);
 }
 
 /**
@@ -291,7 +292,7 @@ it('removes the outline from a composite, leaving the rug and white padding inta
         ->and($out->height())->toBe(1094)
         ->and(compositorColorNear($out, 5, 5, 'ffffff'))->toBeTrue()
         ->and(compositorColorNear($out, 458, 547, 'cc8844'))->toBeTrue()
-        ->and($this->compositor->detectShapeOutline((string) $out->toJpeg(90), 'rond'))->toBeFalse();
+        ->and($this->compositor->detectShapeOutline((string) $out->encodeUsingFormat(Format::JPEG, quality: 90), 'rond'))->toBeFalse();
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
 it('removes a thicker legacy outline than the configured width', function () {
@@ -304,7 +305,7 @@ it('removes a thicker legacy outline than the configured width', function () {
     $out = $this->compositor->removeShapeOutline($with, 'rond');
 
     expect(compositorColorNear($out, 458, 547, 'cc8844'))->toBeTrue()
-        ->and($this->compositor->detectShapeOutline((string) $out->toJpeg(90), 'rond'))->toBeFalse();
+        ->and($this->compositor->detectShapeOutline((string) $out->encodeUsingFormat(Format::JPEG, quality: 90), 'rond'))->toBeFalse();
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
 it('keeps the HW icon outside the shape when stripping the outline', function () {
@@ -315,13 +316,13 @@ it('keeps the HW icon outside the shape when stripping the outline', function ()
         compositorTransform(['shape' => 'rond', 'rect' => $rondRect, 'outline' => true]),
         $this->icon,
         true,
-    )->toJpeg(90);
+    )->encodeUsingFormat(Format::JPEG, quality: 90);
 
     $out = $this->compositor->removeShapeOutline($with, 'rond');
 
     // The bottom-left icon survives; the outline is still gone.
     expect(compositorColorNear($out, 60, 1000, '0000ff'))->toBeTrue()
-        ->and($this->compositor->detectShapeOutline((string) $out->toJpeg(90), 'rond'))->toBeFalse();
+        ->and($this->compositor->detectShapeOutline((string) $out->encodeUsingFormat(Format::JPEG, quality: 90), 'rond'))->toBeFalse();
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
 it('keeps the rug clipped inside the rectangle when scaled up', function () {

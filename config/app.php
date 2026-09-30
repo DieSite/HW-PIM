@@ -1,7 +1,43 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\AuthServiceProvider;
+use App\Providers\EventServiceProvider;
+use App\Providers\HorizonServiceProvider;
+use App\Providers\RouteServiceProvider;
+use Astrotomic\Translatable\TranslatableServiceProvider;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\ServiceProvider;
+use Konekt\Concord\ConcordServiceProvider;
+use Konekt\Concord\Facades\Concord;
+use Konekt\Concord\Facades\Helper;
+use Maatwebsite\Excel\ExcelServiceProvider;
+use Maatwebsite\Excel\Facades\Excel;
+use OwenIt\Auditing\AuditingServiceProvider;
+use Prettus\Repository\Providers\RepositoryServiceProvider;
+use Webkul\Admin\Providers\AdminServiceProvider;
+use Webkul\AdminApi\Providers\AdminApiServiceProvider;
+use Webkul\Attribute\Providers\AttributeServiceProvider;
+use Webkul\Category\Providers\CategoryServiceProvider;
+use Webkul\Core\Facades\Core;
+use Webkul\Core\Providers\CoreServiceProvider;
+use Webkul\Core\Providers\EnvValidatorServiceProvider;
+use Webkul\DAM\Providers\DAMServiceProvider;
+use Webkul\DataGrid\Providers\DataGridServiceProvider;
+use Webkul\DataTransfer\Providers\DataTransferServiceProvider;
+use Webkul\DebugBar\Providers\DebugBarServiceProvider;
+use Webkul\HistoryControl\Providers\HistoryControlServiceProvider;
+use Webkul\Installer\Providers\InstallerServiceProvider;
+use Webkul\MagicAI\Providers\MagicAIServiceProvider;
+use Webkul\Notification\Providers\NotificationServiceProvider;
+use Webkul\Product\Facades\ProductImage;
+use Webkul\Product\Facades\ProductVideo;
+use Webkul\Product\Providers\ProductServiceProvider;
+use Webkul\Theme\Providers\ThemeServiceProvider;
+use Webkul\User\Providers\UserServiceProvider;
+use Webkul\WooCommerce\Providers\WooCommerceServiceProvider;
 
 return [
     /*
@@ -159,44 +195,43 @@ return [
         /**
          * Package service providers.
          */
-        Astrotomic\Translatable\TranslatableServiceProvider::class,
+        TranslatableServiceProvider::class,
         Barryvdh\DomPDF\ServiceProvider::class,
-        Konekt\Concord\ConcordServiceProvider::class,
-        Maatwebsite\Excel\ExcelServiceProvider::class,
-        Prettus\Repository\Providers\RepositoryServiceProvider::class,
-        OwenIt\Auditing\AuditingServiceProvider::class,
+        ConcordServiceProvider::class,
+        ExcelServiceProvider::class,
+        RepositoryServiceProvider::class,
+        AuditingServiceProvider::class,
 
         /**
          * Application service providers.
          */
-        App\Providers\AppServiceProvider::class,
-        App\Providers\AuthServiceProvider::class,
-        App\Providers\EventServiceProvider::class,
-        App\Providers\HorizonServiceProvider::class,
-        App\Providers\RouteServiceProvider::class,
+        AppServiceProvider::class,
+        AuthServiceProvider::class,
+        EventServiceProvider::class,
+        HorizonServiceProvider::class,
+        RouteServiceProvider::class,
 
         /**
          * Webkul package service providers.
          */
-        Webkul\AdminApi\Providers\AdminApiServiceProvider::class,
-        Webkul\Admin\Providers\AdminServiceProvider::class,
-        Webkul\Attribute\Providers\AttributeServiceProvider::class,
-        Webkul\Category\Providers\CategoryServiceProvider::class,
-        Webkul\Core\Providers\CoreServiceProvider::class,
-        Webkul\Core\Providers\EnvValidatorServiceProvider::class,
-        Webkul\DataGrid\Providers\DataGridServiceProvider::class,
-        Webkul\DataTransfer\Providers\DataTransferServiceProvider::class,
-        Webkul\DebugBar\Providers\DebugBarServiceProvider::class,
-        Webkul\FPC\Providers\FPCServiceProvider::class,
-        Webkul\HistoryControl\Providers\HistoryControlServiceProvider::class,
-        Webkul\Installer\Providers\InstallerServiceProvider::class,
-        Webkul\MagicAI\Providers\MagicAIServiceProvider::class,
-        Webkul\Notification\Providers\NotificationServiceProvider::class,
-        Webkul\Product\Providers\ProductServiceProvider::class,
-        Webkul\Theme\Providers\ThemeServiceProvider::class,
-        Webkul\User\Providers\UserServiceProvider::class,
-        Webkul\WooCommerce\Providers\WooCommerceServiceProvider::class,
-        Webkul\DAM\Providers\DAMServiceProvider::class,
+        AdminApiServiceProvider::class,
+        AdminServiceProvider::class,
+        AttributeServiceProvider::class,
+        CategoryServiceProvider::class,
+        CoreServiceProvider::class,
+        EnvValidatorServiceProvider::class,
+        DataGridServiceProvider::class,
+        DataTransferServiceProvider::class,
+        DebugBarServiceProvider::class,
+        HistoryControlServiceProvider::class,
+        InstallerServiceProvider::class,
+        MagicAIServiceProvider::class,
+        NotificationServiceProvider::class,
+        ProductServiceProvider::class,
+        ThemeServiceProvider::class,
+        UserServiceProvider::class,
+        WooCommerceServiceProvider::class,
+        DAMServiceProvider::class,
 
     ])->toArray(),
 
@@ -212,13 +247,13 @@ return [
     */
 
     'aliases' => Facade::defaultAliases()->merge([
-        'Concord'      => Konekt\Concord\Facades\Concord::class,
-        'Core'         => Webkul\Core\Facades\Core::class,
-        'Excel'        => Maatwebsite\Excel\Facades\Excel::class,
-        'Helper'       => Konekt\Concord\Facades\Helper::class,
-        'PDF'          => Barryvdh\DomPDF\Facade\Pdf::class,
-        'ProductImage' => Webkul\Product\Facades\ProductImage::class,
-        'ProductVideo' => Webkul\Product\Facades\ProductVideo::class,
-        'Redis'        => Illuminate\Support\Facades\Redis::class,
+        'Concord'      => Concord::class,
+        'Core'         => Core::class,
+        'Excel'        => Excel::class,
+        'Helper'       => Helper::class,
+        'PDF'          => Pdf::class,
+        'ProductImage' => ProductImage::class,
+        'ProductVideo' => ProductVideo::class,
+        'Redis'        => Redis::class,
     ])->toArray(),
 ];

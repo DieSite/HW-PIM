@@ -70,7 +70,7 @@ class Controller
 
         try {
             $content = Cache::remember($cacheKey, $cacheTime * 60, function () use ($manager, $path, $templateCallback) {
-                $img = $manager->read($path);
+                $img = $manager->decode($path);
 
                 if ($templateCallback instanceof Closure) {
                     $templateCallback($img);

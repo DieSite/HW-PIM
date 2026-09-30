@@ -5,6 +5,7 @@ namespace App\Services\ProductImageEditor;
 use App\Models\AssetLogoVariant;
 use App\Services\ProductImageEditor\Concerns\HandlesDamValues;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Format;
 use Webkul\DAM\Models\Asset;
 use Webkul\DAM\Repositories\AssetResourceMappingRepository;
 use Webkul\Product\Models\Product;
@@ -137,7 +138,7 @@ class GalleryLogoService
 
             $stamped = $this->compositor->stampIcon($contents, $iconContents);
 
-            $variant = $this->writer->store($asset, (string) $stamped->toJpeg($quality), 'hw');
+            $variant = $this->writer->store($asset, (string) $stamped->encodeUsingFormat(Format::JPEG, quality: $quality), 'hw');
 
             AssetLogoVariant::updateOrCreate(
                 ['source_asset_id' => $id],

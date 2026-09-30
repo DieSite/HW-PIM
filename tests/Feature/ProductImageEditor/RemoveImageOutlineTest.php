@@ -3,6 +3,7 @@
 use App\Services\ProductImageEditor\ImageCompositor;
 use App\Services\ProductImageEditor\PrimaryImageEditorService;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Format;
 use Intervention\Image\ImageManager;
 use Webkul\DAM\Models\Asset;
 use Webkul\Product\Models\Product;
@@ -36,7 +37,7 @@ function outlineTestAsset(string $bytes): Asset
 function outlineTestComposite(bool $outline): string
 {
     return (string) app(ImageCompositor::class)->render(
-        (string) app(ImageManager::class)->create(800, 800)->fill('cc8844')->toPng(),
+        (string) app(ImageManager::class)->createImage(800, 800)->fill('cc8844')->encodeUsingFormat(Format::PNG),
         [
             'shape'   => 'rond',
             'rect'    => config('product_image_editor.shapes.rond.rect'),
@@ -46,7 +47,7 @@ function outlineTestComposite(bool $outline): string
         ],
         null,
         false,
-    )->toJpeg(90);
+    )->encodeUsingFormat(Format::JPEG, quality: 90);
 }
 
 function outlineTestPrimaryBytes(Product $product): string
@@ -65,7 +66,7 @@ beforeEach(function () {
 });
 
 it('re-composites from the recorded transform and source asset', function () {
-    $source = outlineTestAsset((string) app(ImageManager::class)->create(800, 800)->fill('cc8844')->toJpeg());
+    $source = outlineTestAsset((string) app(ImageManager::class)->createImage(800, 800)->fill('cc8844')->encodeUsingFormat(Format::JPEG));
 
     $product = Product::factory()->simple()->create([
         'values' => ['common' => ['afbeelding' => (string) $source->id]],
@@ -125,7 +126,7 @@ it('pixel-strips the outline when no transform or source is available', function
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
 it('refuses to re-composite when the transform wants the HW icon but none is configured', function () {
-    $source = outlineTestAsset((string) app(ImageManager::class)->create(800, 800)->fill('cc8844')->toJpeg());
+    $source = outlineTestAsset((string) app(ImageManager::class)->createImage(800, 800)->fill('cc8844')->encodeUsingFormat(Format::JPEG));
     $primary = outlineTestAsset(outlineTestComposite(true));
 
     $product = Product::factory()->simple()->create([
@@ -173,7 +174,7 @@ it('skips products whose transform already records outline=false', function () {
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
 it('reports non-standard images for manual handling and leaves them untouched', function () {
-    $odd = outlineTestAsset((string) app(ImageManager::class)->create(500, 400)->fill('cc8844')->toJpeg());
+    $odd = outlineTestAsset((string) app(ImageManager::class)->createImage(500, 400)->fill('cc8844')->encodeUsingFormat(Format::JPEG));
 
     $product = Product::factory()->simple()->create([
         'values' => ['common' => ['vorm' => 'Rond', 'afbeelding' => (string) $odd->id]],

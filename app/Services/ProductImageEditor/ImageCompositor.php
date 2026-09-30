@@ -71,11 +71,11 @@ class ImageCompositor
         if ($padding && $maskPath !== null) {
             $canvas = $this->renderMaskedShape($sourceContents, $transform, $outputWidth, $outputHeight, $rect, $maskPath);
         } elseif ($padding) {
-            $canvas = $this->renderWithPadding($this->imageManager->read($sourceContents), $transform, $outputWidth, $outputHeight, $rect);
+            $canvas = $this->renderWithPadding($this->imageManager->decode($sourceContents), $transform, $outputWidth, $outputHeight, $rect);
         } elseif ($resize) {
-            $canvas = $this->renderContained($this->imageManager->read($sourceContents), $outputWidth, $outputHeight, $this->rotationAngle($transform));
+            $canvas = $this->renderContained($this->imageManager->decode($sourceContents), $outputWidth, $outputHeight, $this->rotationAngle($transform));
         } else {
-            $canvas = $this->rotate($this->imageManager->read($sourceContents), $this->rotationAngle($transform));
+            $canvas = $this->rotate($this->imageManager->decode($sourceContents), $this->rotationAngle($transform));
         }
 
         if ($iconEnabled && $iconContents !== null && $iconContents !== '') {
@@ -95,7 +95,7 @@ class ImageCompositor
     {
         $config = config('product_image_editor');
 
-        $canvas = $this->imageManager->read($sourceContents);
+        $canvas = $this->imageManager->decode($sourceContents);
 
         $ratio = $canvas->width() / max(1, (int) $config['output']['width']);
 
@@ -203,7 +203,7 @@ class ImageCompositor
         $image->setImageBackgroundColor('white');
         $image->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
 
-        return $this->imageManager->read($image->getImageBlob());
+        return $this->imageManager->decode($image->getImageBlob());
     }
 
     /**
@@ -421,7 +421,7 @@ class ImageCompositor
         $canvas->setImageBackgroundColor('white');
         $canvas->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
 
-        return $this->imageManager->read($canvas->getImageBlob());
+        return $this->imageManager->decode($canvas->getImageBlob());
     }
 
     /**
@@ -437,7 +437,7 @@ class ImageCompositor
         int $outputHeight,
         array $rect
     ): ImageInterface {
-        $canvas = $this->imageManager->create($outputWidth, $outputHeight)->fill('ffffff');
+        $canvas = $this->imageManager->createImage($outputWidth, $outputHeight)->fill('ffffff');
 
         $rx = (int) $rect['x'];
         $ry = (int) $rect['y'];
@@ -478,7 +478,7 @@ class ImageCompositor
 
         if ($visibleWidth > 0 && $visibleHeight > 0) {
             $crop = $resized->crop($visibleWidth, $visibleHeight, $srcLeft, $srcTop);
-            $canvas->place($crop, 'top-left', $rx + $dstLeft, $ry + $dstTop);
+            $canvas->insert($crop, $rx + $dstLeft, $ry + $dstTop);
         }
 
         return $canvas;
@@ -489,14 +489,14 @@ class ImageCompositor
      */
     private function renderContained(ImageInterface $source, int $outputWidth, int $outputHeight, float $rotation = 0.0): ImageInterface
     {
-        $canvas = $this->imageManager->create($outputWidth, $outputHeight)->fill('ffffff');
+        $canvas = $this->imageManager->createImage($outputWidth, $outputHeight)->fill('ffffff');
 
         $scale = min($outputWidth / $source->width(), $outputHeight / $source->height());
 
         $width = max(1, (int) round($source->width() * $scale));
         $height = max(1, (int) round($source->height() * $scale));
 
-        $canvas->place($this->rotate($source->resize($width, $height), $rotation), 'center');
+        $canvas->insert($this->rotate($source->resize($width, $height), $rotation), alignment: 'center');
 
         return $canvas;
     }
@@ -504,9 +504,8 @@ class ImageCompositor
     /**
      * Rotate an Intervention image around its centre, expanding the canvas and
      * filling the exposed corners with white. A positive angle rotates
-     * clockwise to match the browser preview (CSS rotate) and the Imagick path.
-     * Intervention's rotate() is counter-clockwise for a positive angle, hence
-     * the negated angle.
+     * clockwise to match the browser preview (CSS rotate) and the Imagick path,
+     * which is also the direction Intervention 4's rotate() turns.
      */
     private function rotate(ImageInterface $image, float $rotation): ImageInterface
     {
@@ -514,7 +513,7 @@ class ImageCompositor
             return $image;
         }
 
-        return $image->rotate(-$rotation, 'ffffff');
+        return $image->rotate($rotation, 'ffffff');
     }
 
     /**
@@ -557,7 +556,7 @@ class ImageCompositor
      */
     private function overlayIcon(ImageInterface $canvas, string $iconContents, array $iconConfig): void
     {
-        $icon = $this->imageManager->read($iconContents);
+        $icon = $this->imageManager->decode($iconContents);
 
         $iconWidth = (int) $iconConfig['width'];
         $margin = (int) $iconConfig['margin'];
@@ -568,6 +567,6 @@ class ImageCompositor
         $x = $margin;
         $y = $canvas->height() - $margin - $iconHeight;
 
-        $canvas->place($icon, 'top-left', $x, $y);
+        $canvas->insert($icon, $x, $y);
     }
 }

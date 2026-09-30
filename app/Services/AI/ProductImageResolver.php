@@ -5,6 +5,7 @@ namespace App\Services\AI;
 use App\Models\Product;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Format;
 use Intervention\Image\ImageManager;
 use Throwable;
 use Webkul\DAM\Models\Asset;
@@ -94,9 +95,9 @@ class ProductImageResolver
     private function downscale(string $bytes): string
     {
         return $this->imageManager
-            ->read($bytes)
+            ->decode($bytes)
             ->scaleDown(self::MAX_EDGE, self::MAX_EDGE)
-            ->toJpeg(85)
+            ->encodeUsingFormat(Format::JPEG, quality: 85)
             ->toString();
     }
 

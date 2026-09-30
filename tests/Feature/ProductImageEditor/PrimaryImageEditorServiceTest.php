@@ -2,6 +2,7 @@
 
 use App\Services\ProductImageEditor\PrimaryImageEditorService;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Format;
 use Intervention\Image\ImageManager;
 use Webkul\DAM\Models\Asset;
 use Webkul\DAM\Models\AssetResourceMapping;
@@ -13,7 +14,7 @@ function makeSourceAsset(): Asset
     static $counter = 0;
     $counter++;
 
-    $bytes = (string) app(ImageManager::class)->create(800, 1000)->fill('cc8844')->toJpeg();
+    $bytes = (string) app(ImageManager::class)->createImage(800, 1000)->fill('cc8844')->encodeUsingFormat(Format::JPEG);
 
     $fileName = "source-rug-{$counter}.jpg";
     $path = "wp-content/Images/{$fileName}";
