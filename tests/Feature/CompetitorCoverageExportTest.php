@@ -85,7 +85,23 @@ it('leaves variants we never find at a competitor out, even without a competitor
     'met onderkleed'       => [['onderkleed' => 'Met onderkleed']],
     'maatwerk'             => [['maat' => 'Maatwerk']],
     'maatwerk zonder merk' => [['maat' => 'Maatwerk', 'productnaam' => '']],
+    'bijzondere vorm'      => [['vorm' => 'Hexagon']],
+    'ovaal'                => [['vorm' => 'Ovaal']],
+    'oval'                 => [['vorm' => 'Oval']],
 ]);
+
+it('leaves a special shape out when only the parent names it', function () {
+    makeCoverageVariant([], 'COVTEST-PARENTSHAPE', ['merk' => 'De Munk', 'vorm' => 'Organic']);
+
+    expect(uncoveredBySku())->not->toHaveKey('COVTEST-PARENTSHAPE');
+});
+
+it('keeps the regular shapes in the list', function (string $vorm) {
+    makeCoverageVariant(['vorm' => $vorm], 'COVTEST-REGULARSHAPE');
+
+    expect(uncoveredBySku()['COVTEST-REGULARSHAPE']['reden'])
+        ->toBe(CompetitorCoverageAnalyzer::REASON_NO_MATCH);
+})->with(['Rechthoek', 'Vierkant', 'Rond']);
 
 it('ignores a competitor row without a real price', function () {
     $variant = makeCoverageVariant([], 'COVTEST-ZERO');

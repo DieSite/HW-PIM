@@ -17,10 +17,11 @@ use App\Models\Product;
  *
  * Per kleed wordt één reden gerapporteerd: de meest blokkerende.
  *
- * Varianten "Met onderkleed" en maatwerk staan er helemaal niet in: die
- * vinden we nooit bij een externe partij, dus ze zouden de lijst alleen maar
- * vullen met regels waar niemand iets mee kan. De met-onderkleed-prijs volgt
- * de variant zonder onderkleed.
+ * Varianten "Met onderkleed", maatwerk en bijzondere vormen (ovaal,
+ * Organic, Hexagon, …) staan er helemaal niet in: die vinden we nooit bij een
+ * externe partij, dus ze zouden de lijst alleen maar vullen met regels waar
+ * niemand iets mee kan. De met-onderkleed-prijs volgt de variant zonder
+ * onderkleed.
  *
  * @see CompetitorCatalogExporter  bouwt de catalogus-CSV
  * @see CompetitorPricingService   rekent de prijs door
@@ -36,6 +37,15 @@ class CompetitorCoverageAnalyzer
     public const REASON_SIZE = 'Geen bruikbare maat';
 
     public const REASON_NO_MATCH = 'Geen concurrent gevonden';
+
+    /**
+     * De enige gewone vormen. Elke andere waarde van het `vorm`-attribuut —
+     * ook ovaal — geldt als bijzondere vorm; een leeg attribuut als gewone
+     * vorm.
+     *
+     * @var array<int, string>
+     */
+    private const REGULAR_SHAPES = ['rechthoek', 'vierkant', 'rond'];
 
     /**
      * Wat elke reden betekent, in de taal van wie het rapport leest.
@@ -81,8 +91,8 @@ class CompetitorCoverageAnalyzer
 
     /**
      * De reden waarom dit kleed buiten de analyse valt, of null als het er
-     * gewoon in zit of als met-onderkleed- of maatwerkvariant niet
-     * gerapporteerd wordt.
+     * gewoon in zit of als met-onderkleed-, maatwerk- of bijzondere-vorm-
+     * variant niet gerapporteerd wordt.
      */
     public function reason(Product $variant, bool $hasCompetitorPrice): ?string
     {
@@ -96,6 +106,10 @@ class CompetitorCoverageAnalyzer
         $maat = trim((string) ($common['maat'] ?? ''));
 
         if (stripos($maat, 'maatwerk') !== false) {
+            return null;
+        }
+
+        if ($this->hasSpecialShape($common['vorm'] ?? $parentCommon['vorm'] ?? null)) {
             return null;
         }
 
@@ -220,6 +234,15 @@ class CompetitorCoverageAnalyzer
         }
 
         return null;
+    }
+
+    private function hasSpecialShape(mixed $vorm): bool
+    {
+        if (! $this->filled($vorm)) {
+            return false;
+        }
+
+        return ! in_array(mb_strtolower(trim((string) $vorm)), self::REGULAR_SHAPES, true);
     }
 
     private function plausible(int $cm): bool
