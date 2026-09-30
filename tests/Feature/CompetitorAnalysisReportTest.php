@@ -556,6 +556,26 @@ it('writes every change to the CSV with its reason and source URL', function () 
         ->toContain('https://shopa.nl/kleed');
 });
 
+it('starts every CSV with a UTF-8 byte order mark so Excel on Windows keeps € and — intact', function () {
+    logReportChange('CARTEST-A', 1000, 900, 'Concurrent shopa.nl biedt € 900,00 — laagste concurrent.', 'shopa.nl', 900);
+
+    $reporter = app(CompetitorAnalysisReporter::class);
+    $report = $reporter->build(now()->subHour(), now());
+
+    $csvs = [
+        $reporter->toCsv($report['rows']),
+        $reporter->actionsToCsv($report['actions']),
+        $reporter->checksToCsv($report['checks']),
+    ];
+
+    foreach ($csvs as $csv) {
+        expect($csv)->toStartWith("\u{FEFF}")
+            ->and(mb_check_encoding($csv, 'UTF-8'))->toBeTrue();
+    }
+
+    expect($csvs[0])->toContain('€ 900,00 — laagste concurrent');
+});
+
 it('counts a price as confirmed while it is still within the refresh cycle', function () {
     config()->set('competitor_pricing.refresh_days', 7);
 

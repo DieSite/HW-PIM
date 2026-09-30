@@ -81,6 +81,12 @@ class CompetitorAnalysisReporter
     /** Non-breaking space, so an amount never wraps away from its € sign. */
     private const NBSP = "\u{00A0}";
 
+    /**
+     * Excel on Windows reads a CSV without byte order mark as Windows-1252,
+     * which turns every €, — and ë in the attachments into mojibake.
+     */
+    private const UTF8_BOM = "\u{FEFF}";
+
     public function __construct(private readonly CompetitorAnalysisActions $actions) {}
 
     /**
@@ -227,7 +233,7 @@ class CompetitorAnalysisReporter
         $csv = (string) stream_get_contents($handle);
         fclose($handle);
 
-        return $csv;
+        return self::UTF8_BOM.$csv;
     }
 
     /**
@@ -265,7 +271,7 @@ class CompetitorAnalysisReporter
         $csv = (string) stream_get_contents($handle);
         fclose($handle);
 
-        return $csv;
+        return self::UTF8_BOM.$csv;
     }
 
     /**
@@ -295,7 +301,7 @@ class CompetitorAnalysisReporter
         $csv = (string) stream_get_contents($handle);
         fclose($handle);
 
-        return $csv;
+        return self::UTF8_BOM.$csv;
     }
 
     public function kindLabel(string $kind): string

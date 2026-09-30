@@ -101,7 +101,7 @@ class CompetitorAnalysisReport extends Mailable
             $csv = $reporter->toCsv($this->report['rows']);
 
             $attachments[] = Attachment::fromData(fn (): string => $csv, 'prijswijzigingen-'.$date.'.csv')
-                ->withMime('text/csv');
+                ->withMime('text/csv; charset=UTF-8');
         }
 
         $actionRows = array_sum(array_map(
@@ -113,14 +113,14 @@ class CompetitorAnalysisReport extends Mailable
             $acties = $reporter->actionsToCsv($this->report['actions']);
 
             $attachments[] = Attachment::fromData(fn (): string => $acties, 'acties-'.$date.'.csv')
-                ->withMime('text/csv');
+                ->withMime('text/csv; charset=UTF-8');
         }
 
         if ($this->report['flagged'] > 0) {
             $checks = $reporter->checksToCsv($this->report['checks']);
 
             $attachments[] = Attachment::fromData(fn (): string => $checks, 'aandachtspunten-'.$date.'.csv')
-                ->withMime('text/csv');
+                ->withMime('text/csv; charset=UTF-8');
         }
 
         return $attachments;
