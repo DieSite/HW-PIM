@@ -19,7 +19,7 @@ class ExportCompetitorCoverageCommand extends Command
     /**
      * @var string
      */
-    protected $description = 'Exporteer naar Excel welke kleden niet in de concurrentie-analyse zitten, met per kleed de reden.';
+    protected $description = 'Exporteer naar Excel welke kleden niet in de concurrentie-analyse zitten, uitgesplitst per fabrikant en met per kleed de reden.';
 
     public function handle(CompetitorCoverageAnalyzer $analyzer): int
     {
@@ -58,7 +58,7 @@ class ExportCompetitorCoverageCommand extends Command
      * De gevraagde redenen, gevalideerd tegen wat de analyse kent. Een typefout
      * zou anders een leeg bestand opleveren dat eruitziet als goed nieuws.
      *
-     * @return array<int, string>|null  null bij een onbekende reden
+     * @return array<int, string>|null null bij een onbekende reden
      */
     private function reasons(CompetitorCoverageAnalyzer $analyzer): ?array
     {
@@ -103,6 +103,13 @@ class ExportCompetitorCoverageCommand extends Command
                 ->map(fn (string $reason): array => [$reason, $tally->count($reason)])
                 ->filter(fn (array $row): bool => $row[1] > 0)
                 ->push(['Totaal', $tally->total()])
+                ->all(),
+        );
+
+        $this->table(
+            ['Fabrikant', 'Aantal'],
+            collect($tally->brands())
+                ->map(fn (string $brand): array => [CompetitorCoverageExport::brandLabel($brand), $tally->totalFor($brand)])
                 ->all(),
         );
     }

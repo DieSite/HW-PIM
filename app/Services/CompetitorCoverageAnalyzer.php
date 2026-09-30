@@ -13,21 +13,20 @@ use App\Models\Product;
  * variant daarbuiten, dan blijft zijn prijs op de adviesverkoopprijs staan —
  * zonder dat iemand dat ziet. Deze klasse maakt die stille groep zichtbaar en
  * noemt per kleed de reden, zodat te zien is wat data-onderhoud oplost
- * (ontbrekend merk, lege maat) en wat er per definitie buiten valt (maatwerk,
- * de met-onderkleed-bundel).
+ * (ontbrekend merk, lege maat) en wat geen enkele concurrent voert.
  *
- * Per kleed wordt één reden gerapporteerd: de meest blokkerende. Wat er
- * structureel buiten valt (de met-onderkleed-bundel, maatwerk) komt daarbij
- * vóór wat data-onderhoud oplost — een maatwerkkleed een merk geven maakt het
- * nog steeds niet koppelbaar, dus "Maatwerk" is dan het eerlijke antwoord.
+ * Per kleed wordt één reden gerapporteerd: de meest blokkerende.
  *
- * @see \App\Services\CompetitorCatalogExporter  bouwt de catalogus-CSV
- * @see \App\Services\CompetitorPricingService   rekent de prijs door
+ * Varianten "Met onderkleed" en maatwerk staan er helemaal niet in: die
+ * vinden we nooit bij een externe partij, dus ze zouden de lijst alleen maar
+ * vullen met regels waar niemand iets mee kan. De met-onderkleed-prijs volgt
+ * de variant zonder onderkleed.
+ *
+ * @see CompetitorCatalogExporter  bouwt de catalogus-CSV
+ * @see CompetitorPricingService   rekent de prijs door
  */
 class CompetitorCoverageAnalyzer
 {
-    public const REASON_UNDERLAY = 'Met onderkleed';
-
     public const REASON_ADVIES = 'Geen adviesverkoopprijs';
 
     public const REASON_BRAND = 'Geen merk';
@@ -35,8 +34,6 @@ class CompetitorCoverageAnalyzer
     public const REASON_MODEL = 'Geen modelnaam';
 
     public const REASON_SIZE = 'Geen bruikbare maat';
-
-    public const REASON_MAATWERK = 'Maatwerk';
 
     public const REASON_NO_MATCH = 'Geen concurrent gevonden';
 
@@ -46,8 +43,6 @@ class CompetitorCoverageAnalyzer
      * @var array<string, string>
      */
     private const EXPLANATIONS = [
-        self::REASON_UNDERLAY => 'Geen concurrent verkoopt het kleed mét onderkleed; de prijs wordt afgeleid van de variant zonder onderkleed.',
-        self::REASON_MAATWERK => 'Maatwerk heeft geen vaste afmeting; concurrenten voeren er geen vergelijkbare prijs voor.',
         self::REASON_BRAND    => 'De scraper koppelt op merk + model + maat; zonder merk is er niets om op te zoeken.',
         self::REASON_MODEL    => 'De scraper koppelt op merk + model + maat; zonder modelnaam is er niets om op te zoeken.',
         self::REASON_SIZE     => 'De maat is leeg of niet te lezen als afmeting, dus een concurrentmaat is niet te vergelijken.',
@@ -86,7 +81,8 @@ class CompetitorCoverageAnalyzer
 
     /**
      * De reden waarom dit kleed buiten de analyse valt, of null als het er
-     * gewoon in zit.
+     * gewoon in zit of als met-onderkleed- of maatwerkvariant niet
+     * gerapporteerd wordt.
      */
     public function reason(Product $variant, bool $hasCompetitorPrice): ?string
     {
@@ -94,13 +90,13 @@ class CompetitorCoverageAnalyzer
         $parentCommon = $variant->parent !== null ? $this->common($variant->parent) : [];
 
         if (($common['onderkleed'] ?? null) === 'Met onderkleed') {
-            return self::REASON_UNDERLAY;
+            return null;
         }
 
         $maat = trim((string) ($common['maat'] ?? ''));
 
         if (stripos($maat, 'maatwerk') !== false) {
-            return self::REASON_MAATWERK;
+            return null;
         }
 
         if (! $this->filled($parentCommon['merk'] ?? $common['merk'] ?? null)) {

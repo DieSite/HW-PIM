@@ -54,7 +54,7 @@ return [
     [
         'key'    => 'general.afwerkingen.settings',
         'name'   => 'Algemeen',
-        'info'   => 'Of afwerkingen aangeboden worden en tegen welke opslag op de inkoopprijs',
+        'info'   => 'Of afwerkingen aangeboden worden',
         'sort'   => 1,
         'fields' => [
             [
@@ -63,12 +63,6 @@ return [
                 'type'          => 'boolean',
                 'info'          => 'Zet het aanbieden van afwerkingen bij maatwerkkleden aan of uit.',
                 'default_value' => 1,
-            ], [
-                'name'          => 'marge_factor',
-                'title'         => 'Marge op inkoopprijs (factor, dus 2 = verdubbeling)',
-                'type'          => 'number',
-                'info'          => 'De inkooptarieven worden hiermee vermenigvuldigd; daarna komt de BTW erover.',
-                'default_value' => config('afwerkingen.standaard_marge'),
             ],
         ],
     ],

@@ -1,7 +1,6 @@
 <?php
 
 use App\Services\AfwerkingOptieService;
-use Illuminate\Support\Facades\DB;
 
 /**
  * An item in the shape Exporter::formatData() works with: the product's
@@ -23,18 +22,6 @@ function exporterItem(array $common, array $variants = [['maat' => 'Maatwerk']])
     ];
 }
 
-function stelExportConfigIn(string $code, string $value): void
-{
-    DB::table('core_config')->updateOrInsert(
-        ['code' => $code, 'channel_code' => null, 'locale_code' => null],
-        ['value' => $value, 'created_at' => now(), 'updated_at' => now()]
-    );
-}
-
-beforeEach(function () {
-    stelExportConfigIn('general.afwerkingen.settings.marge_factor', '2');
-});
-
 it('bouwt de payload uit de array die de exporter al in handen heeft', function () {
     $payload = app(AfwerkingOptieService::class)
         ->payloadVoorItem(exporterItem(['merk' => 'Eurogros']));
@@ -53,7 +40,7 @@ it('levert een payload die als geldige JSON de meta in kan', function () {
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
 
     /**
-     * Losse waardevergelijking: een rond getal als 121.0 komt als int 121 uit
+     * Losse waardevergelijking: een rond getal als 100.0 komt als int 121 uit
      * json_decode terug. Dat is voor de shop hetzelfde getal, dus alleen de
      * waarden hoeven te kloppen, niet de PHP-types.
      */

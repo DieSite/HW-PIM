@@ -13,11 +13,11 @@ use Illuminate\Support\Facades\DB;
  */
 function afwerkingParent(array $parentValues = [], array $variantValues = [[]]): Product
 {
-    $parent = new Product;
+    $parent = new Product();
     $parent->values = ['common' => $parentValues];
 
     $variants = collect($variantValues)->map(function (array $values): Product {
-        $variant = new Product;
+        $variant = new Product();
         $variant->values = ['common' => array_merge(['maat' => 'Maatwerk'], $values)];
 
         return $variant;
@@ -60,53 +60,69 @@ function optieUitPayload(array $payload, string $code): ?array
     return collect($payload['opties'])->firstWhere('code', $code);
 }
 
-beforeEach(function () {
-    config()->set('afwerkingen.standaard_marge', 2.0);
-    stelAfwerkingConfigIn('general.afwerkingen.settings.marge_factor', '2');
-});
-
-it('rekent het inkooptarief om naar een consumentenprijs met marge en BTW', function () {
+it('exporteert de verkoopprijzen van de website ongewijzigd', function () {
     $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
 
-    // 4,50 inkoop x 2 marge x 1,21 BTW = 10,89
-    expect($payload['opties'])->not->toBeEmpty()
-        ->and(optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'][0]['tarief'])->toBe(10.89)
-        ->and($payload['btw_inbegrepen'])->toBeTrue();
+    $tarieven = collect($payload['opties'])->mapWithKeys(fn (array $optie): array => [
+        $optie['code'] => collect($optie['keuzes'])->mapWithKeys(fn (array $keuze): array => [
+            $keuze['code'] => array_column($keuze['tarieven'], 'tarief'),
+        ])->all(),
+    ])->all();
+
+    expect($payload['btw_inbegrepen'])->toBeTrue()
+        ->and($tarieven)->toBe([
+            'festonneren' => ['standaard' => [9.75]],
+            'banderen'    => [
+                'linnen_25_55'    => [25.0],
+                'linnen_55_90'    => [31.0],
+                'kunstleer_25_55' => [37.0],
+                'kunstleer_55_90' => [41.0],
+            ],
+            'banderen_blind' => [
+                'linnen_25_55'     => [43.0],
+                'linnen_60_100'    => [47.0],
+                'kunstleer_25_55'  => [47.0],
+                'kunstleer_60_100' => [51.0],
+            ],
+            'volume'    => ['standaard' => [33.5]],
+            'biesje'    => ['linnen_05' => [28.0], 'kunstleer_05' => [31.5]],
+            'anti_slip' => ['standaard' => [20.0]],
+        ]);
 });
 
-it('volgt de marge-instelling uit de admin', function () {
-    stelAfwerkingConfigIn('general.afwerkingen.settings.marge_factor', '1');
+it('negeert een achtergebleven marge-instelling uit de admin', function () {
+    stelAfwerkingConfigIn('general.afwerkingen.settings.marge_factor', '3');
 
     $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
 
-    // 4,50 x 1 x 1,21 = 5,45 (afgerond)
-    expect(optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'][0]['tarief'])->toBe(5.45);
+    expect(optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'][0]['tarief'])->toBe(9.75);
 });
 
-it('houdt de staffelgrens van 4 meter aan', function () {
+it('kent geen staffel meer onder en boven de 4 meter', function () {
     $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
-    $tarieven = optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'];
 
-    expect($payload['staffelgrens_cm'])->toBe(400)
-        ->and($tarieven)->toHaveCount(2)
-        ->and($tarieven[0]['max_lengte_cm'])->toBe(400)
-        ->and($tarieven[0]['tarief'])->toBe(10.89)
-        ->and($tarieven[1]['max_lengte_cm'])->toBeNull()
-        // 5,25 x 2 x 1,21 = 12,71 (afgerond)
-        ->and($tarieven[1]['tarief'])->toBe(12.71);
+    foreach ($payload['opties'] as $optie) {
+        foreach ($optie['keuzes'] as $keuze) {
+            expect($keuze['tarieven'])->toHaveCount(1)
+                ->and($keuze['tarieven'][0]['max_lengte_cm'])->toBeNull();
+        }
+    }
+
+    expect($payload)->not->toHaveKey('staffelgrens_cm');
 });
 
 it('levert vaste toeslagen als los bedrag, niet verwerkt in het metertarief', function () {
     $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
-    $festonneren = optieUitPayload($payload, 'festonneren');
-    $toeslag = $festonneren['toeslagen'][0];
 
-    expect($toeslag['type'])->toBe('vast')
-        ->and($toeslag['voorwaarde'])->toBe('organische_vorm')
-        // 15,00 x 2 x 1,21 = 36,30
-        ->and($toeslag['bedrag'])->toBe(36.30)
-        // het metertarief blijft onaangeroerd door de toeslag
-        ->and($festonneren['keuzes'][0]['tarieven'][0]['tarief'])->toBe(10.89);
+    foreach (['festonneren', 'banderen', 'banderen_blind'] as $code) {
+        $toeslag = optieUitPayload($payload, $code)['toeslagen'][0];
+
+        expect($toeslag['type'])->toBe('vast')
+            ->and($toeslag['voorwaarde'])->toBe('organische_vorm')
+            ->and($toeslag['bedrag'])->toBe(30.0);
+    }
+
+    expect(optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'][0]['tarief'])->toBe(9.75);
 });
 
 it('legt de optelvolgorde vast die de shop moet reproduceren', function () {
@@ -120,7 +136,7 @@ it('legt de optelvolgorde vast die de shop moet reproduceren', function () {
     // is 2 x (2,00 + 3,00) = 10 m. Toeslag = omtrek x tarief + vast bedrag.
     $omtrekMeter = 2 * (2.00 + 3.00);
 
-    expect(round($omtrekMeter * $tarief + $vast, 2))->toBe(145.20);
+    expect(round($omtrekMeter * $tarief + $vast, 2))->toBe(127.5);
 });
 
 it('rekent anti-slip per vierkante meter en markeert het als combineerbaar', function () {
@@ -128,8 +144,7 @@ it('rekent anti-slip per vierkante meter en markeert het als combineerbaar', fun
 
     expect($antiSlip['eenheid'])->toBe('m2')
         ->and($antiSlip['combineerbaar'])->toBeTrue()
-        // 10,00 x 2 x 1,21 = 24,20
-        ->and($antiSlip['keuzes'][0]['tarieven'][0]['tarief'])->toBe(24.20);
+        ->and($antiSlip['keuzes'][0]['tarieven'][0]['tarief'])->toBe(20.0);
 });
 
 it('rekent randafwerkingen per strekkende meter omtrek', function () {
@@ -144,8 +159,8 @@ it('markeert volume als inclusief onderkleed en kent de ronde toeslag', function
     $volume = optieUitPayload(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()), 'volume');
 
     expect($volume['inclusief_onderkleed'])->toBeTrue()
-        ->and(collect($volume['toeslagen'])->firstWhere('voorwaarde', 'ronde_vorm')['bedrag'])->toBe(60.50)
-        ->and(collect($volume['toeslagen'])->firstWhere('voorwaarde', 'organische_vorm')['bedrag'])->toBe(121.00);
+        ->and(collect($volume['toeslagen'])->firstWhere('voorwaarde', 'ronde_vorm')['bedrag'])->toBe(50.0)
+        ->and(collect($volume['toeslagen'])->firstWhere('voorwaarde', 'organische_vorm')['bedrag'])->toBe(100.0);
 });
 
 it('geeft null als de feature is uitgeschakeld', function () {

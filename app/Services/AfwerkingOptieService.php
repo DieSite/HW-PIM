@@ -11,7 +11,7 @@ use Illuminate\Support\Arr;
  *
  * The rug's final surcharge cannot be computed here: it depends on the
  * measurements the customer types in on the product page. So the PIM ships the
- * rate table and the shop does `omtrek_m × staffeltarief + Σ vaste toeslagen`.
+ * rate table and the shop does `omtrek_m × tarief + Σ vaste toeslagen`.
  */
 class AfwerkingOptieService
 {
@@ -29,8 +29,8 @@ class AfwerkingOptieService
     }
 
     /**
-     * The rate table for this product, converted to consumer prices and
-     * filtered down to the types that are enabled for its brand.
+     * The rate table for this product, filtered down to the types that are
+     * enabled for its brand.
      *
      * @return array<string, mixed>|null
      */
@@ -119,13 +119,13 @@ class AfwerkingOptieService
             'versie'          => self::PAYLOAD_VERSIE,
             'valuta'          => 'EUR',
             'btw_inbegrepen'  => true,
-            'staffelgrens_cm' => (int) config('afwerkingen.staffelgrens_cm', 400),
             'opties'          => $opties,
         ];
     }
 
     /**
-     * One finishing type, with every inkoop rate converted to a consumer price.
+     * One finishing type. The configured prices are the website prices incl.
+     * BTW and pass through unchanged.
      *
      * @param  array<string, mixed>  $optie
      * @return array<string, mixed>
@@ -140,7 +140,7 @@ class AfwerkingOptieService
                 'label'    => $keuze['label'] ?? $keuzeCode,
                 'tarieven' => array_map(fn (array $tarief): array => [
                     'max_lengte_cm' => $tarief['max_lengte_cm'] ?? null,
-                    'tarief'        => $this->consumentenPrijs((float) $tarief['inkoop']),
+                    'tarief'        => (float) $tarief['prijs'],
                 ], $keuze['tarieven'] ?? []),
             ];
         }
@@ -160,7 +160,7 @@ class AfwerkingOptieService
                 'label'      => $toeslag['label'],
                 'type'       => $toeslag['type'],
                 'voorwaarde' => $toeslag['voorwaarde'],
-                'bedrag'     => $this->consumentenPrijs((float) $toeslag['inkoop']),
+                'bedrag'     => (float) $toeslag['prijs'],
             ], $optie['toeslagen'] ?? []),
         ];
 
@@ -173,27 +173,6 @@ class AfwerkingOptieService
         }
 
         return $formatted;
-    }
-
-    /**
-     * Inkoop ex BTW → consumentenprijs incl. BTW.
-     */
-    private function consumentenPrijs(float $inkoop): float
-    {
-        $btwFactor = 1 + ((float) config('afwerkingen.btw_percentage', 21) / 100);
-
-        return round($inkoop * $this->margeFactor() * $btwFactor, 2);
-    }
-
-    private function margeFactor(): float
-    {
-        $marge = core()->getConfigData('general.afwerkingen.settings.marge_factor');
-
-        if ($marge === null || $marge === '' || ! is_numeric($marge) || (float) $marge <= 0) {
-            return (float) config('afwerkingen.standaard_marge', 1.0);
-        }
-
-        return (float) $marge;
     }
 
     private function featureIsIngeschakeld(): bool

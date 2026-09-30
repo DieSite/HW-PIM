@@ -2,8 +2,7 @@
 
 namespace App\Exports;
 
-use App\Services\CompetitorCoverageAnalyzer;
-use Maatwebsite\Excel\Concerns\FromGenerator;
+use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -13,22 +12,24 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
- * Het blad met één regel per kleed dat niet in de concurrentie-analyse zit.
+ * Een blad met één regel per kleed dat niet in de concurrentie-analyse zit:
+ * de volledige lijst, of het deel van één fabrikant.
  */
-class UncoveredRugsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithStyles, WithTitle
+class UncoveredRugsSheet implements FromArray, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithStyles, WithTitle
 {
     /**
-     * @param  array<int, string>  $reasons
+     * @param  array<int, string>  $headings
+     * @param  array<int, array<int, mixed>>  $rows
      */
     public function __construct(
-        private readonly CompetitorCoverageAnalyzer $analyzer,
-        private readonly array $reasons,
-        private readonly CoverageTally $tally,
+        private readonly string $title,
+        private readonly array $headings,
+        private readonly array $rows,
     ) {}
 
     public function title(): string
     {
-        return 'Niet meegenomen';
+        return $this->title;
     }
 
     /**
@@ -36,20 +37,15 @@ class UncoveredRugsSheet implements FromGenerator, ShouldAutoSize, WithColumnFor
      */
     public function headings(): array
     {
-        return $this->analyzer->headings();
+        return $this->headings;
     }
 
-    public function generator(): \Generator
+    /**
+     * @return array<int, array<int, mixed>>
+     */
+    public function array(): array
     {
-        foreach ($this->analyzer->uncovered() as $row) {
-            if ($this->reasons !== [] && ! in_array($row['reden'], $this->reasons, true)) {
-                continue;
-            }
-
-            $this->tally->add($row['reden']);
-
-            yield array_values($row);
-        }
+        return $this->rows;
     }
 
     /**
