@@ -2,7 +2,6 @@
 
 namespace Webkul\Product\Listeners;
 
-use Illuminate\Support\Facades\Bus;
 use Webkul\Product\Jobs\ElasticSearch\DeleteIndex as DeleteElasticSearchIndexJob;
 use Webkul\Product\Jobs\ElasticSearch\UpdateCreateIndex as UpdateCreateElasticSearchIndexJob;
 use Webkul\Product\Repositories\ProductRepository;
@@ -26,11 +25,13 @@ class Product
      */
     public function afterUpdate($product)
     {
+        if (core()->getConfigData('catalog.products.storefront.search_mode') != 'elastic') {
+            return;
+        }
+
         $productIds = $this->getAllRelatedProductIds($product);
 
-        Bus::chain([
-            new UpdateCreateElasticSearchIndexJob($productIds),
-        ])->dispatch();
+        UpdateCreateElasticSearchIndexJob::dispatch($productIds);
     }
 
     /**

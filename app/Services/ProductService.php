@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\WooCommerceSyncEventStatus;
 use App\Jobs\SyncProductWithBolComJob;
 use App\Models\BolComCredential;
+use App\Services\Bol\BolProductValidator;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -199,16 +200,6 @@ class ProductService
         return is_array($values) ? $values : [];
     }
 
-    /**
-     * Een tekstwaarde uit values.common op vergelijkbare vorm.
-     */
-    private function normaliseLabel(mixed $label): string
-    {
-        return is_string($label)
-            ? mb_strtolower(trim((string) preg_replace('/\s+/', ' ', $label)))
-            : '';
-    }
-
     public function triggerWCSyncForParent(Product $product): void
     {
         if ($product->variants->isEmpty()) {
@@ -230,19 +221,13 @@ class ProductService
             return;
         }
 
-        $parentJob = new SerializedProcessProductsToWooCommerce($product);
         $this->syncEventRecorder->queued($product);
 
-        $childJobs = [];
         foreach ($product->variants as $variant) {
-            $childJobs[] = new SerializedProcessProductsToWooCommerce($variant);
             $this->syncEventRecorder->queued($variant);
         }
 
-        \Bus::chain([
-            $parentJob,
-            ...$childJobs,
-        ])->dispatch();
+        SerializedProcessProductsToWooCommerce::dispatch($product, $product->variants->pluck('id')->all());
     }
 
     public function triggerFullExternalSync(Product $product, ?array $bolCredentials = null): void
@@ -280,7 +265,7 @@ class ProductService
         unset($clearedAdditional['product_sync_error']);
 
         if ($product->bol_com_sync) {
-            $validation = app(\App\Services\Bol\BolProductValidator::class)->validate($product);
+            $validation = app(BolProductValidator::class)->validate($product);
             if ($validation->failed()) {
                 $clearedAdditional['product_sync_error'] = $validation->customerSummary();
                 $product->bol_com_sync = false;
@@ -344,21 +329,6 @@ class ProductService
     }
 
     /**
-     * De kale tegenvariant van een met-onderkleed-variant, of null als die er
-     * niet is.
-     *
-     * @throws \Exception wanneer het product zelf geen onderkleed heeft
-     */
-    private function assertMetOnderkleed(Product $product): ?Product
-    {
-        if ($this->normaliseLabel($this->commonValues($product)['onderkleed'] ?? null) !== 'met onderkleed') {
-            throw new \Exception('Moet zonder onderkleed zijn');
-        }
-
-        return $this->getUnderrugAlternative($product);
-    }
-
-    /**
      * De onderkleedtoeslag voor de maat van dit product, of null wanneer die
      * maat niet in de tarieventabel staat.
      *
@@ -392,6 +362,31 @@ class ProductService
         ]);
 
         return null;
+    }
+
+    /**
+     * Een tekstwaarde uit values.common op vergelijkbare vorm.
+     */
+    private function normaliseLabel(mixed $label): string
+    {
+        return is_string($label)
+            ? mb_strtolower(trim((string) preg_replace('/\s+/', ' ', $label)))
+            : '';
+    }
+
+    /**
+     * De kale tegenvariant van een met-onderkleed-variant, of null als die er
+     * niet is.
+     *
+     * @throws \Exception wanneer het product zelf geen onderkleed heeft
+     */
+    private function assertMetOnderkleed(Product $product): ?Product
+    {
+        if ($this->normaliseLabel($this->commonValues($product)['onderkleed'] ?? null) !== 'met onderkleed') {
+            throw new \Exception('Moet zonder onderkleed zijn');
+        }
+
+        return $this->getUnderrugAlternative($product);
     }
 
     /**

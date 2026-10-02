@@ -5,7 +5,6 @@ namespace Webkul\WooCommerce\Listeners;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Webkul\Product\Models\Product;
 use Webkul\Product\Repositories\ProductRepository;
-use Webkul\WooCommerce\DTO\ProductBatch;
 
 class ProductSync
 {
@@ -14,13 +13,18 @@ class ProductSync
         protected WooCommerceSyncEventRecorder $syncEventRecorder,
     ) {}
 
-    public function syncProductToWooCommerce(Product $product)
+    /**
+     * Queues the product by model identifier only. Serialising the full
+     * toArray() of a parent with its variants put ~130 KB into every Redis
+     * payload (kept by Horizon as pending/completed/failed job), which ran
+     * Redis out of memory during bulk saves. The job re-fetches the product
+     * with its relations when it runs.
+     */
+    public function syncProductToWooCommerce(Product $product): void
     {
-        $product->load(['parent', 'variants']);
-
         $this->syncEventRecorder->queued($product);
 
-        ProcessProductsToWooCommerce::dispatch(ProductBatch::fromProductArray($product->toArray()));
+        SerializedProcessProductsToWooCommerce::dispatch($product);
     }
 
     public function deleteProductFromWooCommerce($productId)

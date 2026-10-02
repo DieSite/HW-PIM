@@ -5,9 +5,12 @@ use App\Models\Product;
 use App\Models\WooCommerceSyncEvent;
 use App\Services\ProductService;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Webkul\User\Tests\Concerns\UserAssertions;
+use Webkul\WooCommerce\Listeners\ProcessProductsToWooCommerce;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 uses(UserAssertions::class);
@@ -152,4 +155,58 @@ it('ships the poller with the panel on the product edit page', function () {
     expect($body)->toContain('WooCommerce synchronisatiestatus')
         ->and($body)->toContain('In wachtrij')
         ->and($body)->toContain('__hwWcTimelinePollerBooted');
+});
+
+it('queues a product update by model identifier instead of the full product array', function () {
+    Queue::fake();
+
+    [$parent] = makeWcSyncParentWithVariant();
+    $parent->values = ['common' => ['beschrijving_l' => str_repeat('x', 50_000)]];
+    $parent->save();
+    $parent->load(['parent', 'variants']);
+
+    Event::dispatch('catalog.product.update.after', $parent);
+
+    Queue::assertNotPushed(ProcessProductsToWooCommerce::class);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, function (SerializedProcessProductsToWooCommerce $job): bool {
+        return strlen(serialize($job)) < 2_000;
+    });
+
+    expect($parent->fresh()->wooCommerceSyncEvents->first()->status)->toBe(WooCommerceSyncEventStatus::Queued);
+});
+
+it('queues a parent sync as one small job that carries only the variant ids', function () {
+    Queue::fake();
+
+    [$parent, $variant] = makeWcSyncParentWithVariant();
+    $second = makeWcSyncProduct('WCSYNC-CHILD-2', 'simple', $parent->id);
+
+    app(ProductService::class)->triggerWCSyncForParent($parent->fresh());
+
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 1);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, function (SerializedProcessProductsToWooCommerce $job) use ($parent, $variant, $second): bool {
+        $state = (fn (): array => [$this->product->id, $this->nextProductIds, $this->chained])->call($job);
+
+        return $state === [$parent->id, [$variant->id, $second->id], []]
+            && strlen(serialize($job)) < 2_000;
+    });
+});
+
+it('queues the next variant only after the current product has synced, skipping deleted ones', function () {
+    Bus::fake([ProcessProductsToWooCommerce::class]);
+    Queue::fake();
+
+    [$parent, $variant] = makeWcSyncParentWithVariant();
+    $deleted = makeWcSyncProduct('WCSYNC-CHILD-GONE', 'simple', $parent->id);
+    $last = makeWcSyncProduct('WCSYNC-CHILD-LAST', 'simple', $parent->id);
+    $deletedId = $deleted->id;
+    $deleted->delete();
+
+    (new SerializedProcessProductsToWooCommerce($variant, [$deletedId, $last->id]))->handle();
+
+    Bus::assertDispatchedSync(ProcessProductsToWooCommerce::class);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 1);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, function (SerializedProcessProductsToWooCommerce $job) use ($last): bool {
+        return (fn (): array => [$this->product->id, $this->nextProductIds])->call($job) === [$last->id, []];
+    });
 });

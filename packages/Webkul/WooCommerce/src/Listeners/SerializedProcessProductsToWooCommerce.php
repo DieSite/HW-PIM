@@ -52,11 +52,17 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param  array<int, int>  $nextProductIds  Products to sync one after another once this one has
+     *                                           succeeded. Replaces Bus::chain(), whose payload carries
+     *                                           every remaining serialized job and so grows quadratically
+     *                                           in Redis for a parent with many variants.
      */
     public function __construct(
-        private Product $product
+        private Product $product,
+        private array $nextProductIds = [],
     ) {
-        $this->product->withoutRelations();
+        $this->product = $product->withoutRelations();
     }
 
     /**
@@ -98,6 +104,8 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
             $this->product->load('parent');
         }
         ProcessProductsToWooCommerce::dispatchSync(ProductBatch::fromProductArray($this->product->toArray()));
+
+        $this->dispatchNext();
     }
 
     public function failed(Throwable $exception): void
@@ -133,5 +141,20 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
         }
 
         Sentry::captureException($exception);
+    }
+
+    private function dispatchNext(): void
+    {
+        $remainingIds = $this->nextProductIds;
+
+        while (($nextId = array_shift($remainingIds)) !== null) {
+            $next = Product::find($nextId);
+
+            if ($next) {
+                static::dispatch($next, $remainingIds);
+
+                return;
+            }
+        }
     }
 }

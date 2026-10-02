@@ -3,12 +3,10 @@
 namespace App\Services;
 
 use App\Models\Product;
-use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use RuntimeException;
 use Webkul\Product\Type\AbstractType;
-use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 /**
  * Kleurvarianten aan elkaar knopen.
@@ -32,7 +30,6 @@ class CrossSellLinker
 
     public function __construct(
         private readonly ProductService $products,
-        private readonly WooCommerceSyncEventRecorder $syncEventRecorder,
     ) {}
 
     /**
@@ -168,15 +165,6 @@ class CrossSellLinker
             $product->save();
 
             Event::dispatch('catalog.product.update.after', $product);
-        }
-
-        // Pas synchroniseren als de hele groep is weggeschreven: de export leest
-        // het product opnieuw uit de database, en anders vertrekt de eerste met
-        // een halve groep. Alleen het hoofdproduct, want de varianten dragen
-        // niets van de koppeling.
-        foreach ($products as $product) {
-            $this->syncEventRecorder->queued($product);
-            SerializedProcessProductsToWooCommerce::dispatch($product);
         }
 
         return $products;
