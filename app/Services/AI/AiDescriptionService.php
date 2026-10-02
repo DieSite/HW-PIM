@@ -4,7 +4,6 @@ namespace App\Services\AI;
 
 use App\Models\AiDescriptionDraft;
 use App\Models\Product;
-use App\Services\ProductService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Event;
 use RuntimeException;
@@ -21,7 +20,6 @@ use Webkul\Attribute\Models\Attribute;
 class AiDescriptionService
 {
     public function __construct(
-        private readonly ProductService $productService,
         private readonly DescriptionValidator $validator,
     ) {}
 
@@ -145,17 +143,13 @@ class AiDescriptionService
         $product->values = $values;
         $product->save();
 
-        Event::dispatch('catalog.product.update.after', $product);
-
         $draft->update([
             'status'          => AiDescriptionDraft::STATUS_APPLIED,
             'previous_values' => $previous,
             'applied_at'      => now(),
         ]);
 
-        if ($syncWoo) {
-            $this->productService->triggerWCSyncForParent($product);
-        }
+        $this->dispatchUpdated($product, $syncWoo);
     }
 
     /**
@@ -186,16 +180,12 @@ class AiDescriptionService
         $product->values = $values;
         $product->save();
 
-        Event::dispatch('catalog.product.update.after', $product);
-
         $draft->update([
             'status'     => AiDescriptionDraft::STATUS_REJECTED,
             'applied_at' => null,
         ]);
 
-        if ($syncWoo) {
-            $this->productService->triggerWCSyncForParent($product);
-        }
+        $this->dispatchUpdated($product, $syncWoo);
     }
 
     /**
@@ -213,6 +203,20 @@ class AiDescriptionService
         }
 
         return is_array($values) ? $values : [];
+    }
+
+    /**
+     * The update event alone queues the WooCommerce sync of the parent. The
+     * texts live on the parent only, so re-syncing every variant on top of
+     * that (triggerWCSyncForParent) only doubled the queue load. Without a
+     * sync the event is skipped: its other listener (DAM asset mappings) has
+     * nothing to do for a text-only change.
+     */
+    private function dispatchUpdated(Product $product, bool $syncWoo): void
+    {
+        if ($syncWoo) {
+            Event::dispatch('catalog.product.update.after', $product);
+        }
     }
 
     /**

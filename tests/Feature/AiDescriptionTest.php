@@ -10,6 +10,7 @@ use App\Services\AI\AiClientManager;
 use App\Services\AI\AiDescriptionService;
 use App\Services\AI\AiRequest;
 use App\Services\AI\AiResponse;
+use App\Services\AI\AiSettings;
 use App\Services\AI\AiTextClient;
 use App\Services\AI\ProductDescriptionGenerator;
 use Illuminate\Bus\Batch;
@@ -17,6 +18,8 @@ use Illuminate\Bus\PendingBatch;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Webkul\User\Models\Admin;
+use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 /**
  * Stands in for the model so the tests never make a network call, and so a test
@@ -62,7 +65,7 @@ function useFakeAiClient(FakeAiTextClient $client): void
     {
         public function __construct(private FakeAiTextClient $fake)
         {
-            parent::__construct(app(App\Services\AI\AiSettings::class));
+            parent::__construct(app(AiSettings::class));
         }
 
         public function client(?string $driver = null): AiTextClient
@@ -365,7 +368,7 @@ it('moves a draft that was queued for a rewrite back into review', function () {
 });
 
 it('records a failed draft instead of blowing up the run', function () {
-    app()->bind(AiClientManager::class, fn () => new class(app(App\Services\AI\AiSettings::class)) extends AiClientManager
+    app()->bind(AiClientManager::class, fn () => new class(app(AiSettings::class)) extends AiClientManager
     {
         public function client(?string $driver = null): AiTextClient
         {
@@ -406,6 +409,51 @@ it('publishes an approved draft onto the product and can undo it', function () {
 
     expect(Product::find($parent->id)->values['common']['beschrijving_l'])->toBe('<p>Oude tekst.</p>')
         ->and($draft->fresh()->status)->toBe(AiDescriptionDraft::STATUS_REJECTED);
+});
+
+it('syncs a published draft to WooCommerce once, for the parent only', function () {
+    Queue::fake();
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'beschrijving_l' => '<p>Oude tekst.</p>']);
+    makeAiProduct(['productnaam' => 'Diamante 01 160x230'], $parent->id);
+    makeAiProduct(['productnaam' => 'Diamante 01 200x290'], $parent->id);
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => $parent->id,
+        'status'     => AiDescriptionDraft::STATUS_APPROVED,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+    ]);
+
+    $service = app(AiDescriptionService::class);
+    $service->publish($draft);
+
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 1);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, function (SerializedProcessProductsToWooCommerce $job) use ($parent): bool {
+        return (fn (): array => [$this->product->id, $this->nextProductIds])->call($job) === [$parent->id, []];
+    });
+
+    $service->revert($draft->fresh());
+
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 2);
+});
+
+it('queues nothing for WooCommerce when publishing without a sync', function () {
+    Queue::fake();
+
+    $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'beschrijving_l' => '<p>Oude tekst.</p>']);
+    makeAiProduct(['productnaam' => 'Diamante 01 160x230'], $parent->id);
+
+    $draft = AiDescriptionDraft::create([
+        'product_id' => $parent->id,
+        'status'     => AiDescriptionDraft::STATUS_APPROVED,
+        'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
+    ]);
+
+    $service = app(AiDescriptionService::class);
+    $service->publish($draft, syncWoo: false);
+    $service->revert($draft->fresh(), syncWoo: false);
+
+    Queue::assertNothingPushed();
 });
 
 it('leaves drafts that were not approved alone when publishing', function () {
@@ -497,7 +545,7 @@ it('generates from raw form values for a product that does not exist yet', funct
 });
 
 it('renders the bulk tool page', function () {
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.tools.ai-descriptions.index'))
         ->assertOk()
         ->assertSee('AI-teksten');
@@ -513,7 +561,7 @@ it('renders the review page with a draft on it', function () {
         'similarity' => 0.12,
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.tools.ai-descriptions.review'))
         ->assertOk()
         ->assertSee('Nieuwe tekst.', escape: false)
@@ -523,7 +571,7 @@ it('renders the review page with a draft on it', function () {
 it('renders the product edit page with the generate button', function () {
     $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.catalog.products.edit', ['id' => $parent->id]))
         ->assertOk()
         ->assertSee('Teksten genereren (AI)');
@@ -538,7 +586,7 @@ it('approves a draft through the review endpoint', function () {
         'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.tools.ai-descriptions.decide', ['draft' => $draft->id]), ['decision' => 'approve'])
         ->assertOk();
 
@@ -551,7 +599,7 @@ it('returns the generated texts from the product edit endpoint', function () {
     $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'merk' => 'De Munk']);
     makeAiProduct(['maat' => '170 cm x 240 cm'], $parent->id);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), ['product_id' => $parent->id])
         ->assertOk()
         ->assertJsonStructure(['texts' => ['beschrijving_l', 'beschrijving_k', 'meta_beschrijving'], 'problems', 'similarity']);
@@ -564,7 +612,7 @@ it('generates for the parent when the edit endpoint is given a variant', functio
     $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'merk' => 'De Munk']);
     $variant = makeAiProduct(['maat' => '170 cm x 240 cm'], $parent->id);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), ['product_id' => $variant->id])
         ->assertOk();
 
@@ -572,7 +620,7 @@ it('generates for the parent when the edit endpoint is given a variant', functio
 });
 
 it('reports a provider failure as a readable message instead of a 500', function () {
-    app()->bind(AiClientManager::class, fn () => new class(app(App\Services\AI\AiSettings::class)) extends AiClientManager
+    app()->bind(AiClientManager::class, fn () => new class(app(AiSettings::class)) extends AiClientManager
     {
         public function client(?string $driver = null): AiTextClient
         {
@@ -582,7 +630,7 @@ it('reports a provider failure as a readable message instead of a 500', function
 
     $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), ['product_id' => $parent->id])
         ->assertStatus(422)
         ->assertJsonPath('message', 'Geen Gemini API-sleutel ingesteld (GEMINI_API_KEY of admin Configuratie).');
@@ -594,7 +642,7 @@ it('writes only the requested field when the per-field button asks for one', fun
 
     $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'merk' => 'De Munk']);
 
-    $response = $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $response = $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), [
             'product_id' => $parent->id,
             'fields'     => ['beschrijving_l'],
@@ -610,7 +658,7 @@ it('writes only the requested field when the per-field button asks for one', fun
 it('renders a per-field AI button under each generated text field', function () {
     $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
 
-    $html = $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $html = $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.catalog.products.edit', ['id' => $parent->id]))
         ->assertOk()
         ->getContent();
@@ -624,7 +672,7 @@ it('does not offer the per-field button on a variant', function () {
     $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
     $variant = makeAiProduct(['maat' => '170 cm x 240 cm'], $parent->id);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.catalog.products.edit', ['id' => $variant->id]))
         ->assertOk()
         ->assertDontSee("generateAiTexts(this, ['beschrijving_l'])", escape: false);
@@ -641,7 +689,7 @@ it('prefers what is in the form over what is stored', function () {
     ]);
     makeAiProduct(['maat' => '170 cm x 240 cm'], $parent->id);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), [
             'product_id' => $parent->id,
             // The editor changed the colour but has not saved yet.
@@ -664,7 +712,7 @@ it('describes a product whose fields are typed but not yet saved', function () {
     // A product straight out of the create modal: a SKU and nothing else.
     $parent = makeAiProduct([]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), [
             'product_id' => $parent->id,
             'values'     => [
@@ -687,7 +735,7 @@ it('ignores empty form fields rather than blanking stored values', function () {
     $parent = makeAiProduct(['productnaam' => 'Diamante 01', 'merk' => 'De Munk']);
     makeAiProduct(['maat' => '170 cm x 240 cm'], $parent->id);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.catalog.products.ai-description.generate'), [
             'product_id' => $parent->id,
             'values'     => ['merk' => '', 'kleuren' => 'Grijs'],
@@ -701,7 +749,7 @@ it('ignores empty form fields rather than blanking stored values', function () {
 it('sends the live form values from the edit page, not just the product id', function () {
     $parent = makeAiProduct(['productnaam' => 'Diamante 01']);
 
-    $html = $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $html = $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.catalog.products.edit', ['id' => $parent->id]))
         ->assertOk()
         ->getContent();
@@ -774,7 +822,7 @@ it('offers a rewrite-all button on the review page', function () {
         'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.tools.ai-descriptions.review'))
         ->assertOk()
         ->assertSee('Alles opnieuw schrijven (1)');
@@ -800,7 +848,7 @@ it('rewrites every draft in the current view but leaves signed-off drafts alone'
         'fields'     => $draft[2],
     ]));
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->post(route('admin.tools.ai-descriptions.regenerate-all'), ['run' => $run->id, 'status' => 'all'])
         ->assertRedirect()
         ->assertSessionHas('success', '3 teksten worden opnieuw geschreven. Ververs de pagina over een paar minuten.');
@@ -832,7 +880,7 @@ it('only rewrites the drafts of the selected status', function () {
         ]);
     }
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->post(route('admin.tools.ai-descriptions.regenerate-all'), ['status' => 'failed'])
         ->assertRedirect();
 
@@ -842,7 +890,7 @@ it('only rewrites the drafts of the selected status', function () {
 it('refuses to rewrite the approved view', function () {
     Queue::fake();
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->post(route('admin.tools.ai-descriptions.regenerate-all'), ['status' => 'approved'])
         ->assertSessionHasErrors('status');
 
@@ -857,7 +905,7 @@ it('offers an approve-and-publish-all button on the review page', function () {
         'problems'   => [['message' => 'Te lang.']],
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.tools.ai-descriptions.review'))
         ->assertOk()
         ->assertSee('Alles goedkeuren en doorsturen (1)')
@@ -884,7 +932,7 @@ it('approves every pending draft of the run and publishes it with the approved o
         'fields'     => $draft[2],
     ]));
 
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     $this->actingAs($admin, 'admin')
         ->post(route('admin.tools.ai-descriptions.approve-and-apply-all'), ['run' => $run->id])
@@ -907,7 +955,7 @@ it('approves every pending draft of the run and publishes it with the approved o
 it('warns instead of publishing when nothing is ready', function () {
     Queue::fake();
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->post(route('admin.tools.ai-descriptions.approve-and-apply-all'))
         ->assertRedirect()
         ->assertSessionHas('warning');
@@ -922,7 +970,7 @@ it('offers a discard-all button on the review page', function () {
         'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.tools.ai-descriptions.review'))
         ->assertOk()
         ->assertSee('Alle concepten weggooien (1)');
@@ -946,7 +994,7 @@ it('discards every unpublished draft of the run in the current view', function (
         'fields'     => ['beschrijving_l' => 'x'],
     ]));
 
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     $this->actingAs($admin, 'admin')
         ->post(route('admin.tools.ai-descriptions.discard-all'), ['run' => $run->id, 'status' => 'pending'])
@@ -970,7 +1018,7 @@ it('discards every unpublished draft of the run in the current view', function (
 });
 
 it('warns instead of discarding when the view holds no drafts', function () {
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->post(route('admin.tools.ai-descriptions.discard-all'), ['status' => 'pending'])
         ->assertRedirect()
         ->assertSessionHas('warning');
@@ -985,7 +1033,7 @@ it('takes approved drafts out of the approved list as soon as publishing is requ
         'fields'     => ['beschrijving_l' => 'x'],
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->post(route('admin.tools.ai-descriptions.apply'), ['sync_woo' => 1])
         ->assertRedirect()
         ->assertSessionHas('success');
@@ -1004,7 +1052,7 @@ it('shows drafts in progress under their own tab with a progress banner', functi
         ]);
     }
 
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     $this->actingAs($admin, 'admin')
         ->get(route('admin.tools.ai-descriptions.review'))
@@ -1033,7 +1081,7 @@ it('refuses to decide on or rewrite a draft that is still being processed', func
         'fields'     => ['beschrijving_l' => 'x'],
     ]);
 
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     $this->actingAs($admin, 'admin')
         ->postJson(route('admin.tools.ai-descriptions.decide', ['draft' => $draft->id]), ['decision' => 'reject'])
@@ -1055,7 +1103,7 @@ it('offers an edit button on the review page instead of a reject button', functi
         'fields'     => ['beschrijving_l' => '<p>Nieuwe tekst.</p>'],
     ]);
 
-    $html = $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $html = $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->get(route('admin.tools.ai-descriptions.review'))
         ->assertOk()
         ->assertSee('Aanpassen')
@@ -1086,7 +1134,7 @@ it('saves a hand-corrected text, approves it and queues it for publishing', func
         'error'      => 'Iets ging mis.',
     ]);
 
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     $this->actingAs($admin, 'admin')
         ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
@@ -1126,7 +1174,7 @@ it('publishes a hand-corrected text onto the product', function () {
         'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>'],
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::query()->firstOrFail(), 'admin')
+    $this->actingAs(Admin::query()->firstOrFail(), 'admin')
         ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
             'fields' => ['beschrijving_l' => '<p>Door mij herschreven.</p>'],
         ])
@@ -1150,7 +1198,7 @@ it('only accepts texts the draft already holds and refuses an empty one', functi
         'fields'     => ['beschrijving_l' => '<p>Voorstel.</p>'],
     ]);
 
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     $this->actingAs($admin, 'admin')
         ->postJson(route('admin.tools.ai-descriptions.edit', ['draft' => $draft->id]), [
@@ -1174,7 +1222,7 @@ it('refuses to edit a draft that is still being processed or already published',
     Queue::fake();
 
     $product = makeAiProduct(['productnaam' => 'Diamante 01']);
-    $admin = Webkul\User\Models\Admin::query()->firstOrFail();
+    $admin = Admin::query()->firstOrFail();
 
     foreach ([AiDescriptionDraft::STATUS_PUBLISHING, AiDescriptionDraft::STATUS_APPLIED] as $status) {
         $draft = AiDescriptionDraft::create([
