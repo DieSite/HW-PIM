@@ -44,6 +44,16 @@ class ImageCompositor
 
     private const DARK_FRACTION_LIMIT = 0.05;
 
+    /**
+     * Mask-derived images (silhouettes, eroded/dilated bands) keyed by mask
+     * path, size and operation. They depend only on the shape geometry, so a
+     * bulk run over thousands of composites pays for the expensive morphology
+     * once per shape instead of once per image.
+     *
+     * @var array<string, \Imagick>
+     */
+    private array $maskCache = [];
+
     public function __construct(private ImageManager $imageManager) {}
 
     /**
@@ -134,13 +144,7 @@ class ImageCompositor
             return null;
         }
 
-        $outlineWidth = $this->scaledOutlineWidth($image->getImageWidth());
-
-        $ring = clone $mask;
-        $inner = clone $mask;
-        $inner->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) $outlineWidth));
-        $inner->negateImage(false);
-        $ring->compositeImage($inner, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+        $ring = $this->edgeBand($maskPath, $mask, 0, $this->scaledOutlineWidth($image->getImageWidth()));
 
         $luminance = $this->bandMeanLuminance($image, $ring);
 
@@ -179,20 +183,14 @@ class ImageCompositor
         }
 
         $stripDepth = max(
-            $this->measureOutlineDepth($image, $mask) + self::STRIP_MARGIN,
+            $this->measureOutlineDepth($image, $maskPath, $mask) + self::STRIP_MARGIN,
             $this->scaledOutlineWidth($image->getImageWidth()) + self::STRIP_MARGIN,
             self::MIN_STRIP_DEPTH,
         );
 
         // White band from slightly outside the mask edge (anti-aliased spill)
         // down to the measured ring depth: band = dilate(mask) AND NOT erode(mask).
-        $outer = clone $mask;
-        $outer->morphology(\Imagick::MORPHOLOGY_DILATE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) self::STRIP_MARGIN));
-
-        $keep = clone $mask;
-        $keep->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) $stripDepth));
-        $keep->negateImage(false);
-        $outer->compositeImage($keep, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+        $outer = $this->edgeBand($maskPath, $mask, self::STRIP_MARGIN, $stripDepth);
 
         $white = new \Imagick();
         $white->newImage($image->getImageWidth(), $image->getImageHeight(), 'white');
@@ -202,6 +200,7 @@ class ImageCompositor
         $image->compositeImage($white, \Imagick::COMPOSITE_OVER, 0, 0);
         $image->setImageBackgroundColor('white');
         $image->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+        $image->setOption('png:compression-level', '0');
 
         return $this->imageManager->decode($image->getImageBlob());
     }
@@ -212,46 +211,123 @@ class ImageCompositor
      * up to ~10px, so the strip must adapt instead of assuming the configured
      * width. Capped so a genuinely near-black rug cannot erode indefinitely.
      */
-    private function measureOutlineDepth(\Imagick $image, \Imagick $mask): int
+    private function measureOutlineDepth(\Imagick $image, string $maskPath, \Imagick $mask): int
     {
         $depth = 0;
-        $current = clone $mask;
+        $darkPixels = $this->darkPixelMap($image);
 
         while ($depth < self::MAX_STRIP_DEPTH) {
-            $next = clone $current;
-            $next->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, '2'));
+            $band = $this->cachedMask(
+                $this->maskCacheKey($maskPath, $mask, "probe:$depth"),
+                function () use ($maskPath, $mask, $depth): \Imagick {
+                    $inner = clone $this->erodedChain($maskPath, $mask, $depth + 2);
+                    $inner->negateImage(false);
 
-            $band = clone $current;
-            $inner = clone $next;
-            $inner->negateImage(false);
-            $band->compositeImage($inner, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+                    $band = clone $this->erodedChain($maskPath, $mask, $depth);
+                    $band->compositeImage($inner, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
 
-            $fraction = $this->bandDarkFraction($image, $band);
+                    return $band;
+                },
+            );
+
+            $fraction = $this->bandDarkFraction($darkPixels, $band);
 
             if ($fraction === null || $fraction < self::DARK_FRACTION_LIMIT) {
                 break;
             }
 
             $depth += 2;
-            $current = $next;
         }
 
         return $depth;
     }
 
     /**
-     * Share (0..1) of pixels within a grayscale band mask that are darker than
-     * DARK_PIXEL_CUTOFF, or null when the band is empty. Unlike a mean, this
-     * still flags a band whose anti-aliased outline remnants are diluted by
-     * bright rug pixels.
+     * The mask eroded by successive 2px disks until `$depth` pixels are gone,
+     * matching the stepwise probing in measureOutlineDepth().
      */
-    private function bandDarkFraction(\Imagick $image, \Imagick $band): ?float
+    private function erodedChain(string $maskPath, \Imagick $mask, int $depth): \Imagick
+    {
+        if ($depth <= 0) {
+            return $mask;
+        }
+
+        return $this->cachedMask(
+            $this->maskCacheKey($maskPath, $mask, "chain:$depth"),
+            function () use ($maskPath, $mask, $depth): \Imagick {
+                $eroded = clone $this->erodedChain($maskPath, $mask, $depth - 2);
+                $eroded->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, '2'));
+
+                return $eroded;
+            },
+        );
+    }
+
+    /**
+     * Band along the mask edge from `$outside` pixels outside it to `$inside`
+     * pixels inside it: dilate(mask, outside) AND NOT erode(mask, inside).
+     */
+    private function edgeBand(string $maskPath, \Imagick $mask, int $outside, int $inside): \Imagick
+    {
+        return $this->cachedMask(
+            $this->maskCacheKey($maskPath, $mask, "band:$outside:$inside"),
+            static function () use ($mask, $outside, $inside): \Imagick {
+                $band = clone $mask;
+
+                if ($outside > 0) {
+                    $band->morphology(\Imagick::MORPHOLOGY_DILATE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) $outside));
+                }
+
+                $keep = clone $mask;
+                $keep->morphology(\Imagick::MORPHOLOGY_ERODE, 1, \ImagickKernel::fromBuiltIn(\Imagick::KERNEL_DISK, (string) $inside));
+                $keep->negateImage(false);
+                $band->compositeImage($keep, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
+
+                return $band;
+            },
+        );
+    }
+
+    /**
+     * Build a mask-derived image once and serve it from the cache afterwards.
+     * Callers must clone before mutating the returned instance.
+     *
+     * @param  callable(): \Imagick  $build
+     */
+    private function cachedMask(string $key, callable $build): \Imagick
+    {
+        return $this->maskCache[$key] ??= $build();
+    }
+
+    private function maskCacheKey(string $maskPath, \Imagick $mask, string $operation): string
+    {
+        return sprintf('%s:%dx%d:%s', $maskPath, $mask->getImageWidth(), $mask->getImageHeight(), $operation);
+    }
+
+    /**
+     * Grayscale map of the image with pixels darker than DARK_PIXEL_CUTOFF in
+     * white and everything else in black.
+     */
+    private function darkPixelMap(\Imagick $image): \Imagick
     {
         $dark = clone $image;
         $dark->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
         $dark->transformImageColorspace(\Imagick::COLORSPACE_GRAY);
         $dark->thresholdImage(self::DARK_PIXEL_CUTOFF * \Imagick::getQuantum());
         $dark->negateImage(false);
+
+        return $dark;
+    }
+
+    /**
+     * Share (0..1) of pixels within a grayscale band mask that are dark in the
+     * given dark-pixel map, or null when the band is empty. Unlike a mean, this
+     * still flags a band whose anti-aliased outline remnants are diluted by
+     * bright rug pixels.
+     */
+    private function bandDarkFraction(\Imagick $darkPixels, \Imagick $band): ?float
+    {
+        $dark = clone $darkPixels;
         $dark->compositeImage($band, \Imagick::COMPOSITE_MULTIPLY, 0, 0);
 
         $bandMean = $band->getImageChannelMean(\Imagick::CHANNEL_GRAY)['mean'];
@@ -298,11 +374,15 @@ class ImageCompositor
             return null;
         }
 
-        $mask = new \Imagick($maskPath);
-        $mask->resizeImage($width, $height, \Imagick::FILTER_BOX, 1);
-        $mask->setImageAlphaChannel(\Imagick::ALPHACHANNEL_EXTRACT);
+        $mask = $this->cachedMask("$maskPath:{$width}x{$height}:silhouette", static function () use ($maskPath, $width, $height): \Imagick {
+            $mask = new \Imagick($maskPath);
+            $mask->resizeImage($width, $height, \Imagick::FILTER_BOX, 1);
+            $mask->setImageAlphaChannel(\Imagick::ALPHACHANNEL_EXTRACT);
 
-        return $mask;
+            return $mask;
+        });
+
+        return clone $mask;
     }
 
     /**

@@ -308,6 +308,20 @@ it('removes a thicker legacy outline than the configured width', function () {
         ->and($this->compositor->detectShapeOutline((string) $out->encodeUsingFormat(Format::JPEG, quality: 90), 'rond'))->toBeFalse();
 })->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
 
+it('strips consecutive composites of different sizes with one compositor instance', function () {
+    $full = compositorRondComposite($this->compositor, true);
+    $half = (string) app(ImageManager::class)->decode($full)->resize(458, 546)->encodeUsingFormat(Format::JPEG, quality: 90);
+
+    $first = $this->compositor->removeShapeOutline($full, 'rond');
+    $second = $this->compositor->removeShapeOutline($half, 'rond');
+    $again = $this->compositor->removeShapeOutline($full, 'rond');
+
+    expect($second->width())->toBe(458)
+        ->and(compositorColorNear($second, 229, 273, 'cc8844'))->toBeTrue()
+        ->and($this->compositor->detectShapeOutline((string) $second->encodeUsingFormat(Format::JPEG, quality: 90), 'rond'))->toBeFalse()
+        ->and((string) $again->encodeUsingFormat(Format::JPEG, quality: 90))->toBe((string) $first->encodeUsingFormat(Format::JPEG, quality: 90));
+})->skip(! extension_loaded('imagick'), 'Shape masking requires Imagick.');
+
 it('keeps the HW icon outside the shape when stripping the outline', function () {
     $rondRect = config('product_image_editor.shapes.rond.rect');
 

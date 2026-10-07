@@ -203,13 +203,13 @@ class PrimaryImageEditorService
 
         $values = $this->normalizeValues($product->values);
 
-        $primaryAsset = $this->firstAssetWithFile($values['common'][$config['primary_attribute']] ?? null, $disk);
+        $primary = $this->readFirstAsset($values['common'][$config['primary_attribute']] ?? null, $disk);
 
-        if ($primaryAsset === null) {
+        if ($primary === null) {
             return ['outcome' => self::OUTCOME_MANUAL, 'shape' => $shape, 'reason' => 'primary image asset or file missing'];
         }
 
-        $primaryContents = Storage::disk($disk)->get($primaryAsset->path);
+        [$primaryAsset, $primaryContents] = $primary;
         $detected = $this->compositor->detectShapeOutline($primaryContents, $shape);
 
         if ($detected === null) {
@@ -225,17 +225,18 @@ class PrimaryImageEditorService
         }
 
         foreach ([$config['primary_attribute'], $config['no_logo_attribute']] as $attributeCode) {
-            $asset = $attributeCode === $config['primary_attribute']
-                ? $primaryAsset
-                : $this->firstAssetWithFile($values['common'][$attributeCode] ?? null, $disk);
+            $read = $attributeCode === $config['primary_attribute']
+                ? $primary
+                : $this->readFirstAsset($values['common'][$attributeCode] ?? null, $disk);
 
-            if ($asset === null) {
+            if ($read === null) {
                 continue;
             }
 
-            $contents = $asset->id === $primaryAsset->id ? $primaryContents : Storage::disk($disk)->get($asset->path);
+            [$asset, $contents] = $read;
+            $isPrimary = $asset->id === $primaryAsset->id;
 
-            if ($this->compositor->detectShapeOutline($contents, $shape) !== true) {
+            if (! $isPrimary && $this->compositor->detectShapeOutline($contents, $shape) !== true) {
                 continue;
             }
 
@@ -285,9 +286,13 @@ class PrimaryImageEditorService
     }
 
     /**
-     * The first asset of a DAM value whose file actually exists on disk.
+     * The first asset of a DAM value together with its file contents, or null
+     * when the asset or its file is missing. Reads in one storage round trip
+     * instead of an exists() check followed by a get().
+     *
+     * @return array{0: Asset, 1: string}|null
      */
-    private function firstAssetWithFile(mixed $value, string $disk): ?Asset
+    private function readFirstAsset(mixed $value, string $disk): ?array
     {
         $ids = $this->assetIdList($value);
 
@@ -297,11 +302,13 @@ class PrimaryImageEditorService
 
         $asset = Asset::find($ids[0]);
 
-        if (! $asset || ! Storage::disk($disk)->exists($asset->path)) {
+        if (! $asset) {
             return null;
         }
 
-        return $asset;
+        $contents = Storage::disk($disk)->get($asset->path);
+
+        return is_string($contents) && $contents !== '' ? [$asset, $contents] : null;
     }
 
     /**
