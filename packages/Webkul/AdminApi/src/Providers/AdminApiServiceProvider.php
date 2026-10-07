@@ -6,8 +6,13 @@ use Carbon\Carbon;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Passport;
 use Webkul\AdminApi\Console\ApiClientCommand;
+use Webkul\AdminApi\Http\Middleware\EnsureAcceptsJson;
+use Webkul\AdminApi\Http\Middleware\LocaleMiddleware;
+use Webkul\AdminApi\Http\Middleware\ScopeMiddleware;
+use Webkul\AdminApi\Models\Client;
 use Webkul\Core\Tree;
 
 class AdminApiServiceProvider extends ServiceProvider
@@ -18,9 +23,9 @@ class AdminApiServiceProvider extends ServiceProvider
      * @var array
      */
     protected $middlewareAliases = [
-        'accept.json'    => \Webkul\AdminApi\Http\Middleware\EnsureAcceptsJson::class,
-        'request.locale' => \Webkul\AdminApi\Http\Middleware\LocaleMiddleware::class,
-        'api.scope'      => \Webkul\AdminApi\Http\Middleware\ScopeMiddleware::class,
+        'accept.json'    => EnsureAcceptsJson::class,
+        'request.locale' => LocaleMiddleware::class,
+        'api.scope'      => ScopeMiddleware::class,
     ];
 
     /**
@@ -118,17 +123,18 @@ class AdminApiServiceProvider extends ServiceProvider
         Passport::$validateKeyPermissions = false;
 
         Passport::enablePasswordGrant();
-        Passport::useClientModel(\Webkul\AdminApi\Models\Client::class);
+        Passport::useClientModel(Client::class);
 
         /**
-         * A day, so MCP connectors and API integrations sign in at most once
-         * a day instead of every hour.
+         * Access tokens live a day; refresh tokens rotate on every use and live
+         * 90 days, so MCP connectors and API integrations only sign in again
+         * after 90 days of inactivity.
          */
         Passport::tokensExpireIn(Carbon::now()->addDay());
 
-        Passport::refreshTokensExpireIn(Carbon::now()->addDay());
+        Passport::refreshTokensExpireIn(Carbon::now()->addDays(90));
 
-        $this->app->bind(\Laravel\Passport\ClientRepository::class, \Webkul\AdminApi\Repositories\ClientRepository::class);
+        $this->app->bind(ClientRepository::class, \Webkul\AdminApi\Repositories\ClientRepository::class);
     }
 
     /**

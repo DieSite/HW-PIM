@@ -1,8 +1,13 @@
 <?php
 
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
+use Laravel\Passport\RefreshToken;
 use Tests\Feature\Mcp\McpCatalogFixture;
 use Webkul\AdminApi\Repositories\ClientRepository;
+use Webkul\Core\Exceptions\Handler;
+use Webkul\User\Models\Admin;
 
 const MCP_REDIRECT = 'https://claude.ai/api/mcp/auth_callback';
 
@@ -21,7 +26,15 @@ function registerMcpClient(): array
  * Runs the authorization-code + PKCE flow a Claude connector performs and
  * returns the access token.
  */
-function mcpAccessToken(\Webkul\User\Models\Admin $admin): string
+function mcpAccessToken(Admin $admin): string
+{
+    return mcpTokens($admin)['access_token'];
+}
+
+/**
+ * @return array{client_id: string, access_token: string, refresh_token: string}
+ */
+function mcpTokens(Admin $admin): array
 {
     $client = registerMcpClient();
     $verifier = Str::random(64);
@@ -38,8 +51,8 @@ function mcpAccessToken(\Webkul\User\Models\Admin $admin): string
     ]))->assertOk()->assertSee('Toestaan');
 
     $redirect = test()->post('/oauth/authorize', [
-        'state'     => 'xyz',
-        'client_id' => $client['client_id'],
+        'state'      => 'xyz',
+        'client_id'  => $client['client_id'],
         'auth_token' => $consent->viewData('authToken'),
     ])->assertRedirect()->headers->get('Location');
 
@@ -58,10 +71,14 @@ function mcpAccessToken(\Webkul\User\Models\Admin $admin): string
     expect($token->json('expires_in'))->toBeGreaterThanOrEqual(86400 - 60)
         ->and($token->json('refresh_token'))->toBeString();
 
-    return $token->json('access_token');
+    return [
+        'client_id'     => $client['client_id'],
+        'access_token'  => $token->json('access_token'),
+        'refresh_token' => $token->json('refresh_token'),
+    ];
 }
 
-function mcpCall(string $token, string $method, array $params = []): \Illuminate\Testing\TestResponse
+function mcpCall(string $token, string $method, array $params = []): TestResponse
 {
     return test()->withToken($token)->postJson('/mcp/products', [
         'jsonrpc' => '2.0',
@@ -142,7 +159,7 @@ it('sends a guest from the authorize screen through the MCP login and back', fun
  */
 it('sends guests to the MCP login and answers MCP with a 401 when debug is off', function () {
     config(['app.debug' => false]);
-    $this->app->singleton(\Illuminate\Contracts\Debug\ExceptionHandler::class, fn ($app) => new \Webkul\Core\Exceptions\Handler($app));
+    $this->app->singleton(ExceptionHandler::class, fn ($app) => new Handler($app));
 
     $client = registerMcpClient();
 
@@ -178,6 +195,24 @@ it('issues a token through the authorization code flow and serves the tools with
     mcpCall($token, 'tools/call', ['name' => 'get-products', 'arguments' => ['skus' => ['MCP-E2E']]])
         ->assertOk()
         ->assertSee('Eurogros');
+});
+
+it('keeps the connector signed in through refresh tokens that last 90 days', function () {
+    $tokens = mcpTokens(McpCatalogFixture::admin());
+
+    expect(RefreshToken::query()->sole()->expires_at)
+        ->toBeGreaterThan(now()->addDays(89));
+
+    $refreshed = $this->postJson('/oauth/token', [
+        'grant_type'    => 'refresh_token',
+        'client_id'     => $tokens['client_id'],
+        'refresh_token' => $tokens['refresh_token'],
+        'scope'         => 'mcp:use',
+    ])->assertOk();
+
+    expect($refreshed->json('refresh_token'))->toBeString()->not->toBe($tokens['refresh_token']);
+
+    mcpCall($refreshed->json('access_token'), 'tools/list')->assertOk()->assertSee('get-products');
 });
 
 it('rejects tokens that were not granted the mcp:use scope', function () {
