@@ -119,7 +119,7 @@ it('downloads a photo from a public URL and refuses private addresses and non-im
 
     ProductsServer::actingAs($this->admin, 'api')
         ->tool(UploadProductImageTool::class, [])
-        ->assertHasErrors(['Give either "url" or "content_base64"']);
+        ->assertHasErrors(['Give exactly one of "url", "content_base64" or "dropbox"']);
 });
 
 it('dry-runs a new main photo with before/after and previews without writing anything', function () {

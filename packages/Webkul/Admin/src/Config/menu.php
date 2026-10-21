@@ -237,6 +237,12 @@ return [
         'route'      => 'admin.tools.delivery-times.index',
         'sort'       => 14,
         'icon'       => 'icon-product',
+    ], [
+        'key'        => 'tools.dropbox',
+        'name'       => 'Dropbox',
+        'route'      => 'admin.tools.dropbox.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
     ],
 
     /**

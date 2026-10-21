@@ -9,6 +9,7 @@ use App\Http\Controllers\PhotoroomController;
 use App\Http\Controllers\Tools\AiDescriptionsController;
 use App\Http\Controllers\Tools\BulkEditController;
 use App\Http\Controllers\Tools\DeliveryTimesController;
+use App\Http\Controllers\Tools\DropboxController;
 use App\Http\Controllers\Tools\ErroredProductsController;
 use App\Http\Controllers\Tools\EurgrosController;
 use App\Http\Controllers\Tools\HordeurenAnalysisController;
@@ -72,9 +73,13 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::get('/hordeuren-analyse', [HordeurenAnalysisController::class, 'index'])->name('admin.tools.hordeuren-analyse.index');
         Route::post('/hordeuren-analyse', [HordeurenAnalysisController::class, 'run'])->name('admin.tools.hordeuren-analyse.run');
 
-
         Route::get('/levertijden', [DeliveryTimesController::class, 'index'])->name('admin.tools.delivery-times.index');
         Route::post('/levertijden', [DeliveryTimesController::class, 'update'])->name('admin.tools.delivery-times.update');
+
+        Route::get('/dropbox', [DropboxController::class, 'index'])->name('admin.tools.dropbox.index');
+        Route::post('/dropbox/connect', [DropboxController::class, 'connect'])->name('admin.tools.dropbox.connect');
+        Route::get('/dropbox/callback', [DropboxController::class, 'callback'])->name('admin.tools.dropbox.callback');
+        Route::post('/dropbox/disconnect', [DropboxController::class, 'disconnect'])->name('admin.tools.dropbox.disconnect');
     });
 
     Route::prefix('custom')->group(function () {

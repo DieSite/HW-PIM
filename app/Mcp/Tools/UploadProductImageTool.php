@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('upload-product-image')]
-#[Description('Upload one photo (JPEG, PNG or WebP, max 25 MB) into the DAM from a public URL or base64 content and get its asset id, file name, URL and a preview. A photo whose exact bytes are already in the DAM is not stored twice: the existing asset is returned ("action": "reused"). Uploading does not change any product; link the asset with set-product-images. dry_run checks the file and shows the preview without storing it.')]
+#[Description('Upload one photo (JPEG, PNG or WebP, max 25 MB) into the DAM from Dropbox, a public URL or base64 content and get its asset id, file name, URL and a preview. A photo whose exact bytes are already in the DAM is not stored twice: the existing asset is returned ("action": "reused"). Uploading does not change any product; link the asset with set-product-images. dry_run checks the file and shows the preview without storing it.')]
 #[IsIdempotent]
 #[IsDestructive(false)]
 class UploadProductImageTool extends Tool
@@ -33,6 +33,7 @@ class UploadProductImageTool extends Tool
         $validated = $request->validate([
             'url'            => ['nullable', 'string', 'url'],
             'content_base64' => ['nullable', 'string'],
+            'dropbox'        => ['nullable', 'string', 'max:2000'],
             'file_name'      => ['nullable', 'string', 'max:200'],
             'dry_run'        => ['nullable', 'boolean'],
         ]);
@@ -56,7 +57,8 @@ class UploadProductImageTool extends Tool
         return [
             'url'            => $schema->string()->description('Public http(s) URL of the photo.'),
             'content_base64' => $schema->string()->description('The photo file as base64 (a data: URI prefix is allowed). Use instead of url.'),
-            'file_name'      => $schema->string()->description('Descriptive file name, e.g. "HW Trevis 01 beige 900.jpg"; it is made URL-safe and gets a random suffix. Defaults to the URL\'s file name.'),
+            'dropbox'        => $schema->string()->description('A file in the connected Dropbox: its path (e.g. "/Leveranciers/Desso/Trevis 01.jpg") or id ("id:...") as browse-dropbox lists it, or a Dropbox share link. Use instead of url.'),
+            'file_name'      => $schema->string()->description('Descriptive file name, e.g. "HW Trevis 01 beige 900.jpg"; it is made URL-safe and gets a random suffix. Defaults to the source\'s file name.'),
             'dry_run'        => $schema->boolean()->default(false)->description('Check the photo and return the preview without storing it.'),
         ];
     }

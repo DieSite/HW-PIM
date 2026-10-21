@@ -2,6 +2,8 @@
 
 namespace App\Services\Mcp;
 
+use App\Clients\DropboxClient;
+use App\Exceptions\DropboxException;
 use App\Exceptions\ProductUpsertException;
 use App\Mcp\AdminPermission;
 use App\Models\AssetLogoVariant;
@@ -63,14 +65,15 @@ class ProductImageService
         private ProductSyncDispatcher $syncDispatcher,
         private AssetDescriber $describer,
         private HwIconResolver $iconResolver,
+        private DropboxClient $dropbox,
     ) {}
 
     /**
-     * Stores a photo from a URL or base64 content as a new DAM asset. A photo
-     * whose bytes already exist as an asset is not stored again; the existing
-     * asset is returned instead.
+     * Stores a photo from a URL, base64 content or Dropbox as a new DAM asset.
+     * A photo whose bytes already exist as an asset is not stored again; the
+     * existing asset is returned instead.
      *
-     * @param  array{url?: ?string, content_base64?: ?string, file_name?: ?string}  $input
+     * @param  array{url?: ?string, content_base64?: ?string, dropbox?: ?string, file_name?: ?string}  $input
      * @return array{result: array<string, mixed>, preview: ?string}
      */
     public function upload(array $input, Admin $admin, bool $dryRun = false): array
@@ -79,12 +82,23 @@ class ProductImageService
 
         $url = trim((string) ($input['url'] ?? ''));
         $base64 = (string) ($input['content_base64'] ?? '');
+        $dropbox = trim((string) ($input['dropbox'] ?? ''));
 
-        if (($url === '') === ($base64 === '')) {
-            throw new ProductUpsertException('Give either "url" or "content_base64", not both.');
+        if (count(array_filter([$url, $base64, $dropbox], fn (string $source): bool => $source !== '')) !== 1) {
+            throw new ProductUpsertException('Give exactly one of "url", "content_base64" or "dropbox".');
         }
 
-        $contents = $url !== '' ? $this->download($url) : $this->decodeBase64($base64);
+        if ($url !== '' && DropboxClient::isSharedLink($url)) {
+            [$dropbox, $url] = [$url, ''];
+        }
+
+        if ($dropbox !== '') {
+            $file = $this->downloadFromDropbox($dropbox);
+            $contents = $file['contents'];
+            $input['file_name'] = ($input['file_name'] ?? null) ?: $file['name'];
+        } else {
+            $contents = $url !== '' ? $this->download($url) : $this->decodeBase64($base64);
+        }
 
         $size = @getimagesizefromstring($contents);
         $extension = self::MIME_EXTENSIONS[$size['mime'] ?? ''] ?? null;
@@ -116,7 +130,13 @@ class ProductImageService
         } else {
             $asset = $this->storeAsset($contents, $fileName, $size['mime'], $extension);
 
-            Log::channel('mcp')->info('asset uploaded', ['admin' => $admin->email, 'asset_id' => $asset->id, 'file_name' => $fileName, 'source' => $url !== '' ? $url : 'base64']);
+            $source = match (true) {
+                $dropbox !== '' => 'dropbox:'.($file['path'] ?? $dropbox),
+                $url !== ''     => $url,
+                default         => 'base64',
+            };
+
+            Log::channel('mcp')->info('asset uploaded', ['admin' => $admin->email, 'asset_id' => $asset->id, 'file_name' => $fileName, 'source' => $source]);
 
             $result += [
                 'action' => 'created',
@@ -684,6 +704,18 @@ class ProductImageService
         }
 
         return $contents;
+    }
+
+    /**
+     * @return array{contents: string, name: string, path: ?string, size: int}
+     */
+    private function downloadFromDropbox(string $reference): array
+    {
+        try {
+            return $this->dropbox->download($reference, self::MAX_UPLOAD_BYTES);
+        } catch (DropboxException $e) {
+            throw new ProductUpsertException($e->getMessage());
+        }
     }
 
     /**
