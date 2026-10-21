@@ -4,7 +4,6 @@ use App\Exceptions\ProductUpsertException;
 use App\Services\Mcp\ProductUpsertService;
 use App\Services\ProductService;
 use Illuminate\Support\Facades\Event;
-use Mockery\MockInterface;
 use Tests\Feature\Mcp\McpCatalogFixture;
 use Webkul\Product\Models\Product;
 
@@ -73,7 +72,7 @@ it('creates a configurable parent and its variants in one batch, variants listed
         ['sku' => 'MCP-NEW.2', 'parent_sku' => 'MCP-NEW', 'values' => ['common' => [
             'onderkleed' => 'Zonder onderkleed', 'maatgroep' => '200 cm x 290 cm', 'prijs' => ['EUR' => '499'], 'ean' => '8712345678906',
         ]]],
-        ['sku' => 'MCP-NEW', 'type' => 'configurable', 'family' => McpCatalogFixture::FAMILY, 'super_attributes' => ['onderkleed', 'maatgroep'],
+        ['sku'       => 'MCP-NEW', 'type' => 'configurable', 'family' => McpCatalogFixture::FAMILY, 'super_attributes' => ['onderkleed', 'maatgroep'],
             'values' => ['common' => ['merk' => 'Eurogros', 'productnaam' => 'Nieuw kleed']]],
         ['sku' => 'MCP-NEW.1', 'parent_sku' => 'MCP-NEW', 'values' => ['common' => [
             'onderkleed' => 'Zonder onderkleed', 'maatgroep' => '160 cm x 230 cm', 'prijs' => ['EUR' => '329'],
@@ -144,13 +143,13 @@ it('refuses writes the MCP must not make', function (array $item, string $messag
         ->and(implode(' ', $result['results'][0]['errors']))->toContain($message);
 })->with([
     'unknown attribute'      => [['sku' => 'MCP-6', 'values' => ['common' => ['kleur_xyz' => 'rood']]], 'not an attribute of this product'],
-    'asset attribute'        => [['sku' => 'MCP-6', 'values' => ['common' => ['afbeelding' => '123']]], 'cannot be set through the MCP'],
+    'asset attribute'        => [['sku' => 'MCP-6', 'values' => ['common' => ['afbeelding' => '123']]], 'set with the set-product-images tool'],
     'wrong section'          => [['sku' => 'MCP-6', 'values' => ['common' => ['mcp_tagline' => 'x']]], 'belongs in values.locale_specific'],
-    'variant axis change'    => [['sku' => 'MCP-6.1', 'values' => ['common' => ['maatgroep' => '200 cm x 290 cm']]], 'variant axis'],
+    'axis on parent'         => [['sku' => 'MCP-6', 'values' => ['common' => ['maatgroep' => '200 cm x 290 cm']]], 'change it on the variants'],
     'sku rename'             => [['sku' => 'MCP-6', 'values' => ['common' => ['sku' => 'OTHER']]], 'cannot be renamed'],
     'type change'            => [['sku' => 'MCP-6', 'type' => 'simple', 'values' => []], 'cannot be changed'],
     'unknown new product'    => [['sku' => 'MCP-UNKNOWN', 'values' => []], 'does not exist yet'],
-    'unknown section'        => [['sku' => 'MCP-6', 'values' => ['associations' => []]], 'Unknown values section'],
+    'unknown section'        => [['sku' => 'MCP-6', 'values' => ['bogus' => []]], 'Unknown values section'],
     'unknown category'       => [['sku' => 'MCP-6', 'values' => ['categories' => ['does-not-exist']]], 'does-not-exist does not exist'],
 ]);
 

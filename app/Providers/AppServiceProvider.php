@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Exceptions\Handler;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
+use App\Jobs\SyncCategoryToWooCommerceJob;
+use App\Models\Product;
 use App\Monitor\AlertFailedJob;
 use App\Monitor\HorizonQueueStats;
 use App\Services\AI\AiSettings;
@@ -18,11 +20,11 @@ use Illuminate\Support\Facades\ParallelTesting;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Passport\Passport;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\DriverInterface;
+use Laravel\Passport\Passport;
 use Webkul\Product\Models\Product as WebkulProduct;
 use Webkul\Theme\ViewRenderEventManager;
 
@@ -90,12 +92,22 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(QueueJobFailed::class, [AlertFailedJob::class, 'handle']);
 
         /**
+         * A category saved in the admin is created in WooCommerce straight
+         * away; the product export drops categories it has no mapping for.
+         */
+        Event::listen(['catalog.category.create.after', 'catalog.category.update.after'], function (mixed $category): void {
+            if (is_object($category) && isset($category->id)) {
+                SyncCategoryToWooCommerceJob::dispatch((int) $category->id);
+            }
+        });
+
+        /**
          * Keep a variant's delivery time in step with its stock on every save:
          * the stock imports, the stock tools and the product form all save the
          * model. Registered on both classes, as Eloquent names model events
          * after the concrete class.
          */
-        foreach ([WebkulProduct::class, \App\Models\Product::class] as $productModel) {
+        foreach ([WebkulProduct::class, Product::class] as $productModel) {
             $productModel::saving(fn (WebkulProduct $product) => app(DeliveryTimeService::class)->applyTo($product));
         }
 
@@ -106,7 +118,7 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            $appProduct = \App\Models\Product::with(['bolSyncEvents.credential', 'wooCommerceSyncEvents'])->find($product->id);
+            $appProduct = Product::with(['bolSyncEvents.credential', 'wooCommerceSyncEvents'])->find($product->id);
 
             if ($appProduct === null) {
                 return;

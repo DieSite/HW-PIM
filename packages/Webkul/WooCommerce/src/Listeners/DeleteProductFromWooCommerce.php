@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Jobs\Middleware\DisconnectsIdleRedis;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -10,7 +11,6 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Webkul\WooCommerce\Services\WooCommerceService;
 use Webkul\WooCommerce\Traits\DataTransferMappingTrait;
-use App\Jobs\Middleware\DisconnectsIdleRedis;
 
 class DeleteProductFromWooCommerce implements ShouldQueue
 {
@@ -19,6 +19,8 @@ class DeleteProductFromWooCommerce implements ShouldQueue
     public const ACTION_GET = 'getAllProduct';
 
     public const DELETE_PRODUCT = 'deleteProduct';
+
+    public const DELETE_PRODUCT_VARIANT = 'deleteProductVariant';
 
     public $tries = 5;
 
@@ -69,17 +71,30 @@ class DeleteProductFromWooCommerce implements ShouldQueue
             return Log::warning('Auto-sync setting is disabled. Product cannot be deleted.');
         }
 
-        // Check if product exists via SKU
+        // Check if product exists via SKU; this also finds variations.
         $existingProduct = $this->connectorService->requestApiAction('getProductWithSku', [], ['sku' => $this->batch]);
 
-        if (! isset($existingProduct[0])) {
+        if (! isset($existingProduct[0]['id'])) {
             return Log::info("Product with sku $this->batch does not exist at woocommerce end.");
-        } else {
-            $apiParams = ['credential' => $this->credential['id']];
-            $apiParams['id'] = $existingProduct[0]['id'];
-            $result = $this->connectorService->requestApiAction(self::DELETE_PRODUCT, [], $apiParams);
-
-            return Log::info("Product with sku $this->batch deleted successfully.");
         }
+
+        $found = $existingProduct[0];
+        $apiParams = ['credential' => $this->credential['id'], 'id' => $found['id']];
+
+        // The products endpoint refuses variations, and variations cannot be
+        // trashed, so a variation is deleted for good through its own endpoint.
+        if (($found['type'] ?? null) === 'variation' && ! empty($found['parent_id'])) {
+            $result = $this->connectorService->requestApiAction(self::DELETE_PRODUCT_VARIANT, [], $apiParams + ['product' => $found['parent_id'], 'force' => 'true']);
+        } else {
+            $result = $this->connectorService->requestApiAction(self::DELETE_PRODUCT, [], $apiParams);
+        }
+
+        if (($result['id'] ?? null) != $found['id']) {
+            Log::error("Deleting sku $this->batch from WooCommerce failed.", ['response' => $result]);
+
+            throw new \RuntimeException("Deleting sku $this->batch from WooCommerce failed: ".json_encode($result));
+        }
+
+        return Log::info("Product with sku $this->batch deleted successfully.");
     }
 }

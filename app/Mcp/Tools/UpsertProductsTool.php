@@ -15,7 +15,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('upsert-products')]
-#[Description('Create or update up to 100 products in one call. An existing SKU is patched: only the attributes you send change, null clears one, categories are replaced when sent. A new SKU is created as a configurable parent (type + family + super_attributes), a variant (parent_sku + the variant axis values in values.common) or a simple product (type + family). Products are never deleted. Each item succeeds or fails on its own. Use dry_run first to see the exact before/after changes without saving. Saved changes are synced to WooCommerce and, for Bol-enabled products, to Bol.com.')]
+#[Description('Create or update up to 100 products in one call. An existing SKU is patched: only the attributes you send change, null clears one, categories are replaced when sent. A new SKU is created as a configurable parent (type + family + super_attributes), a variant (parent_sku + the variant axis values in values.common) or a simple product (type + family). A variant can move to another axis value (e.g. another maatgroep) when no sibling has that combination. values.associations.cross_sells replaces the cross-sell list of a parent (other parent SKUs, e.g. the other colours of the same design; products in the same batch may be referred to). Deleting is done with delete-products. Each item succeeds or fails on its own. Use dry_run first to see the exact before/after changes without saving. Saved changes are synced to WooCommerce and, for Bol-enabled products, to Bol.com.')]
 #[IsIdempotent]
 #[IsDestructive(false)]
 class UpsertProductsTool extends Tool
@@ -64,7 +64,10 @@ class UpsertProductsTool extends Tool
                         'locale_specific'         => $attributeMap('locale_code => {attribute_code => value}.'),
                         'channel_specific'        => $attributeMap('channel_code => {attribute_code => value}.'),
                         'channel_locale_specific' => $attributeMap('channel_code => {locale_code => {attribute_code => value}}.'),
-                        'categories'              => $schema->array()->items($schema->string())->description('Category codes; replaces the current categories.'),
+                        'categories'              => $schema->array()->items($schema->string())->description('Category codes (see get-categories); replaces the current categories.'),
+                        'associations'            => $schema->object([
+                            'cross_sells' => $schema->array()->items($schema->string())->description('Parent SKUs; replaces the current list.'),
+                        ])->description('Only on parent/standalone products.'),
                     ])->description('The attributes to set, grouped by the section get-family-attributes reports for each attribute.'),
                 ])
             ),

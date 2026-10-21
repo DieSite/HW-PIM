@@ -14,6 +14,7 @@ use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\NotifyMissingEurogrosEansJob;
 use App\Jobs\RunHordeurenAnalysisJob;
 use App\Jobs\ScrapeHordeurenCompetitorJob;
+use App\Jobs\SyncCategoryToWooCommerceJob;
 use App\Jobs\SyncProductWithBolComJob;
 use App\Jobs\SyncWooCommerceStockJob;
 use App\Models\BolComCredential;
@@ -56,6 +57,7 @@ function queueTimingJobFactories(): array
         NotifyMissingEurogrosEansJob::class    => fn () => new NotifyMissingEurogrosEansJob(CarbonImmutable::now()),
         RunHordeurenAnalysisJob::class         => fn () => new RunHordeurenAnalysisJob('test@example.com'),
         ScrapeHordeurenCompetitorJob::class    => fn () => new ScrapeHordeurenCompetitorJob('01-voorbeeld.spec.js'),
+        SyncCategoryToWooCommerceJob::class    => fn () => new SyncCategoryToWooCommerceJob(1),
         SyncProductWithBolComJob::class        => fn () => new SyncProductWithBolComJob(new WebkulProduct(), new BolComCredential()),
         SyncWooCommerceStockJob::class         => fn () => new SyncWooCommerceStockJob([]),
 

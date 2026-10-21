@@ -257,6 +257,10 @@ class Exporter extends AbstractExporter
     {
         $item = $batch->toArray();
 
+        if (! empty($item['variants'])) {
+            $item['variants'] = $this->enabledVariants($item['variants']);
+        }
+
         $formatted = [
             'name'        => $item['code'],
             'slug'        => $item['code'],
@@ -804,6 +808,22 @@ class Exporter extends AbstractExporter
                 }
             }
         }
+    }
+
+    /**
+     * The variants the parent offers in the shop. A disabled variant is
+     * deleted from WooCommerce, so its size, price and stock must not reach
+     * the parent either. When none is enabled all of them are kept, because a
+     * parent without options fails on its default attributes.
+     *
+     * @param  array<int, array<string, mixed>>  $variants
+     * @return array<int, array<string, mixed>>
+     */
+    protected function enabledVariants(array $variants): array
+    {
+        $enabled = array_values(array_filter($variants, fn (array $variant): bool => (int) ($variant['status'] ?? 0) === 1));
+
+        return $enabled === [] ? $variants : $enabled;
     }
 
     /**

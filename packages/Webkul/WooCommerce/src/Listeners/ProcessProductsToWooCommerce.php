@@ -207,6 +207,12 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         );
 
         try {
+            if ($this->batch->parentId !== null && (int) $product->status !== 1) {
+                $this->deleteDisabledVariation($product->sku);
+
+                return;
+            }
+
             $productData = $this->formatData($this->batch);
 
             if (isset($productData['parent_id'])) {
@@ -405,6 +411,68 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         }
 
         $this->handleWoocommerceResponse($result, $productData);
+    }
+
+    /**
+     * A disabled variant is not offered in the shop at all: its WooCommerce
+     * variation is deleted for good. Enabling the variant again creates a new
+     * one. The SKU search finds variations too, wherever they hang.
+     *
+     * @throws WoocommerceTimeoutException
+     * @throws \Exception
+     */
+    private function deleteDisabledVariation(string $sku): void
+    {
+        $found = $this->connectorService->requestApiAction('getProductWithSku', [], ['sku' => $sku]);
+
+        $this->assertWooCommerceAnswered($found, $sku);
+
+        if (($found[0]['type'] ?? null) !== 'variation' || empty($found[0]['parent_id'])) {
+            $this->recordSuccess($sku, 'Inactieve variant staat niet in WooCommerce.');
+
+            return;
+        }
+
+        $variationId = $found[0]['id'];
+
+        $result = $this->connectorService->requestApiAction(
+            'deleteProductVariant',
+            [],
+            ['credential' => $this->credential['id'], 'product' => $found[0]['parent_id'], 'id' => $variationId, 'force' => 'true']
+        );
+
+        $this->assertWooCommerceAnswered($result, $sku);
+
+        if (($result['id'] ?? null) != $variationId) {
+            throw new \Exception("Deleting variation {$sku} from WooCommerce failed ({$result['code']}): ".json_encode($result));
+        }
+
+        DataTransferMapping::query()
+            ->where('entityType', 'product')
+            ->where('code', $sku)
+            ->where('apiUrl', $this->credential['shopUrl'])
+            ->delete();
+
+        Log::info("Deleted disabled variation {$sku} (WP ID: {$variationId}) from WooCommerce.");
+        $this->recordSuccess($sku, 'Inactieve variant verwijderd uit WooCommerce.');
+    }
+
+    /**
+     * An empty search result must mean the SKU is not in the shop, never that
+     * the request failed.
+     *
+     * @throws WoocommerceTimeoutException
+     * @throws WoocommerceBadGatewayException
+     * @throws \Exception
+     */
+    private function assertWooCommerceAnswered(array $result, string $sku): void
+    {
+        match ($result['code'] ?? null) {
+            200     => null,
+            0       => throw new WoocommerceTimeoutException($sku, $result['error'] ?? 'unknown curl error'),
+            502     => throw new WoocommerceBadGatewayException($sku),
+            default => throw new \Exception('Error occurred ('.($result['code'] ?? 'no code').'): '.json_encode($result)),
+        };
     }
 
     /**

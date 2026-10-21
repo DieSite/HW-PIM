@@ -23,7 +23,17 @@ class ProductCatalogReader
     private const OPTIONS_PREVIEW = 100;
 
     /**
-     * @param  array{skus?: list<string>, sku_prefix?: string, parent_sku?: string, family?: string, type?: string, attribute?: array{code: string, value: string}, limit?: int, page?: int}  $filters
+     * SKU => parent SKU (null for a parent) of the products the current
+     * get() call's cross-sells refer to.
+     *
+     * @var array<string, ?string>
+     */
+    private array $crossSellIndex = [];
+
+    public function __construct(private AssetDescriber $assetDescriber) {}
+
+    /**
+     * @param  array{skus?: list<string>, sku_prefix?: string, parent_sku?: string, family?: string, type?: string, attribute?: array{code: string, value: string}, category?: string, cross_sell_problems?: bool, limit?: int, page?: int}  $filters
      * @return array{total: int, page: int, limit: int, products: list<array<string, mixed>>}
      */
     public function search(array $filters): array
@@ -40,14 +50,24 @@ class ProductCatalogReader
             ->when($filters['family'] ?? null, fn (Builder $query, string $family) => $query->whereHas('attribute_family', fn (Builder $query) => $query->where('code', $family)))
             ->when($filters['parent_sku'] ?? null, fn (Builder $query, string $parentSku) => $query->whereHas('parent', fn (Builder $query) => $query->where('sku', $parentSku)))
             ->when($filters['attribute'] ?? null, fn (Builder $query, array $attribute) => $query->where('values->common->'.$attribute['code'], $attribute['value']))
+            ->when($filters['category'] ?? null, fn (Builder $query, string $category) => $query->whereRaw("JSON_CONTAINS(JSON_EXTRACT(`values`, '$.categories'), ?)", [json_encode($category)]))
             ->orderBy('sku');
+
+        $problems = null;
+
+        if (! empty($filters['cross_sell_problems'])) {
+            $problems = $this->allCrossSellProblems();
+            $query->whereIn('id', array_keys($problems));
+        }
 
         $total = $query->count();
 
-        $products = $query->forPage($page, $limit)->get()->map(function (Product $product): array {
+        $products = $query->forPage($page, $limit)->get()->map(function (Product $product) use ($problems): array {
             $common = DeliveryTimeService::decodeValues($product->values)[AbstractType::COMMON_VALUES_KEY] ?? [];
 
-            return [
+            return array_filter([
+                'cross_sell_problems' => $problems[$product->id] ?? null,
+            ]) + [
                 'sku'            => $product->sku,
                 'type'           => $product->type,
                 'family'         => $product->attribute_family?->code,
@@ -75,44 +95,18 @@ class ProductCatalogReader
             ->whereIn('sku', $skus)
             ->get();
 
+        $assetCodes = Attribute::query()->where('type', 'asset')->pluck('code')->all();
+        $assets = $this->assetDescriber->describe($products->flatMap(fn (Product $product): array => $this->assetIds($product, $assetCodes))->all());
+
+        $referenced = $products->whereNull('parent_id')->flatMap(fn (Product $product): array => $this->crossSells($product))->unique()->values()->all();
+        $this->crossSellIndex = Product::query()->with('parent:id,sku')->whereIn('sku', $referenced)->get(['id', 'sku', 'parent_id'])
+            ->mapWithKeys(fn (Product $product): array => [$product->sku => $product->parent?->sku])
+            ->all();
+
         return [
-            'products'  => $products->map(fn (Product $product): array => $this->present($product, $withVariants))->values()->all(),
+            'products'  => $products->map(fn (Product $product): array => $this->present($product, $withVariants, $assetCodes, $assets))->values()->all(),
             'not_found' => array_values(array_diff($skus, $products->pluck('sku')->all())),
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function present(Product $product, bool $withVariants): array
-    {
-        $axes = $product->super_attributes->pluck('code')->all();
-
-        $data = [
-            'sku'           => $product->sku,
-            'type'          => $product->type,
-            'family'        => $product->attribute_family?->code,
-            'parent_sku'    => $product->parent?->sku,
-            'status'        => (bool) $product->status,
-            'bol_com_sync'  => (bool) $product->bol_com_sync,
-            'sync_error'    => $product->additional['product_sync_error'] ?? null,
-            'updated_at'    => $product->updated_at?->toIso8601String(),
-            'values'        => DeliveryTimeService::decodeValues($product->values),
-        ];
-
-        if ($product->type === 'configurable') {
-            $data['super_attributes'] = $axes;
-
-            if ($withVariants) {
-                $data['variants'] = $product->variants->map(function (Product $variant) use ($axes): array {
-                    $common = DeliveryTimeService::decodeValues($variant->values)[AbstractType::COMMON_VALUES_KEY] ?? [];
-
-                    return ['sku' => $variant->sku, 'status' => (bool) $variant->status] + array_intersect_key($common, array_flip($axes));
-                })->values()->all();
-            }
-        }
-
-        return $data;
     }
 
     /**
@@ -155,8 +149,146 @@ class ProductCatalogReader
                 $channel->code => $channel->locales->pluck('code')->all(),
             ])->all(),
             'variant_axis_candidates' => $family->getConfigurableAttributes()->pluck('code')->all(),
-            'attributes'            => $attributes->map(fn (Attribute $attribute): array => $this->presentAttribute($attribute, full: $attributeCode !== null))->all(),
+            'attributes'              => $attributes->map(fn (Attribute $attribute): array => $this->presentAttribute($attribute, full: $attributeCode !== null))->all(),
         ];
+    }
+
+    /**
+     * The cross-sells of a product, without the product itself.
+     *
+     * @return list<string>
+     */
+    private function crossSells(Product $product): array
+    {
+        $list = DeliveryTimeService::decodeValues($product->values)[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] ?? [];
+
+        return array_values(array_filter((array) $list, fn (mixed $sku): bool => is_string($sku) && $sku !== '' && $sku !== $product->sku));
+    }
+
+    /**
+     * What is wrong with a parent's cross-sells: SKUs that do not exist,
+     * variants (WooCommerce wants their parent), or, for a configurable rug,
+     * no other product at all.
+     *
+     * @param  array<string, ?string>  $index  SKU => parent SKU, for existing products.
+     * @return array{missing?: list<string>, variants?: array<string, string>, empty?: true}
+     */
+    private function crossSellProblems(Product $product, array $index): array
+    {
+        $list = $this->crossSells($product);
+
+        if ($list === []) {
+            return $product->type === 'configurable' ? ['empty' => true] : [];
+        }
+
+        $problems = [];
+
+        foreach ($list as $sku) {
+            if (! array_key_exists($sku, $index)) {
+                $problems['missing'][] = $sku;
+            } elseif ($index[$sku] !== null) {
+                $problems['variants'][$sku] = $index[$sku];
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * Cross-sell problems of every parent and standalone product, by id.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function allCrossSellProblems(): array
+    {
+        $index = Product::query()->toBase()
+            ->leftJoin('products as parents', 'parents.id', '=', 'products.parent_id')
+            ->select(['products.sku as sku', 'parents.sku as parent_sku'])
+            ->pluck('parent_sku', 'sku')
+            ->all();
+
+        $problems = [];
+
+        Product::query()->whereNull('parent_id')->select(['id', 'sku', 'type', 'parent_id', 'values'])->chunkById(1000, function ($products) use ($index, &$problems): void {
+            foreach ($products as $product) {
+                if ($found = $this->crossSellProblems($product, $index)) {
+                    $problems[$product->id] = $found;
+                }
+            }
+        });
+
+        return $problems;
+    }
+
+    /**
+     * @param  list<string>  $assetCodes
+     * @return list<int>
+     */
+    private function assetIds(Product $product, array $assetCodes): array
+    {
+        $common = DeliveryTimeService::decodeValues($product->values)[AbstractType::COMMON_VALUES_KEY] ?? [];
+
+        return collect($assetCodes)
+            ->flatMap(fn (string $code): array => $this->assetIdList($common[$code] ?? null))
+            ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function assetIdList(mixed $value): array
+    {
+        $value = is_array($value) ? implode(',', $value) : (string) $value;
+
+        return array_values(array_filter(array_map('intval', explode(',', $value))));
+    }
+
+    /**
+     * @param  list<string>  $assetCodes
+     * @param  array<int, array<string, mixed>>  $assets
+     * @return array<string, mixed>
+     */
+    private function present(Product $product, bool $withVariants, array $assetCodes, array $assets): array
+    {
+        $axes = $product->super_attributes->pluck('code')->all();
+
+        $data = [
+            'sku'           => $product->sku,
+            'type'          => $product->type,
+            'family'        => $product->attribute_family?->code,
+            'parent_sku'    => $product->parent?->sku,
+            'status'        => (bool) $product->status,
+            'bol_com_sync'  => (bool) $product->bol_com_sync,
+            'sync_error'    => $product->additional['product_sync_error'] ?? null,
+            'updated_at'    => $product->updated_at?->toIso8601String(),
+            'values'        => DeliveryTimeService::decodeValues($product->values),
+        ];
+
+        if (! $product->parent_id && ($problems = $this->crossSellProblems($product, $this->crossSellIndex))) {
+            $data['cross_sell_problems'] = $problems;
+        }
+
+        $common = $data['values'][AbstractType::COMMON_VALUES_KEY] ?? [];
+
+        foreach ($assetCodes as $code) {
+            if ($ids = $this->assetIdList($common[$code] ?? null)) {
+                $data['assets'][$code] = array_map(fn (int $id): array => $assets[$id] ?? ['id' => $id, 'missing' => true], $ids);
+            }
+        }
+
+        if ($product->type === 'configurable') {
+            $data['super_attributes'] = $axes;
+
+            if ($withVariants) {
+                $data['variants'] = $product->variants->map(function (Product $variant) use ($axes): array {
+                    $common = DeliveryTimeService::decodeValues($variant->values)[AbstractType::COMMON_VALUES_KEY] ?? [];
+
+                    return ['sku' => $variant->sku, 'status' => (bool) $variant->status] + array_intersect_key($common, array_flip($axes));
+                })->values()->all();
+            }
+        }
+
+        return $data;
     }
 
     /**
@@ -169,9 +301,9 @@ class ProductCatalogReader
             'name'     => $attribute->name,
             'type'     => $attribute->type,
             'section'  => match (true) {
-                $attribute->value_per_channel && $attribute->value_per_locale => AbstractType::CHANNEL_LOCALE_VALUES_KEY,
-                (bool) $attribute->value_per_channel                           => AbstractType::CHANNEL_VALUES_KEY,
-                (bool) $attribute->value_per_locale                            => AbstractType::LOCALE_VALUES_KEY,
+                $attribute->value_per_channel && $attribute->value_per_locale   => AbstractType::CHANNEL_LOCALE_VALUES_KEY,
+                (bool) $attribute->value_per_channel                            => AbstractType::CHANNEL_VALUES_KEY,
+                (bool) $attribute->value_per_locale                             => AbstractType::LOCALE_VALUES_KEY,
                 default                                                         => AbstractType::COMMON_VALUES_KEY,
             },
             'required' => (bool) $attribute->is_required,
@@ -181,6 +313,10 @@ class ProductCatalogReader
 
         if ($attribute->validation) {
             $data['validation'] = $attribute->validation;
+        }
+
+        if ($attribute->type === 'asset') {
+            $data['format'] = 'comma-separated DAM asset ids; change with set-product-images';
         }
 
         if ($attribute->type === 'price') {

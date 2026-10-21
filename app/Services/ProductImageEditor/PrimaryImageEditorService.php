@@ -47,7 +47,9 @@ class PrimaryImageEditorService
      */
     public function apply(Product $product, array $input): void
     {
-        if (! config('product_image_editor.enabled')) {
+        $rendered = $this->render($product, $input);
+
+        if ($rendered === null) {
             return;
         }
 
@@ -57,36 +59,11 @@ class PrimaryImageEditorService
         $noLogoCode = $config['no_logo_attribute'];
 
         $values = $this->normalizeValues($product->values);
+        $source = $rendered['source'];
+        $transform = $rendered['transform'];
 
-        $sourceAssetId = $this->resolveSourceAssetId($input, $values, $primaryCode);
-
-        if (! $sourceAssetId) {
-            return;
-        }
-
-        $source = Asset::find($sourceAssetId);
-
-        if (! $source || ! Storage::disk($config['asset_disk'])->exists($source->path)) {
-            return;
-        }
-
-        $sourceContents = Storage::disk($config['asset_disk'])->get($source->path);
-        $iconContents = $this->iconResolver->contents();
-        $transform = $this->normalizeTransform($input);
-        $transform['rect'] = $this->resolveShapeRect($transform['shape']);
-        $quality = (int) ($config['quality'] ?? 90);
-
-        $primaryAsset = $this->writer->store(
-            $source,
-            (string) $this->compositor->render($sourceContents, $transform, $iconContents, true)->encodeUsingFormat(Format::JPEG, quality: $quality),
-            'hw',
-        );
-
-        $noLogoAsset = $this->writer->store(
-            $source,
-            (string) $this->compositor->render($sourceContents, $transform, $iconContents, false)->encodeUsingFormat(Format::JPEG, quality: $quality),
-            'zonder-logo',
-        );
+        $primaryAsset = $this->writer->store($source, $rendered['primary'], 'hw');
+        $noLogoAsset = $this->writer->store($source, $rendered['no_logo'], 'zonder-logo');
 
         $primaryIds = $this->replaceMainAsset($values['common'][$primaryCode] ?? null, (int) $primaryAsset->id);
         $noLogoIds = $this->replaceMainAsset($values['common'][$noLogoCode] ?? null, (int) $noLogoAsset->id);
@@ -100,7 +77,7 @@ class PrimaryImageEditorService
 
         $additional = is_array($product->additional) ? $product->additional : [];
         $additional['primary_image_editor'] = array_merge($record, [
-            'source_asset_id'   => (int) $sourceAssetId,
+            'source_asset_id'   => (int) $source->id,
             'edited_asset_id'   => $primaryAsset->id,
             'no_logo_asset_id'  => $noLogoAsset->id,
         ]);
@@ -110,6 +87,50 @@ class PrimaryImageEditorService
 
         $this->assetResourceMappingRepository->createProductAssetMappings($primaryIds, $product->id, $primaryCode);
         $this->assetResourceMappingRepository->createProductAssetMappings($noLogoIds, $product->id, $noLogoCode);
+    }
+
+    /**
+     * Render both composites (with and without the HW icon) in memory, without
+     * storing anything. Null when the editor is disabled or the source image is
+     * missing.
+     *
+     * @param  array<string, mixed>  $input  The decoded `__image_edit` payload.
+     * @return array{source: Asset, primary: string, no_logo: string, transform: array<string, mixed>}|null
+     */
+    public function render(Product $product, array $input): ?array
+    {
+        if (! config('product_image_editor.enabled')) {
+            return null;
+        }
+
+        $config = config('product_image_editor');
+
+        $values = $this->normalizeValues($product->values);
+
+        $sourceAssetId = $this->resolveSourceAssetId($input, $values, $config['primary_attribute']);
+
+        if (! $sourceAssetId) {
+            return null;
+        }
+
+        $source = Asset::find($sourceAssetId);
+
+        if (! $source || ! Storage::disk($config['asset_disk'])->exists($source->path)) {
+            return null;
+        }
+
+        $sourceContents = Storage::disk($config['asset_disk'])->get($source->path);
+        $iconContents = $this->iconResolver->contents();
+        $transform = $this->normalizeTransform($input);
+        $transform['rect'] = $this->resolveShapeRect($transform['shape']);
+        $quality = (int) ($config['quality'] ?? 90);
+
+        return [
+            'source'    => $source,
+            'primary'   => (string) $this->compositor->render($sourceContents, $transform, $iconContents, true)->encodeUsingFormat(Format::JPEG, quality: $quality),
+            'no_logo'   => (string) $this->compositor->render($sourceContents, $transform, $iconContents, false)->encodeUsingFormat(Format::JPEG, quality: $quality),
+            'transform' => $transform,
+        ];
     }
 
     /**

@@ -5,11 +5,9 @@ namespace App\Services\Mcp;
 use App\Exceptions\ProductUpsertException;
 use App\Mcp\AdminPermission;
 use App\Services\DeliveryTimeService;
-use App\Services\ProductService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -33,10 +31,8 @@ use Webkul\User\Models\Admin;
  * A dry run executes the whole batch inside a transaction that is rolled back,
  * which reports exactly what a real run would do without writing anything.
  *
- * After a real run the same downstream work as an admin save is started, once
- * per touched product/parent: the after-events (search index, DAM, WooCommerce
- * listener), the WooCommerce parent chain, the Bol sync for Bol-enabled
- * products, and the onderkleed stock copy when a stock field changed.
+ * After a real run ProductSyncDispatcher starts the same downstream work as an
+ * admin save (after-events, WooCommerce, Bol, onderkleed stock copy).
  */
 class ProductUpsertService
 {
@@ -48,20 +44,14 @@ class ProductUpsertService
         AbstractType::CHANNEL_VALUES_KEY,
         AbstractType::CHANNEL_LOCALE_VALUES_KEY,
         AbstractType::CATEGORY_VALUES_KEY,
+        AbstractType::ASSOCIATION_VALUES_KEY,
     ];
 
     /**
-     * Attribute types the MCP cannot write: asset values are DAM ids that only
-     * the admin's image tooling may set.
+     * Attribute types upsert-products cannot write: asset values are DAM ids
+     * that go through set-product-images (ProductImageService) instead.
      */
     public const UNSUPPORTED_ATTRIBUTE_TYPES = ['asset', 'image', 'file', 'gallery'];
-
-    private const STOCK_ATTRIBUTES = [
-        'voorraad_eurogros',
-        'voorraad_5_korting_handmatig',
-        'voorraad_hw_5_korting',
-        'uitverkoop_15_korting',
-    ];
 
     private const PREVIEW_LENGTH = 300;
 
@@ -72,7 +62,7 @@ class ProductUpsertService
         private ProductRepository $productRepository,
         private AttributeRepository $attributeRepository,
         private ProductValuesValidator $valuesValidator,
-        private ProductService $productService,
+        private ProductSyncDispatcher $syncDispatcher,
     ) {}
 
     /**
@@ -90,11 +80,22 @@ class ProductUpsertService
         /** @var array<int, array{product: Product, action: string, changed: list<string>}> $touched */
         $touched = [];
 
+        $batchParentSkus = collect($items)
+            ->filter(fn (mixed $item): bool => is_array($item) && is_string($item['sku'] ?? null) && empty($item['parent_sku']))
+            ->map(fn (array $item): string => trim($item['sku']))
+            ->all();
+
         DB::beginTransaction();
 
         try {
             foreach ($this->parentsFirst($items) as $index => $item) {
-                $results[$index] = $this->applyItem($item, $admin, $touched);
+                $results[$index] = $this->applyItem($item, $admin, $touched, $batchParentSkus);
+            }
+
+            foreach ($items as $index => $item) {
+                if (isset($item['values'][AbstractType::ASSOCIATION_VALUES_KEY]) && $results[$index]['action'] !== 'error') {
+                    $results[$index] = $this->applyCrossSells($results[$index], $item, $touched);
+                }
             }
         } finally {
             if ($dryRun) {
@@ -108,7 +109,7 @@ class ProductUpsertService
 
         if (! $dryRun) {
             $this->logWrites($admin, $touched);
-            $this->dispatchDownstream($touched);
+            $this->syncDispatcher->dispatch($touched);
         }
 
         return [
@@ -135,9 +136,10 @@ class ProductUpsertService
     /**
      * @param  array<string, mixed>  $item
      * @param  array<int, array{product: Product, action: string, changed: list<string>}>  $touched
+     * @param  list<string>  $batchParentSkus
      * @return array<string, mixed>
      */
-    private function applyItem(mixed $item, Admin $admin, array &$touched): array
+    private function applyItem(mixed $item, Admin $admin, array &$touched, array $batchParentSkus = []): array
     {
         $sku = is_array($item) && is_string($item['sku'] ?? null) ? trim($item['sku']) : null;
 
@@ -146,7 +148,7 @@ class ProductUpsertService
                 throw new ProductUpsertException('Every item needs a "sku" string.');
             }
 
-            $outcome = DB::transaction(fn (): array => $this->applyToProduct($sku, $item, $admin));
+            $outcome = DB::transaction(fn (): array => $this->applyToProduct($sku, $item, $admin, $batchParentSkus));
         } catch (ProductUpsertException $e) {
             return ['sku' => $sku, 'action' => 'error', 'errors' => [$e->getMessage()]];
         } catch (ValidationException $e) {
@@ -175,12 +177,19 @@ class ProductUpsertService
     }
 
     /**
+     * Cross-sells are validated with the item but written in a second pass,
+     * after every product of the batch exists, so the colours of a new
+     * collection can refer to each other in one call.
+     *
      * @param  array<string, mixed>  $item
+     * @param  list<string>  $batchParentSkus
      * @return array{action: string, product: Product, changes: array<string, array{before: mixed, after: mixed}>}
      */
-    private function applyToProduct(string $sku, array $item, Admin $admin): array
+    private function applyToProduct(string $sku, array $item, Admin $admin, array $batchParentSkus = []): array
     {
         $patch = $this->normalisePatch($sku, $item['values'] ?? []);
+        $crossSells = $patch[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] ?? null;
+        unset($patch[AbstractType::ASSOCIATION_VALUES_KEY]);
 
         $product = Product::query()->where('sku', $sku)->first();
 
@@ -198,6 +207,10 @@ class ProductUpsertService
         }
 
         $this->assertWritable($product, $patch, $action === 'created');
+
+        if ($crossSells !== null) {
+            $this->assertCrossSells($product, $crossSells, $batchParentSkus);
+        }
 
         $this->valuesValidator->validate(data: $this->withoutNulls($patch), productId: $product->id);
 
@@ -295,7 +308,6 @@ class ProductUpsertService
     }
 
     /**
-     * @param  mixed  $codes
      * @return list<string>
      */
     private function validSuperAttributes(AttributeFamily $family, mixed $codes): array
@@ -347,6 +359,7 @@ class ProductUpsertService
             : $product->super_attributes->pluck('code')->all();
 
         $errors = [];
+        $axisChanges = [];
 
         foreach ($this->attributeEntries($patch) as [$section, $path, $code, $value]) {
             $attribute = $attributes->get($code);
@@ -358,7 +371,9 @@ class ProductUpsertService
             }
 
             if (in_array($attribute->type, self::UNSUPPORTED_ATTRIBUTE_TYPES, true)) {
-                $errors[] = "{$path}: {$attribute->type} attributes cannot be set through the MCP.";
+                $errors[] = $attribute->type === 'asset'
+                    ? "{$path}: photos are set with the set-product-images tool, not upsert-products."
+                    : "{$path}: {$attribute->type} attributes cannot be set through the MCP.";
             }
 
             if ($section !== $this->sectionFor($attribute)) {
@@ -366,7 +381,11 @@ class ProductUpsertService
             }
 
             if (! $isNew && in_array($code, $variantAxes, true)) {
-                $errors[] = "{$path}: {$code} is a variant axis and cannot be changed on an existing product.";
+                if ($product->parent_id) {
+                    $axisChanges[$code] = $value;
+                } else {
+                    $errors[] = "{$path}: {$code} is a variant axis; change it on the variants, not on the parent.";
+                }
             }
 
             if ($value === null && $attribute->is_required) {
@@ -374,9 +393,139 @@ class ProductUpsertService
             }
         }
 
+        if ($axisChanges) {
+            array_push($errors, ...$this->axisChangeErrors($product, $variantAxes, $axisChanges));
+        }
+
         if ($errors) {
             throw new ProductUpsertException(implode(' ', $errors));
         }
+    }
+
+    /**
+     * A variant may move to another axis value (e.g. another maatgroep) when
+     * the value is an existing option and no sibling has the new combination.
+     *
+     * @param  list<string>  $variantAxes
+     * @param  array<string, mixed>  $axisChanges
+     * @return list<string>
+     */
+    private function axisChangeErrors(Product $variant, array $variantAxes, array $axisChanges): array
+    {
+        $errors = [];
+        $current = DeliveryTimeService::decodeValues($variant->values)[AbstractType::COMMON_VALUES_KEY] ?? [];
+        $combination = [];
+
+        foreach ($variantAxes as $axis) {
+            $combination[$axis] = array_key_exists($axis, $axisChanges) ? $axisChanges[$axis] : ($current[$axis] ?? null);
+        }
+
+        foreach ($axisChanges as $axis => $value) {
+            if (! is_string($value) || $value === '') {
+                $errors[] = "common.{$axis}: a variant always needs a {$axis} option.";
+            } elseif ($this->attributeRepository->findVariantOption($axis, $value)->isEmpty()) {
+                $errors[] = "common.{$axis}: \"{$value}\" is not an option of {$axis}. Add it with add-attribute-options first.";
+            }
+        }
+
+        if ($errors === [] && ! $this->productRepository->isUniqueVariantForProduct(productId: $variant->parent_id, configAttributes: $combination, variantId: $variant->id)) {
+            $sibling = Product::query()->where('parent_id', $variant->parent_id)->whereKeyNot($variant->id)
+                ->where(fn ($query) => collect($combination)->each(fn ($value, $axis) => $query->where('values->common->'.$axis, $value)))
+                ->value('sku');
+
+            $errors[] = "{$variant->parent->sku} already has a variant with ".json_encode($combination, JSON_UNESCAPED_UNICODE).($sibling ? " ({$sibling})" : '').'; move that one first.';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Cross-sells point at other parent (or standalone) products: WooCommerce
+     * shows products, not variations, as cross-sells.
+     *
+     * @param  list<string>  $crossSells
+     * @param  list<string>  $batchParentSkus
+     */
+    private function assertCrossSells(Product $product, array $crossSells, array $batchParentSkus): void
+    {
+        if ($product->parent_id) {
+            throw new ProductUpsertException("Cross-sells belong on the parent {$product->parent->sku}, not on a variant.");
+        }
+
+        $found = Product::query()->with('parent:id,sku')->whereIn('sku', $crossSells)->get(['id', 'sku', 'parent_id'])->keyBy('sku');
+        $errors = [];
+
+        foreach ($crossSells as $sku) {
+            $target = $found->get($sku);
+
+            if ($target?->parent_id) {
+                $errors[] = "{$sku} is a variant; use its parent {$target->parent->sku}.";
+            } elseif (! $target && ! in_array($sku, $batchParentSkus, true)) {
+                $errors[] = "{$sku} does not exist.";
+            }
+        }
+
+        if ($errors) {
+            throw new ProductUpsertException('associations.cross_sells: '.implode(' ', $errors));
+        }
+    }
+
+    /**
+     * Second pass: writes the cross-sells of an item whose values were
+     * applied. A reference to a batch product that failed is left out and
+     * reported.
+     *
+     * @param  array<string, mixed>  $result
+     * @param  array<string, mixed>  $item
+     * @param  array<int, array{product: Product, action: string, changed: list<string>}>  $touched
+     * @return array<string, mixed>
+     */
+    private function applyCrossSells(array $result, array $item, array &$touched): array
+    {
+        $sku = $result['sku'];
+        $wanted = $this->normalisePatch($sku, $item['values'])[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] ?? null;
+
+        if ($wanted === null) {
+            return $result;
+        }
+
+        $outcome = DB::transaction(function () use ($sku, $wanted): array {
+            $product = Product::query()->where('sku', $sku)->firstOrFail();
+            $existing = Product::query()->whereIn('sku', $wanted)->whereNull('parent_id')->pluck('sku')->all();
+
+            $before = DeliveryTimeService::decodeValues($product->values);
+            $after = $before;
+            $after[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] = array_values(array_intersect($wanted, $existing));
+
+            $changes = $this->diff($before, $after);
+
+            if ($changes !== []) {
+                $product->values = $after;
+                $product->save();
+            }
+
+            return ['product' => $product, 'changes' => $changes, 'skipped' => array_values(array_diff($wanted, $existing))];
+        });
+
+        if ($outcome['skipped'] !== []) {
+            $result['warnings'][] = 'associations.cross_sells: left out '.implode(', ', $outcome['skipped']).' because '.(count($outcome['skipped']) === 1 ? 'it was' : 'they were').' not created in this batch.';
+        }
+
+        if ($outcome['changes'] === []) {
+            return $result;
+        }
+
+        $result['changes'] += $outcome['changes'];
+        $result['action'] = $result['action'] === 'unchanged' ? 'updated' : $result['action'];
+
+        $product = $outcome['product']->refresh();
+        $touched[$product->id] = [
+            'product' => $product,
+            'action'  => $touched[$product->id]['action'] ?? 'updated',
+            'changed' => [...($touched[$product->id]['changed'] ?? []), ...array_keys($outcome['changes'])],
+        ];
+
+        return $result;
     }
 
     /**
@@ -419,9 +568,9 @@ class ProductUpsertService
     private function sectionFor(Attribute $attribute): string
     {
         return match (true) {
-            $attribute->value_per_channel && $attribute->value_per_locale => AbstractType::CHANNEL_LOCALE_VALUES_KEY,
-            (bool) $attribute->value_per_channel                           => AbstractType::CHANNEL_VALUES_KEY,
-            (bool) $attribute->value_per_locale                            => AbstractType::LOCALE_VALUES_KEY,
+            $attribute->value_per_channel && $attribute->value_per_locale   => AbstractType::CHANNEL_LOCALE_VALUES_KEY,
+            (bool) $attribute->value_per_channel                            => AbstractType::CHANNEL_VALUES_KEY,
+            (bool) $attribute->value_per_locale                             => AbstractType::LOCALE_VALUES_KEY,
             default                                                         => AbstractType::COMMON_VALUES_KEY,
         };
     }
@@ -462,7 +611,38 @@ class ProductUpsertService
             $values[AbstractType::CATEGORY_VALUES_KEY] = array_values(array_unique(array_map('strval', (array) $values[AbstractType::CATEGORY_VALUES_KEY])));
         }
 
+        if (array_key_exists(AbstractType::ASSOCIATION_VALUES_KEY, $values)) {
+            $values[AbstractType::ASSOCIATION_VALUES_KEY] = $this->normaliseAssociations($sku, $values[AbstractType::ASSOCIATION_VALUES_KEY]);
+        }
+
         return $values;
+    }
+
+    /**
+     * Only cross_sells reach the shop, so only they can be written. The list
+     * replaces the current one; the product itself and duplicates are dropped.
+     *
+     * @return array{cross_sells?: list<string>}
+     */
+    private function normaliseAssociations(string $sku, mixed $associations): array
+    {
+        if (! is_array($associations) || array_diff(array_keys($associations), [AbstractType::CROSS_SELLS_ASSOCIATION_KEY])) {
+            throw new ProductUpsertException('values.associations only takes "cross_sells" (up_sells and related_products are not shown on the site).');
+        }
+
+        if (! array_key_exists(AbstractType::CROSS_SELLS_ASSOCIATION_KEY, $associations)) {
+            return [];
+        }
+
+        $list = $associations[AbstractType::CROSS_SELLS_ASSOCIATION_KEY] ?? [];
+
+        if (! is_array($list) || ! array_is_list($list) || array_filter($list, fn (mixed $value): bool => ! is_string($value))) {
+            throw new ProductUpsertException('values.associations.cross_sells must be a list of SKUs.');
+        }
+
+        $list = array_filter(array_map('trim', $list), fn (string $value): bool => $value !== '' && $value !== $sku);
+
+        return [AbstractType::CROSS_SELLS_ASSOCIATION_KEY => array_values(array_unique($list))];
     }
 
     /**
@@ -553,6 +733,7 @@ class ProductUpsertService
             AbstractType::LOCALE_VALUES_KEY         => 2,
             AbstractType::CHANNEL_VALUES_KEY        => 2,
             AbstractType::CHANNEL_LOCALE_VALUES_KEY => 3,
+            AbstractType::ASSOCIATION_VALUES_KEY    => 1,
         ];
 
         $flat = [];
@@ -612,64 +793,5 @@ class ProductUpsertService
                 'changed' => $entry['changed'],
             ]);
         }
-    }
-
-    /**
-     * @param  array<int, array{product: Product, action: string, changed: list<string>}>  $touched
-     */
-    private function dispatchDownstream(array $touched): void
-    {
-        $parentIds = [];
-
-        foreach ($touched as $entry) {
-            $product = $entry['product'];
-
-            Event::dispatch($entry['action'] === 'created' ? 'catalog.product.create.after' : 'catalog.product.update.after', $product);
-
-            $parentIds[$product->parent_id ?? $product->id] = true;
-
-            try {
-                if ($product->bol_com_sync) {
-                    $this->resyncBol($product);
-                }
-
-                $stockChanged = array_intersect(
-                    array_map(fn (string $path): string => (string) str($path)->after('common.'), $entry['changed']),
-                    self::STOCK_ATTRIBUTES
-                );
-
-                if ($product->parent_id && $stockChanged) {
-                    $this->productService->copyStockValuesOnderkleed($product);
-                }
-            } catch (Throwable $e) {
-                report($e);
-            }
-        }
-
-        Product::query()->whereIn('id', array_keys($parentIds))->each(function (Product $parent): void {
-            try {
-                $this->productService->triggerWCSyncForParent($parent);
-            } catch (Throwable $e) {
-                report($e);
-            }
-        });
-    }
-
-    /**
-     * Re-sends a Bol-enabled product with its current Bol settings, exactly
-     * as an admin save that leaves the Bol fields untouched would.
-     */
-    private function resyncBol(Product $product): void
-    {
-        $credentials = $product->bolComCredentials()->get();
-
-        $this->productService->processBolSync(
-            $product,
-            true,
-            $credentials->pluck('id')->all(),
-            $credentials->first()?->pivot?->delivery_code,
-            $product->bol_price_override !== null ? (float) $product->bol_price_override : null,
-            true
-        );
     }
 }

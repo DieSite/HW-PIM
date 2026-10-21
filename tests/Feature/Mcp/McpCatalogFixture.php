@@ -27,18 +27,19 @@ class McpCatalogFixture
         ]);
 
         $attributes = [
-            'sku'            => ['type' => 'text', 'is_required' => 1, 'is_unique' => 1],
-            'merk'           => ['type' => 'text'],
-            'productnaam'    => ['type' => 'text'],
-            'materiaal'      => ['type' => 'text'],
-            'ean'            => ['type' => 'text', 'is_unique' => 1],
-            'voorraad_eurogros' => ['type' => 'text'],
-            'maatgroep'      => ['type' => 'select', 'options' => ['160 cm x 230 cm', '200 cm x 290 cm']],
-            'onderkleed'     => ['type' => 'select', 'options' => ['Zonder onderkleed', 'Met onderkleed']],
-            'prijs'          => ['type' => 'price'],
-            'beschrijving_l' => ['type' => 'textarea', 'enable_wysiwyg' => 1],
-            'afbeelding'     => ['type' => 'asset'],
-            'mcp_tagline'    => ['type' => 'text', 'value_per_locale' => 1],
+            'sku'                    => ['type' => 'text', 'is_required' => 1, 'is_unique' => 1],
+            'merk'                   => ['type' => 'text'],
+            'productnaam'            => ['type' => 'text'],
+            'materiaal'              => ['type' => 'text'],
+            'ean'                    => ['type' => 'text', 'is_unique' => 1],
+            'voorraad_eurogros'      => ['type' => 'text'],
+            'maatgroep'              => ['type' => 'select', 'options' => ['160 cm x 230 cm', '200 cm x 290 cm']],
+            'onderkleed'             => ['type' => 'select', 'options' => ['Zonder onderkleed', 'Met onderkleed']],
+            'prijs'                  => ['type' => 'price'],
+            'beschrijving_l'         => ['type' => 'textarea', 'enable_wysiwyg' => 1],
+            'afbeelding'             => ['type' => 'asset'],
+            'afbeelding_zonder_logo' => ['type' => 'asset'],
+            'mcp_tagline'            => ['type' => 'text', 'value_per_locale' => 1],
         ];
 
         $position = 1;

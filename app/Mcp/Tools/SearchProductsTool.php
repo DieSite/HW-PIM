@@ -14,7 +14,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('search-products')]
-#[Description('Find products by SKU list, SKU prefix, parent SKU, family, type or an exact common attribute value (e.g. merk = "Eurogros"). Returns a page of product summaries; use get-products for the full values.')]
+#[Description('Find products by SKU list, SKU prefix, parent SKU, family, type, category or an exact common attribute value (e.g. merk = "Eurogros"). cross_sell_problems: true finds the parents whose cross-sells point at missing SKUs, at variants or at nothing. Returns a page of product summaries; use get-products for the full values.')]
 #[IsReadOnly]
 class SearchProductsTool extends Tool
 {
@@ -27,17 +27,19 @@ class SearchProductsTool extends Tool
         }
 
         $filters = $request->validate([
-            'skus'            => ['nullable', 'array', 'max:'.ProductCatalogReader::MAX_PAGE_SIZE],
-            'skus.*'          => ['string'],
-            'sku_prefix'      => ['nullable', 'string', 'min:2'],
-            'parent_sku'      => ['nullable', 'string'],
-            'family'          => ['nullable', 'string'],
-            'type'            => ['nullable', 'in:simple,configurable'],
-            'attribute'       => ['nullable', 'array'],
-            'attribute.code'  => ['required_with:attribute', 'string', 'regex:/^[a-z0-9_]+$/'],
-            'attribute.value' => ['required_with:attribute', 'string'],
-            'limit'           => ['nullable', 'integer', 'min:1', 'max:'.ProductCatalogReader::MAX_PAGE_SIZE],
-            'page'            => ['nullable', 'integer', 'min:1'],
+            'skus'                => ['nullable', 'array', 'max:'.ProductCatalogReader::MAX_PAGE_SIZE],
+            'skus.*'              => ['string'],
+            'sku_prefix'          => ['nullable', 'string', 'min:2'],
+            'parent_sku'          => ['nullable', 'string'],
+            'family'              => ['nullable', 'string'],
+            'type'                => ['nullable', 'in:simple,configurable'],
+            'attribute'           => ['nullable', 'array'],
+            'attribute.code'      => ['required_with:attribute', 'string', 'regex:/^[a-z0-9_]+$/'],
+            'attribute.value'     => ['required_with:attribute', 'string'],
+            'category'            => ['nullable', 'string'],
+            'cross_sell_problems' => ['nullable', 'boolean'],
+            'limit'               => ['nullable', 'integer', 'min:1', 'max:'.ProductCatalogReader::MAX_PAGE_SIZE],
+            'page'                => ['nullable', 'integer', 'min:1'],
         ]);
 
         return Response::json($this->reader->search($filters));
@@ -58,8 +60,10 @@ class SearchProductsTool extends Tool
                 'code'  => $schema->string()->required(),
                 'value' => $schema->string()->required(),
             ])->description('Exact match on a common attribute value, e.g. {"code": "merk", "value": "Eurogros"}.'),
-            'limit' => $schema->integer()->min(1)->max(ProductCatalogReader::MAX_PAGE_SIZE)->default(50),
-            'page'  => $schema->integer()->min(1)->default(1),
+            'category'            => $schema->string()->description('Category code, e.g. "Louis De Poortere".'),
+            'cross_sell_problems' => $schema->boolean()->description('Only parents whose cross-sells refer to missing SKUs, to variants, or to no other product.'),
+            'limit'               => $schema->integer()->min(1)->max(ProductCatalogReader::MAX_PAGE_SIZE)->default(50),
+            'page'                => $schema->integer()->min(1)->default(1),
         ];
     }
 }
