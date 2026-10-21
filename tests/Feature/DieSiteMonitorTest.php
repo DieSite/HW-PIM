@@ -86,22 +86,22 @@ it('serves the PIM status payload with the configured queues', function () {
         ])
         ->assertJsonPath('orders', null)
         ->assertJsonPath('revenue', null)
-        ->assertJsonPath('queues.*.queue', ['default', 'bolcom', 'hordeuren', 'demunk', 'long', 'ai']);
+        ->assertJsonPath('queues.*.queue', ['default', 'bolcom', 'hordeuren', 'long', 'ai']);
 });
 
 it('reads pending counts from the queue connection and failures from failed_jobs', function () {
     expect(app(QueueStats::class))->toBeInstanceOf(HorizonQueueStats::class);
 
     Queue::fake();
-    Queue::pushOn('demunk', 'job-a');
-    Queue::pushOn('demunk', 'job-b');
+    Queue::pushOn('hordeuren', 'job-a');
+    Queue::pushOn('hordeuren', 'job-b');
     Queue::pushOn('ai', 'job-c');
 
     foreach ([now()->subHour(), now()->subDays(2)] as $failedAt) {
         DB::table('failed_jobs')->insert([
             'uuid'       => (string) Str::uuid(),
-            'connection' => 'redis-demunk',
-            'queue'      => 'demunk',
+            'connection' => 'redis-hordeuren',
+            'queue'      => 'hordeuren',
             'payload'    => '{}',
             'exception'  => 'boom',
             'failed_at'  => $failedAt,
@@ -110,8 +110,8 @@ it('reads pending counts from the queue connection and failures from failed_jobs
 
     $stats = collect(app(QueueStats::class)->collect())->keyBy('queue');
 
-    expect($stats['demunk']['pending'])->toBe(2)
-        ->and($stats['demunk']['failed'])->toBe(1)
+    expect($stats['hordeuren']['pending'])->toBe(2)
+        ->and($stats['hordeuren']['failed'])->toBe(1)
         ->and($stats['ai']['pending'])->toBe(1)
         ->and($stats['default']['pending'])->toBe(0);
 });
@@ -120,7 +120,6 @@ it('maps each queue to the connection its Horizon supervisor serves', function (
     $map = app(HorizonQueueStats::class)->connectionPerQueue();
 
     expect($map['default'])->toBe('redis')
-        ->and($map['demunk'])->toBe('redis-demunk')
         ->and($map['hordeuren'])->toBe('redis-hordeuren')
         ->and($map['long'])->toBe('redis-long')
         ->and($map['ai'])->toBe('redis-ai');

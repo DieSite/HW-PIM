@@ -4,6 +4,7 @@ namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
 use App\Models\Product;
 use App\Services\AfwerkingOptieService;
+use App\Services\DefaultProductImage;
 use App\Services\DeliveryTimeService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
@@ -330,6 +331,10 @@ class Exporter extends AbstractExporter
         Log::debug('1 ATTRIBUTES', ['attributes' => $attributes]);
 
         $this->formatAdditionalData($formatted, $attributes, $imagesToExport, $item);
+
+        if (! isset($formatted['parent_id']) && empty($formatted['images'])) {
+            $this->addDefaultImage($formatted, $item['code']);
+        }
 
         $voorraadEurogros = $item['values']['common']['voorraad_eurogros'] ?? 0;
         $voorraadDeMunk = $item['values']['common']['voorraad_5_korting_handmatig'] ?? 0;
@@ -1060,6 +1065,27 @@ class Exporter extends AbstractExporter
     protected function getAttributeCodesFromType(string $type): array
     {
         return collect($this->attributes)->where('type', $type)->pluck('code')->toArray();
+    }
+
+    /**
+     * A parent product without images gets the admin-configured
+     * "geen afbeelding beschikbaar" image, so it can still be synced.
+     */
+    protected function addDefaultImage(array &$formatted, string $itemCode): void
+    {
+        $imageUrl = app(DefaultProductImage::class)->url();
+
+        if (! $imageUrl) {
+            return;
+        }
+
+        $imageId = $this->checkImagesExported($itemCode, $imageUrl);
+
+        $formatted['images'] = [
+            $imageId
+                ? ['id' => $imageId, 'position' => 0]
+                : ['src' => $imageUrl, 'name' => $this->getImageName($imageUrl), 'position' => 0],
+        ];
     }
 
     protected function generateImageUrl(string $image): string

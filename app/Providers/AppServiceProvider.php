@@ -181,6 +181,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(base_path('config/image_editor_settings.php'), 'core');
+        $this->mergeConfigFrom(base_path('config/product_image_settings.php'), 'core');
         $this->mergeConfigFrom(base_path('config/competitor_pricing_settings.php'), 'core');
         $this->mergeConfigFrom(base_path('config/afwerkingen_settings.php'), 'core');
         $this->mergeConfigFrom(base_path('config/ai_settings.php'), 'core');

@@ -40,7 +40,7 @@ return [
     | Redis by App\Monitor\HorizonQueueStats (bound in AppServiceProvider).
     */
 
-    'queues' => ['default', 'bolcom', 'hordeuren', 'demunk', 'long', 'ai'],
+    'queues' => ['default', 'bolcom', 'hordeuren', 'long', 'ai'],
 
     /*
     |--------------------------------------------------------------------------

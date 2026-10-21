@@ -232,12 +232,6 @@ return [
         'sort'       => 14,
         'icon'       => 'icon-product',
     ], [
-        'key'        => 'tools.demunk-voorraad',
-        'name'       => 'De Munk voorraad-koppelingen',
-        'route'      => 'admin.tools.demunk-voorraad.index',
-        'sort'       => 14,
-        'icon'       => 'icon-product',
-    ], [
         'key'        => 'tools.delivery-times',
         'name'       => 'Levertijden',
         'route'      => 'admin.tools.delivery-times.index',

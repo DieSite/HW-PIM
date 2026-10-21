@@ -89,22 +89,6 @@ return [
         ],
 
         /**
-         * The De Munk voorraad import (ImportVoorraadDeMunkJob orchestrator,
-         * the per-collection fetch batch and the final apply job) crawls the
-         * dealer portal and runs well past the shared "default" queue's
-         * retry_after. Its own connection carries a retry_after comfortably
-         * above the largest job timeout on the queue (900s). Served by the
-         * dedicated Horizon supervisor "supervisor-demunk".
-         */
-        'redis-demunk' => [
-            'driver'      => 'redis',
-            'connection'  => 'default',
-            'queue'       => 'demunk',
-            'retry_after' => 3600,
-            'block_for'   => null,
-        ],
-
-        /**
          * Generic slot for long-running jobs (currently BulkEditProductsJob,
          * $timeout 3600) so they never sit on the shared "default" queue whose
          * short retry_after would re-reserve them mid-flight. Served by the

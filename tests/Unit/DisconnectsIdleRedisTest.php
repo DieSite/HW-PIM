@@ -1,8 +1,6 @@
 <?php
 
-use App\Jobs\ApplyDeMunkStockJob;
 use App\Jobs\BulkEditProductsJob;
-use App\Jobs\FetchDeMunkCollectionStockJob;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use Illuminate\Support\Facades\Redis;
 
@@ -60,8 +58,6 @@ it('touches only the connections the worker actually resolved', function () {
  */
 it('applies the middleware to every long job that goes quiet on redis', function () {
     $jobs = [
-        FetchDeMunkCollectionStockJob::class => new FetchDeMunkCollectionStockJob('Aruba'),
-        ApplyDeMunkStockJob::class           => new ApplyDeMunkStockJob(['Aruba']),
         BulkEditProductsJob::class           => new BulkEditProductsJob([], [], false, 1),
     ];
 

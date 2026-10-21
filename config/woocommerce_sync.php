@@ -23,6 +23,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Concurrent syncs
+    |--------------------------------------------------------------------------
+    |
+    | How many products may be talking to WooCommerce at the same time. The
+    | per-minute limit above does not stop every queue worker from sending a
+    | heavy product write at once, and WordPress then times out on all of
+    | them. A job that finds every slot taken is released and tried again
+    | after release_after_seconds.
+    |
+    */
+
+    'concurrency' => [
+        'max_concurrent'        => (int) env('WOOCOMMERCE_SYNC_MAX_CONCURRENT', 2),
+        'release_after_seconds' => (int) env('WOOCOMMERCE_SYNC_CONCURRENCY_RELEASE_AFTER', 15),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Backoff after a failed sync
+    |--------------------------------------------------------------------------
+    |
+    | Seconds to wait before retrying a sync that threw, per retry. WordPress
+    | keeps processing a request after our client gave up on it, so a retry
+    | that comes back too soon lands on a shop still busy with the first
+    | attempt and times out as well.
+    |
+    */
+
+    'backoff_seconds' => [120, 300, 900],
+
+    /*
+    |--------------------------------------------------------------------------
     | Retry deadline
     |--------------------------------------------------------------------------
     |
@@ -38,5 +70,18 @@ return [
     */
 
     'retry_deadline_hours' => (int) env('WOOCOMMERCE_SYNC_RETRY_DEADLINE_HOURS', 24),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Deadline warning
+    |--------------------------------------------------------------------------
+    |
+    | A sync that only gets its turn with less than this share of its retry
+    | window left is reported: the backlog drains slower than the deadline
+    | assumes, and the syncs further back will fail without being sent.
+    |
+    */
+
+    'deadline_warning_remaining' => (float) env('WOOCOMMERCE_SYNC_DEADLINE_WARNING_REMAINING', 0.25),
 
 ];

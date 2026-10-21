@@ -2,10 +2,8 @@
 
 namespace App\Monitor;
 
-use App\Jobs\ApplyDeMunkStockJob;
 use App\Jobs\BulkEditProductsJob;
 use App\Jobs\GenerateAiDescriptionsJob;
-use App\Jobs\ImportVoorraadDeMunkJob;
 use App\Jobs\ImportVoorraadEurogrosJob;
 use App\Jobs\MailHordeurenAnalysisReportJob;
 use App\Jobs\RunHordeurenAnalysisJob;
@@ -28,10 +26,8 @@ class AlertFailedJob
      * @var array<int, class-string>
      */
     public const SELF_REPORTING = [
-        ApplyDeMunkStockJob::class,
         BulkEditProductsJob::class,
         GenerateAiDescriptionsJob::class,
-        ImportVoorraadDeMunkJob::class,
         ImportVoorraadEurogrosJob::class,
         MailHordeurenAnalysisReportJob::class,
         RunHordeurenAnalysisJob::class,

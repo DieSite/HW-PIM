@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\WooCommerceAssumption;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
+use App\Services\WooCommerce\WooCommerceAssumptionMonitor;
 use Illuminate\Contracts\Queue\Job as QueueJob;
 use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Support\Facades\Redis;
@@ -16,17 +18,32 @@ use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 function forgetWooCommerceSyncWindow(): void
 {
     Redis::connection()->del(md5(ThrottlesWooCommerceSync::LIMITER));
+
+    foreach (range(1, 5) as $slot) {
+        Redis::connection()->del(ThrottlesWooCommerceSync::FUNNEL.$slot);
+    }
 }
 
 /**
  * A queued job as the middleware sees it: an underlying queue job it can be
  * released back onto, plus a record of the delays it was released with.
+ *
+ * @param  array<string, mixed>  $payload
  */
-function throttleableJob(?object $queueJob = null): object
+function throttleableJob(?object $queueJob = null, array $payload = []): object
 {
-    return new class($queueJob ?? Mockery::mock(QueueJob::class)) {
+    if (! $queueJob) {
+        $queueJob = Mockery::mock(QueueJob::class);
+        $queueJob->shouldReceive('payload')->andReturn($payload);
+        $queueJob->shouldReceive('attempts')->andReturn(1);
+    }
+
+    return new class($queueJob)
+    {
         /** @var array<int, mixed> */
         public array $releasedAfter = [];
+
+        public ?int $timeout = null;
 
         public function __construct(public ?object $job) {}
 
@@ -184,4 +201,249 @@ it('gives a throttled sync a deadline long enough to drain a full backlog', func
         20000,
         'At the configured rate the retry deadline must still cover a catalog-wide re-export, or a queued sync expires before its turn.'
     );
+});
+
+/**
+ * The per-minute budget does not stop every worker from writing to the shop
+ * at once, and a heavy product write can take close to a minute; with all
+ * workers doing that together WordPress times out on every one of them.
+ */
+it('releases a sync while the configured number of syncs is already talking to WooCommerce', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 1]);
+
+    $middleware = new ThrottlesWooCommerceSync();
+    $waiting = throttleableJob();
+    $waitingRan = false;
+
+    $middleware->handle(throttleableJob(), function () use ($middleware, $waiting, &$waitingRan) {
+        $middleware->handle($waiting, function () use (&$waitingRan) {
+            $waitingRan = true;
+        });
+    });
+
+    expect($waitingRan)->toBeFalse('A second sync may not reach WooCommerce while the only slot is taken.')
+        ->and($waiting->releasedAfter)->toBe([15]);
+});
+
+it('frees the concurrency slot once a sync has finished', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 1]);
+
+    $middleware = new ThrottlesWooCommerceSync();
+    $ran = 0;
+
+    foreach (range(1, 3) as $index) {
+        $middleware->handle(throttleableJob(), function () use (&$ran) {
+            $ran++;
+        });
+    }
+
+    expect($ran)->toBe(3);
+});
+
+it('frees the concurrency slot when a sync throws', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 1]);
+
+    $middleware = new ThrottlesWooCommerceSync();
+
+    expect(fn () => $middleware->handle(throttleableJob(), fn () => throw new RuntimeException('WooCommerce timed out')))
+        ->toThrow(RuntimeException::class);
+
+    $ran = false;
+    $middleware->handle(throttleableJob(), function () use (&$ran) {
+        $ran = true;
+    });
+
+    expect($ran)->toBeTrue();
+});
+
+/**
+ * WordPress keeps processing a request after our client gave up on it, so a
+ * retry one minute later lands on a shop still busy with the first attempt.
+ */
+it('waits at least two minutes before retrying a failed sync', function () {
+    $jobs = [
+        SerializedProcessProductsToWooCommerce::class => new SerializedProcessProductsToWooCommerce(new WebkulProduct()),
+        ProcessProductsToWooCommerce::class           => new ProcessProductsToWooCommerce(ProductBatch::fromProductArray(['sku' => 'SKU-1'])),
+    ];
+
+    foreach ($jobs as $class => $job) {
+        $backoff = $job->backoff();
+
+        expect($backoff[0])->toBeGreaterThanOrEqual(120, "[{$class}] retries too soon after a WooCommerce timeout.")
+            ->and($backoff)->toBe(collect($backoff)->sort()->values()->all(), "[{$class}] must back off longer on every retry.");
+    }
+});
+
+it('lets two syncs talk to WooCommerce at the same time by default and retries a waiting one after fifteen seconds', function () {
+    expect((int) config('woocommerce_sync.concurrency.max_concurrent'))->toBe(2)
+        ->and((int) config('woocommerce_sync.concurrency.release_after_seconds'))->toBe(15);
+});
+
+it('lets as many syncs run side by side as configured', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 2]);
+
+    $middleware = new ThrottlesWooCommerceSync();
+    $second = throttleableJob();
+    $third = throttleableJob();
+    $ran = [];
+
+    $middleware->handle(throttleableJob(), function () use ($middleware, $second, $third, &$ran) {
+        $ran[] = 'first';
+
+        $middleware->handle($second, function () use ($middleware, $third, &$ran) {
+            $ran[] = 'second';
+
+            $middleware->handle($third, function () use (&$ran) {
+                $ran[] = 'third';
+            });
+        });
+    });
+
+    expect($ran)->toBe(['first', 'second'])
+        ->and($second->releasedAfter)->toBeEmpty()
+        ->and($third->releasedAfter)->toBe([15]);
+});
+
+/**
+ * A job turned away by the per-minute window never reached WooCommerce, so it
+ * must not keep a concurrency slot occupied either.
+ */
+it('frees the concurrency slot of a sync the per-minute window turned away', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 1, 'woocommerce_sync.rate_limit.per_minute' => 1]);
+
+    $middleware = new ThrottlesWooCommerceSync();
+    $middleware->handle(throttleableJob(), fn () => null);
+
+    $turnedAway = throttleableJob();
+    $middleware->handle($turnedAway, fn () => null);
+
+    config(['woocommerce_sync.rate_limit.per_minute' => 100]);
+    $ran = false;
+    $middleware->handle(throttleableJob(), function () use (&$ran) {
+        $ran = true;
+    });
+
+    expect($turnedAway->releasedAfter)->toHaveCount(1)
+        ->and($turnedAway->releasedAfter[0])->not->toBe(15, 'It was turned away by the window, not by the funnel.')
+        ->and($ran)->toBeTrue();
+});
+
+/**
+ * A worker killed mid-sync (deploy, OOM) never releases its slot. The slot
+ * has to expire on its own, but not before a sync could still be running.
+ */
+it('lets the slot of a killed worker expire shortly after the job timeout', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 1]);
+
+    $job = throttleableJob();
+    $job->timeout = 600;
+    $slotTtl = null;
+
+    (new ThrottlesWooCommerceSync())->handle($job, function () use (&$slotTtl) {
+        $slotTtl = Redis::connection()->ttl(ThrottlesWooCommerceSync::FUNNEL.'1');
+    });
+
+    expect($slotTtl)->toBeGreaterThan(600)->toBeLessThanOrEqual(660);
+});
+
+it('never holds back the inner synchronous dispatch, even with every slot taken', function () {
+    config(['woocommerce_sync.concurrency.max_concurrent' => 1]);
+
+    $middleware = new ThrottlesWooCommerceSync();
+    $innerRan = false;
+
+    $middleware->handle(throttleableJob(), function () use ($middleware, &$innerRan) {
+        $middleware->handle(throttleableJob(Mockery::mock(SyncJob::class)), function () use (&$innerRan) {
+            $innerRan = true;
+        });
+    });
+
+    expect($innerRan)->toBeTrue();
+});
+
+/**
+ * A sync waiting so long it nearly misses its retry deadline means the
+ * backlog drains slower than the deadline assumes; the syncs behind it will
+ * fail without ever reaching the shop unless someone steps in.
+ */
+it('reports a sync that only gets its turn near the end of its retry window', function () {
+    $this->freezeTime();
+    $monitor = $this->spy(WooCommerceAssumptionMonitor::class);
+    $ran = false;
+
+    (new ThrottlesWooCommerceSync())->handle(
+        throttleableJob(payload: [
+            'displayName' => SerializedProcessProductsToWooCommerce::class,
+            'createdAt'   => now()->subHours(20)->getTimestamp(),
+            'retryUntil'  => now()->addHours(4)->getTimestamp(),
+        ]),
+        function () use (&$ran) {
+            $ran = true;
+        }
+    );
+
+    expect($ran)->toBeTrue('The check only reports; the sync itself still runs.');
+
+    $monitor->shouldHaveReceived('violated')->with(
+        WooCommerceAssumption::BacklogDrainsBeforeDeadline,
+        Mockery::pattern('/SerializedProcessProductsToWooCommerce got its turn with 17% of its retry window left \(4 hours remaining\)/'),
+        Mockery::any()
+    )->once();
+});
+
+it('reports nothing about a sync that gets its turn with time to spare', function () {
+    $monitor = $this->spy(WooCommerceAssumptionMonitor::class);
+
+    (new ThrottlesWooCommerceSync())->handle(
+        throttleableJob(payload: ['createdAt' => now()->subHours(17)->getTimestamp(), 'retryUntil' => now()->addHours(7)->getTimestamp()]),
+        fn () => null
+    );
+
+    $monitor->shouldNotHaveReceived('violated');
+});
+
+it('only checks the deadline of a sync that actually gets its turn', function () {
+    config(['woocommerce_sync.rate_limit.per_minute' => 1]);
+    $monitor = $this->spy(WooCommerceAssumptionMonitor::class);
+    $middleware = new ThrottlesWooCommerceSync();
+    $nearlyExpired = ['createdAt' => now()->subHours(23)->getTimestamp(), 'retryUntil' => now()->addHour()->getTimestamp()];
+
+    $healthy = ['createdAt' => now()->getTimestamp(), 'retryUntil' => now()->addDay()->getTimestamp()];
+
+    $middleware->handle(throttleableJob(payload: $healthy), fn () => null);
+    $middleware->handle(throttleableJob(payload: $nearlyExpired), fn () => null);
+
+    $monitor->shouldNotHaveReceived('violated');
+});
+
+/**
+ * The check reads createdAt and retryUntil from the queue payload. That is a
+ * framework detail, so it is pinned here for both jobs, and a payload without
+ * them is reported rather than silently left unchecked.
+ */
+it('finds the queue time and retry deadline in the payload of both jobs that push products to WooCommerce', function () {
+    $queue = app('queue')->connection('redis');
+    $createPayload = new ReflectionMethod($queue, 'createPayload');
+
+    foreach ([
+        new SerializedProcessProductsToWooCommerce(new WebkulProduct()),
+        new ProcessProductsToWooCommerce(ProductBatch::fromProductArray(['sku' => 'SKU-1'])),
+    ] as $job) {
+        $payload = json_decode($createPayload->invoke($queue, $job, 'default'), true);
+
+        expect($payload['createdAt'] ?? null)->toBe(now()->getTimestamp(), $job::class.' carries no createdAt.')
+            ->and($payload['retryUntil'] ?? null)->toBe($job->retryUntil()->getTimestamp(), $job::class.' carries no retryUntil.');
+    }
+});
+
+it('reports a sync whose deadline cannot be checked', function () {
+    $monitor = $this->spy(WooCommerceAssumptionMonitor::class);
+
+    (new ThrottlesWooCommerceSync())->handle(throttleableJob(payload: ['displayName' => 'SomeSync']), fn () => null);
+
+    $monitor->shouldHaveReceived('violated')->with(
+        WooCommerceAssumption::BacklogDrainsBeforeDeadline,
+        'It cannot be checked for SomeSync: its queue payload carries no usable createdAt/retryUntil.',
+        Mockery::any()
+    )->once();
 });

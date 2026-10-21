@@ -48,8 +48,6 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
      */
     public $maxExceptions = 3;
 
-    public $backoff = 60;
-
     /**
      * Create a new job instance.
      *
@@ -92,6 +90,19 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
     public function retryUntil(): DateTimeInterface
     {
         return now()->addHours((int) config('woocommerce_sync.retry_deadline_hours'));
+    }
+
+    /**
+     * Seconds to wait before each retry of a sync that threw. A retry that
+     * comes back too soon lands on a shop still busy with the request we gave
+     * up on. Throttled releases count as attempts too, so a job that waited
+     * its turn first jumps straight to the longest delay.
+     *
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return config('woocommerce_sync.backoff_seconds');
     }
 
     public function handle(): void

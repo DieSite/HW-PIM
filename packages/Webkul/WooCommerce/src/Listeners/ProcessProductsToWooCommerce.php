@@ -2,9 +2,11 @@
 
 namespace Webkul\WooCommerce\Listeners;
 
+use App\Enums\WooCommerceAssumption;
 use App\Enums\WooCommerceSyncEventStatus;
 use App\Exceptions\ParentHasNoVariantsException;
 use App\Exceptions\WoocommerceBadGatewayException;
+use App\Exceptions\WoocommerceInvalidImageException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
 use App\Exceptions\WoocommerceProductSkuExistsException;
 use App\Exceptions\WoocommerceProductSkuInLookupTableException;
@@ -12,6 +14,7 @@ use App\Exceptions\WoocommerceTimeoutException;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Models\Product;
+use App\Services\WooCommerce\WooCommerceAssumptionMonitor;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
 use DateTimeInterface;
 use Illuminate\Bus\Queueable;
@@ -21,10 +24,12 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Sentry;
 use Sentry\Severity;
 use Webkul\WooCommerce\DTO\ProductBatch;
 use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
+use Webkul\WooCommerce\Models\DataTransferMapping;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
 use Webkul\WooCommerce\Services\WooCommerceService;
 use Webkul\WooCommerce\Traits\DataTransferMappingTrait;
@@ -74,6 +79,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
 
     protected WooCommerceSyncEventRecorder $eventRecorder;
 
+    protected WooCommerceAssumptionMonitor $assumptionMonitor;
+
     protected ?array $credential = null;
 
     /**
@@ -113,12 +120,26 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         return now()->addHours((int) config('woocommerce_sync.retry_deadline_hours'));
     }
 
-    public function handle(Exporter $exporter, WooCommerceService $connectorService, DataTransferMappingRepository $dataTransferMappingRepository, WooCommerceSyncEventRecorder $eventRecorder): void
+    /**
+     * Seconds to wait before each retry of a sync that threw. A retry that
+     * comes back too soon lands on a shop still busy with the request we gave
+     * up on. Throttled releases count as attempts too, so a job that waited
+     * its turn first jumps straight to the longest delay.
+     *
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return config('woocommerce_sync.backoff_seconds');
+    }
+
+    public function handle(Exporter $exporter, WooCommerceService $connectorService, DataTransferMappingRepository $dataTransferMappingRepository, WooCommerceSyncEventRecorder $eventRecorder, WooCommerceAssumptionMonitor $assumptionMonitor): void
     {
         $this->exporter = $exporter;
         $this->connectorService = $connectorService;
         $this->dataTransferMappingRepository = $dataTransferMappingRepository;
         $this->eventRecorder = $eventRecorder;
+        $this->assumptionMonitor = $assumptionMonitor;
 
         // Fetched before the guards below so a skipped sync can still be
         // reported on the product timeline, which otherwise keeps showing the
@@ -219,6 +240,16 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 $productData,
                 'product_sync_error',
                 "SKU {$e->sku} bestaat al in de WooCommerce zoektabel en kon niet automatisch worden vrijgemaakt. Controleer of het product in de prullenbak van WooCommerce staat, verwijder het daar definitief en probeer opnieuw."
+            );
+        } catch (WoocommerceInvalidImageException $e) {
+            Log::info('WooCommerce no longer has image(s) #'.implode(', #', $e->attachmentIds)." of {$e->sku}. Uploading them again.");
+            $this->forgetUploadedImages($e->attachmentIds);
+            $this->deleteAndRetry(
+                fn () => null,
+                $e->sku,
+                $this->formatData($this->batch),
+                'product_sync_error',
+                $e->getMessage()
             );
         } catch (WoocommerceTimeoutException|WoocommerceBadGatewayException $e) {
             $product = Product::whereSku($this->batch->sku)->first();
@@ -634,6 +665,174 @@ class ProcessProductsToWooCommerce implements ShouldQueue
     }
 
     /**
+     * Remember which WordPress attachment every image sent by URL became.
+     *
+     * An image without a mapping goes out as {src}, and WordPress then
+     * downloads it and renders every thumbnail size inside the REST request —
+     * on a product with a full gallery that alone outlasts the request
+     * timeout, and every sync uploaded the whole gallery again. With the
+     * mapping in place the exporter sends {id} instead.
+     * {@see Exporter::checkImagesExported()}
+     *
+     * WooCommerce answers with the images in the order they were sent (the
+     * first becomes the featured image, the rest the gallery), so they are
+     * matched by position. Titles are not reliable for that: WordPress runs
+     * them through wptexturize, turning e.g. "200x290" into "200×290". The
+     * order is checked on every answer, and nothing is remembered for a
+     * product whose answer does not line up — a wrong mapping would put
+     * another image on the product from then on.
+     *
+     * Variations are left out: their endpoint only reads `image`, so the
+     * `images` they are formatted with never reach the shop.
+     */
+    private function rememberUploadedImages(array $result, array $productData): void
+    {
+        $sentImages = array_values($productData['images'] ?? []);
+        $savedImages = array_values($result['images'] ?? []);
+
+        if (isset($productData['parent_id']) || empty($sentImages)) {
+            return;
+        }
+
+        if (count($sentImages) !== count($savedImages)) {
+            $this->assumptionMonitor->violated(
+                WooCommerceAssumption::EveryImageListed,
+                "{$productData['sku']} was sent ".count($sentImages).' image(s), WooCommerce listed '.count($savedImages).'.',
+                ['sku' => $productData['sku'], 'sent' => $sentImages, 'saved' => $savedImages]
+            );
+
+            return;
+        }
+
+        $misplaced = collect($sentImages)
+            ->keys()
+            ->reject(fn (int $position) => $this->isSameImage($sentImages[$position], $savedImages[$position]))
+            ->values()
+            ->all();
+
+        if ($misplaced !== []) {
+            $this->assumptionMonitor->violated(
+                WooCommerceAssumption::ImagesInSentOrder,
+                "{$productData['sku']}: the image(s) at position ".implode(', ', $misplaced).' came back different from what was sent there.',
+                ['sku' => $productData['sku'], 'sent' => $sentImages, 'saved' => $savedImages]
+            );
+
+            return;
+        }
+
+        foreach ($sentImages as $position => $sentImage) {
+            $attachmentId = $savedImages[$position]['id'] ?? null;
+
+            if (empty($sentImage['src']) || empty($attachmentId)) {
+                continue;
+            }
+
+            $this->dataTransferMappingRepository->updateOrCreate(
+                [
+                    'entityType' => 'image',
+                    'code'       => $productData['sku'].'-'.$this->exporter->getImageName($sentImage['src']),
+                    'apiUrl'     => $this->credential['shopUrl'],
+                ],
+                [
+                    'externalId'    => $attachmentId,
+                    'jobInstanceId' => 0,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Whether WooCommerce saved the image that was sent at this position. An
+     * image sent by id must keep that id; one sent by URL must have become a
+     * file of the same name, allowing for what WordPress does to file names
+     * (sanitising, transliterating, and suffixes such as "-1" for a name
+     * already taken or "-scaled" for a large image).
+     *
+     * @param  array<string, mixed>  $sentImage
+     * @param  array<string, mixed>  $savedImage
+     */
+    private function isSameImage(array $sentImage, array $savedImage): bool
+    {
+        if (! empty($sentImage['id'])) {
+            return (string) $sentImage['id'] === (string) ($savedImage['id'] ?? '');
+        }
+
+        $sentName = $this->normalisedFileName((string) ($sentImage['src'] ?? ''));
+        $savedName = $this->normalisedFileName((string) ($savedImage['src'] ?? ''));
+
+        return $sentName !== '' && preg_match('/^'.preg_quote($sentName, '/').'(-\d+|-scaled|-rotated|-e\d+)*$/', $savedName) === 1;
+    }
+
+    private function normalisedFileName(string $url): string
+    {
+        $fileName = pathinfo(rawurldecode((string) parse_url($url, PHP_URL_PATH)), PATHINFO_FILENAME);
+
+        return trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower(Str::ascii($fileName))), '-');
+    }
+
+    /**
+     * The attachment ids we sent that WooCommerce rejected as no longer
+     * existing. Its message ("#123 is an invalid image ID.") is translated, so
+     * it is matched on the ids we actually sent rather than on its wording.
+     *
+     * @return array<int, string>
+     */
+    private function rejectedImageIds(array $result, array $productData): array
+    {
+        $sentIds = collect($productData['images'] ?? [])->pluck('id')->filter()->map(fn (mixed $id) => (string) $id);
+
+        $message = (string) ($result['message'] ?? '');
+
+        preg_match_all('/#(\d+)\b/', $message, $matches);
+
+        $rejectedIds = $sentIds->intersect($matches[1])->unique()->values()->all();
+
+        if ($rejectedIds === [] && $sentIds->isNotEmpty() && preg_match('/afbeelding|image|attachment|bijlage/i', $message)) {
+            $this->assumptionMonitor->violated(
+                WooCommerceAssumption::ImageRejectionNamesId,
+                "{$productData['sku']} was rejected over an image without naming one of the attachment ids it was sent: \"{$message}\".",
+                ['sku' => $productData['sku'], 'sentIds' => $sentIds->all(), 'response' => $result]
+            );
+        }
+
+        return $rejectedIds;
+    }
+
+    /**
+     * WooCommerce answers a saved product with the SKU it stored. A plugin or
+     * a SKU WooCommerce cleaned up can make that differ from what was sent.
+     */
+    private function verifySavedSku(array $result, array $productData): void
+    {
+        $savedSku = $result['sku'] ?? null;
+
+        if ($savedSku === $productData['sku']) {
+            return;
+        }
+
+        $this->assumptionMonitor->violated(
+            WooCommerceAssumption::SkuSavedAsSent,
+            "Sent {$productData['sku']}, WooCommerce saved ".($savedSku === null ? 'no SKU' : "\"{$savedSku}\"").'.',
+            ['sku' => $productData['sku'], 'savedSku' => $savedSku, 'externalId' => $result['id'] ?? null]
+        );
+    }
+
+    /**
+     * Drop the mappings to attachments WooCommerce no longer has, so the next
+     * formatting sends those images by URL again.
+     *
+     * @param  array<int, string>  $attachmentIds
+     */
+    private function forgetUploadedImages(array $attachmentIds): void
+    {
+        DataTransferMapping::query()
+            ->where('entityType', 'image')
+            ->where('apiUrl', $this->credential['shopUrl'])
+            ->whereIn('externalId', $attachmentIds)
+            ->delete();
+    }
+
+    /**
      * @throws WoocommerceProductSkuExistsException
      * @throws \Exception
      */
@@ -644,10 +843,14 @@ class ProcessProductsToWooCommerce implements ShouldQueue
         } elseif ($result['code'] === 200) {
             Log::debug("Product $productData[sku] updated successfully");
             $this->recordSuccess($productData['sku'], 'Bijgewerkt in WooCommerce.', $result['id'] ?? null);
+            $this->verifySavedSku($result, $productData);
+            $this->rememberUploadedImages($result, $productData);
             $this->reportDroppedAttributes($result, $productData);
         } elseif ($result['code'] === 201) {
             Log::debug("Product $productData[sku] created successfully");
             $this->recordSuccess($productData['sku'], 'Aangemaakt in WooCommerce.', $result['id'] ?? null);
+            $this->verifySavedSku($result, $productData);
+            $this->rememberUploadedImages($result, $productData);
             $this->reportDroppedAttributes($result, $productData);
         } elseif ($result['code'] === 400) {
             if ($result['message'] === 'Ongeldig of dubbel artikelnummer.') {
@@ -659,6 +862,8 @@ class ProcessProductsToWooCommerce implements ShouldQueue
                 }
             } elseif (str_contains($result['message'] ?? '', 'zoektabel') || str_contains($result['message'] ?? '', 'lookup table')) {
                 throw new WoocommerceProductSkuInLookupTableException($productData['sku']);
+            } elseif ($rejectedImageIds = $this->rejectedImageIds($result, $productData)) {
+                throw new WoocommerceInvalidImageException($productData['sku'], $rejectedImageIds);
             } else {
                 throw new \Exception("Error occurred ($result[code]): ".json_encode($result));
             }

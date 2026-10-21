@@ -50,6 +50,8 @@ it('changes the HW icon from the configuration UI by uploading an image', functi
         ->not->toBeNull()
         ->toStartWith('configuration/');
 
+    Storage::disk(config('filesystems.default'))->assertExists($storedValue);
+
     $this->assertDatabaseHas((new CoreConfig())->getTable(), [
         'code'  => 'image_editor.settings.general.hw_icon',
         'value' => $storedValue,

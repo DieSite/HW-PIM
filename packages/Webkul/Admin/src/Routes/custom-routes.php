@@ -9,7 +9,6 @@ use App\Http\Controllers\PhotoroomController;
 use App\Http\Controllers\Tools\AiDescriptionsController;
 use App\Http\Controllers\Tools\BulkEditController;
 use App\Http\Controllers\Tools\DeliveryTimesController;
-use App\Http\Controllers\Tools\DeMunkStockController;
 use App\Http\Controllers\Tools\ErroredProductsController;
 use App\Http\Controllers\Tools\EurgrosController;
 use App\Http\Controllers\Tools\HordeurenAnalysisController;
@@ -73,11 +72,6 @@ Route::group(['middleware' => ['web', 'admin']], function () {
         Route::get('/hordeuren-analyse', [HordeurenAnalysisController::class, 'index'])->name('admin.tools.hordeuren-analyse.index');
         Route::post('/hordeuren-analyse', [HordeurenAnalysisController::class, 'run'])->name('admin.tools.hordeuren-analyse.run');
 
-        Route::get('/demunk-voorraad', [DeMunkStockController::class, 'index'])->name('admin.tools.demunk-voorraad.index');
-        Route::post('/demunk-voorraad/import', [DeMunkStockController::class, 'import'])->name('admin.tools.demunk-voorraad.import');
-        Route::get('/demunk-voorraad/search-products', [DeMunkStockController::class, 'searchProducts'])->name('admin.tools.demunk-voorraad.search-products');
-        Route::post('/demunk-voorraad/link', [DeMunkStockController::class, 'link'])->name('admin.tools.demunk-voorraad.link');
-        Route::post('/demunk-voorraad/unlink', [DeMunkStockController::class, 'unlink'])->name('admin.tools.demunk-voorraad.unlink');
 
         Route::get('/levertijden', [DeliveryTimesController::class, 'index'])->name('admin.tools.delivery-times.index');
         Route::post('/levertijden', [DeliveryTimesController::class, 'update'])->name('admin.tools.delivery-times.update');

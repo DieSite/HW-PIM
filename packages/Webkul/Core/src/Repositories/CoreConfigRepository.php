@@ -154,23 +154,11 @@ class CoreConfigRepository extends Repository
      */
     public function recursiveArray(array $formData, $method)
     {
-        static $data = [];
+        $data = [];
 
-        static $recursiveArrayData = [];
+        $this->collectFieldGroups($formData, $method, $data);
 
-        foreach ($formData as $form => $formValue) {
-            $value = $method.'.'.$form;
-
-            if (is_array($formValue)) {
-                $dim = $this->countDim($formValue);
-
-                if ($dim > 1) {
-                    $this->recursiveArray($formValue, $value);
-                } elseif ($dim == 1) {
-                    $data[$value] = $formValue;
-                }
-            }
-        }
+        $recursiveArrayData = [];
 
         foreach ($data as $key => $value) {
             $field = core()->getConfigField($key);
@@ -185,6 +173,32 @@ class CoreConfigRepository extends Repository
         }
 
         return $recursiveArrayData;
+    }
+
+    /**
+     * Collect the innermost field groups of the posted form, keyed by their
+     * dotted config path.
+     *
+     * The accumulator is passed explicitly instead of living in static
+     * variables: a static leaks every earlier call's fields into the next
+     * one, so an uploaded file got processed twice and the second pass
+     * deleted the file the first pass had just stored.
+     */
+    protected function collectFieldGroups(array $formData, string $method, array &$data): void
+    {
+        foreach ($formData as $form => $formValue) {
+            $value = $method.'.'.$form;
+
+            if (is_array($formValue)) {
+                $dim = $this->countDim($formValue);
+
+                if ($dim > 1) {
+                    $this->collectFieldGroups($formValue, $value, $data);
+                } elseif ($dim == 1) {
+                    $data[$value] = $formValue;
+                }
+            }
+        }
     }
 
     /**
