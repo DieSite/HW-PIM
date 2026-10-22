@@ -1,5 +1,6 @@
 <?php
 
+use App\Clients\DropboxClient;
 use App\Services\DropboxTokenStore;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -67,11 +68,10 @@ it('stores the tokens and account in Redis when Dropbox sends the admin back', f
         ->assertSessionHas('success', 'Dropbox is gekoppeld met inkoop@example.com.');
 
     expect($this->store->connection())->toMatchArray([
-        'refresh_token'     => 'long-lived',
-        'account_name'      => 'HW Inkoop',
-        'account_email'     => 'inkoop@example.com',
-        'root_namespace_id' => '111',
-        'connected_by'      => $this->admin->email,
+        'refresh_token' => 'long-lived',
+        'account_name'  => 'HW Inkoop',
+        'account_email' => 'inkoop@example.com',
+        'connected_by'  => $this->admin->email,
     ])->and($this->store->accessToken())->toBe('short-lived');
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.dropboxapi.com/oauth2/token'
@@ -82,8 +82,20 @@ it('stores the tokens and account in Redis when Dropbox sends the admin back', f
         ->get(route('admin.tools.dropbox.index'))
         ->assertOk()
         ->assertSee('HW Inkoop')
-        ->assertSee('teamaccount')
         ->assertSee('Ontkoppelen');
+});
+
+it('lists the app folder without a path root header, also for a team account', function () {
+    $this->store->connect('long-lived', 'short-lived', 14400, ['account_name' => 'HW Inkoop', 'account_email' => null, 'connected_by' => null]);
+
+    Http::fake(['api.dropboxapi.com/2/files/list_folder' => Http::response(['entries' => [['.tag' => 'folder', 'name' => 'Brinker', 'path_display' => '/Brinker']], 'has_more' => false])]);
+
+    expect(app(DropboxClient::class)->listFolder('', 100)['entries'])
+        ->toBe([['type' => 'folder', 'name' => 'Brinker', 'path' => '/Brinker']]);
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/2/files/list_folder')
+        && $request['path'] === ''
+        && ! $request->hasHeader('Dropbox-API-Path-Root'));
 });
 
 it('refuses a callback with a wrong state or a denied consent and stores nothing', function () {
@@ -116,7 +128,7 @@ it('shows the Dropbox error when the code is refused', function () {
 });
 
 it('revokes the token at Dropbox and forgets the connection on disconnect', function () {
-    $this->store->connect('long-lived', 'short-lived', 14400, ['account_name' => 'HW Inkoop', 'account_email' => null, 'root_namespace_id' => null, 'connected_by' => null]);
+    $this->store->connect('long-lived', 'short-lived', 14400, ['account_name' => 'HW Inkoop', 'account_email' => null, 'connected_by' => null]);
 
     Http::fake(['api.dropboxapi.com/2/auth/token/revoke' => Http::response('null')]);
 

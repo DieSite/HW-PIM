@@ -20,7 +20,7 @@ class DropboxTokenStore
     private const EXPIRY_MARGIN = 300;
 
     /**
-     * @return array{refresh_token: string, account_name: ?string, account_email: ?string, root_namespace_id: ?string, connected_by: ?string, connected_at: ?string}|null
+     * @return array{refresh_token: string, account_name: ?string, account_email: ?string, connected_by: ?string, connected_at: ?string}|null
      */
     public function connection(): ?array
     {
@@ -31,12 +31,11 @@ class DropboxTokenStore
         }
 
         return [
-            'refresh_token'     => $fields['refresh_token'],
-            'account_name'      => $fields['account_name'] ?? null,
-            'account_email'     => $fields['account_email'] ?? null,
-            'root_namespace_id' => ($fields['root_namespace_id'] ?? '') !== '' ? $fields['root_namespace_id'] : null,
-            'connected_by'      => $fields['connected_by'] ?? null,
-            'connected_at'      => $fields['connected_at'] ?? null,
+            'refresh_token' => $fields['refresh_token'],
+            'account_name'  => $fields['account_name'] ?? null,
+            'account_email' => $fields['account_email'] ?? null,
+            'connected_by'  => $fields['connected_by'] ?? null,
+            'connected_at'  => $fields['connected_at'] ?? null,
         ];
     }
 
@@ -46,7 +45,7 @@ class DropboxTokenStore
     }
 
     /**
-     * @param  array{account_name: ?string, account_email: ?string, root_namespace_id: ?string, connected_by: ?string}  $details
+     * @param  array{account_name: ?string, account_email: ?string, connected_by: ?string}  $details
      */
     public function connect(string $refreshToken, string $accessToken, int $expiresIn, array $details): void
     {

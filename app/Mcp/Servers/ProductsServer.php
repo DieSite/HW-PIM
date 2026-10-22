@@ -43,7 +43,7 @@ use Laravel\Mcp\Server\Attributes\Version;
 
     Photos:
     - afbeelding (the gallery, first = main photo) and afbeelding_zonder_logo hold DAM asset ids. get-products lists them under "assets" with file name and URL; view-assets shows the photos themselves.
-    - Supplier photos usually live in Dropbox: browse-dropbox lists or searches folders, and upload-product-image with "dropbox" (the file's path or id, or a share link) brings a photo into the DAM.
+    - Supplier photos usually live in Dropbox, in the PIM app's own folder (/Apps/<app name>/ in Dropbox; every path starts there): browse-dropbox lists or searches folders, and upload-product-image with "dropbox" (the file's path or id, or a share link) brings a photo into the DAM.
     - To add photos: upload-product-image (Dropbox, URL or base64) gives an asset id; set-product-images sets the ordered list, runs the primary image editor on the main photo (which also creates afbeelding_zonder_logo) and stamps the HW icon on the other photos. Run it with dry_run first and look at the returned previews before saving.
     - upsert-products cannot change photos.
 

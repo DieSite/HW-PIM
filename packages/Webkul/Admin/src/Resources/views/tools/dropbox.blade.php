@@ -42,9 +42,6 @@
                     @if ($connection['connected_by'])
                         door {{ $connection['connected_by'] }}
                     @endif
-                    @if ($connection['root_namespace_id'])
-                        · teamaccount, de teammappen zijn bereikbaar
-                    @endif
                 </p>
 
                 <div class="flex gap-2.5">

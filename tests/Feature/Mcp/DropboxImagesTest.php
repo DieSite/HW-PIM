@@ -20,16 +20,17 @@ function dropboxPhotoBytes(): string
 }
 
 /**
- * A connected Dropbox in Redis under a key prefix of this test only; a team
- * account resolves paths from root namespace 111.
+ * A connected Dropbox in Redis under a key prefix of this test only. It still
+ * carries the team root_namespace_id that connections stored before the app
+ * became an App folder app, which must be ignored.
  */
-function connectDropbox(?string $rootNamespaceId = '111'): DropboxTokenStore
+function connectDropbox(): DropboxTokenStore
 {
     $store = app(DropboxTokenStore::class);
     $store->connect('refresh', 'short-lived', 14400, [
         'account_name'      => 'HW Inkoop',
         'account_email'     => 'inkoop@example.com',
-        'root_namespace_id' => $rootNamespaceId,
+        'root_namespace_id' => '111',
         'connected_by'      => 'admin@example.com',
     ]);
 
@@ -53,7 +54,7 @@ afterEach(function () {
     app(DropboxTokenStore::class)->disconnect();
 });
 
-it('uploads a photo by Dropbox path from the team root under its Dropbox name', function () {
+it('uploads a photo by Dropbox path from the app folder under its Dropbox name', function () {
     Http::fake([
         'api.dropboxapi.com/2/files/get_metadata' => Http::response(['.tag' => 'file', 'name' => 'Trevis 601 sfeer.jpg', 'path_display' => '/Leveranciers/Eurogros/Trevis 601 sfeer.jpg', 'size' => 2048]),
         'content.dropboxapi.com/2/files/download' => Http::response(dropboxPhotoBytes()),
@@ -68,7 +69,7 @@ it('uploads a photo by Dropbox path from the team root under its Dropbox name', 
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://content.dropboxapi.com/2/files/download'
         && json_decode($request->header('Dropbox-API-Arg')[0], true) === ['path' => '/Leveranciers/Eurogros/Trevis 601 sfeer.jpg']
-        && json_decode($request->header('Dropbox-API-Path-Root')[0], true) === ['.tag' => 'root', 'root' => '111']
+        && ! $request->hasHeader('Dropbox-API-Path-Root')
         && $request->header('Authorization')[0] === 'Bearer short-lived');
 
     Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'oauth2/token'));
@@ -96,8 +97,6 @@ it('refreshes an expired access token with the stored refresh token and keeps th
 
 it('downloads a Dropbox share link through the API, also when it is given as url', function () {
     $link = 'https://www.dropbox.com/scl/fi/abc123/Trevis%20601.jpg?rlkey=xyz&dl=0';
-
-    connectDropbox(rootNamespaceId: null);
 
     Http::fake([
         'api.dropboxapi.com/2/sharing/get_shared_link_metadata' => Http::response(['.tag' => 'file', 'name' => 'Trevis 601.jpg', 'size' => 2048]),

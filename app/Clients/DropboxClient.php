@@ -13,9 +13,9 @@ use Illuminate\Support\Facades\Http;
  * Read-only Dropbox API client for fetching product photos.
  *
  * An admin connects the account under Tools → Dropbox (OAuth code flow); the
- * refresh and access tokens live in Redis through DropboxTokenStore. In a team
- * account every path resolves from the team root (so team folders are
- * reachable), not from the member's own folder.
+ * refresh and access tokens live in Redis through DropboxTokenStore. The app
+ * has App folder access, so every path resolves from its own folder
+ * (/Apps/<app name>/) and Dropbox-API-Path-Root must never be sent.
  */
 class DropboxClient
 {
@@ -164,7 +164,7 @@ class DropboxClient
      * Exchanges the code from the consent page for tokens, reads the account
      * and stores the connection, replacing an earlier one.
      *
-     * @return array{account_name: ?string, account_email: ?string, root_namespace_id: ?string, connected_by: ?string}
+     * @return array{account_name: ?string, account_email: ?string, connected_by: ?string}
      */
     public function connect(string $code, string $redirectUri, ?string $connectedBy): array
     {
@@ -192,13 +192,10 @@ class DropboxClient
             throw new DropboxException('Dropbox did not return the account (HTTP '.$account->status().'); check that the app has the account_info.read permission.');
         }
 
-        $root = $account->json('root_info') ?? [];
-
         $details = [
-            'account_name'      => $account->json('name.display_name'),
-            'account_email'     => $account->json('email'),
-            'root_namespace_id' => ($root['root_namespace_id'] ?? null) !== ($root['home_namespace_id'] ?? null) ? (string) $root['root_namespace_id'] : null,
-            'connected_by'      => $connectedBy,
+            'account_name'  => $account->json('name.display_name'),
+            'account_email' => $account->json('email'),
+            'connected_by'  => $connectedBy,
         ];
 
         $this->tokens->connect($response->json('refresh_token'), $response->json('access_token'), (int) $response->json('expires_in', 14400), $details);
@@ -298,10 +295,6 @@ class DropboxClient
         }
 
         $request = Http::timeout(60)->withToken($this->accessToken());
-
-        if (($root = $this->tokens->connection()['root_namespace_id'] ?? null) !== null) {
-            $request->withHeaders(['Dropbox-API-Path-Root' => json_encode(['.tag' => 'root', 'root' => $root])]);
-        }
 
         try {
             $response = $call($request);
