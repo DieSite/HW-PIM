@@ -34,6 +34,14 @@ return [
     'merken' => ['Eurogros', 'Karpi', 'Desso', 'Mart Visser'],
 
     /*
+    | Materialen waarbij een kleed nooit een afwerking krijgt: niet bij een
+    | toegestaan merk en ook niet met de handmatige override "ja". `materiaal`
+    | is een `|`-lijst ("Wol|Polyester"); een kleed valt af zodra één onderdeel
+    | het woord bevat, dus ook "Wol en katoen".
+    */
+    'uitgesloten_materialen' => ['Wol'],
+
+    /*
     | De ticket gaf voor festonneren en volume eerst een tarief onder en boven
     | de 4 meter lengte; die staffel is vervallen en vervangen door het bedrag
     | er precies tussenin (9,00/10,50 → 9,75 en 32,00/35,00 → 33,50).

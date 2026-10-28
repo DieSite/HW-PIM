@@ -60,14 +60,15 @@ class AfwerkingOptieService
     /**
      * The manual `afwerking_beschikbaar` override wins over the brand rule, so
      * a single rug can be switched off, and a rug from a brand that is not on
-     * the list can be switched on.
+     * the list can be switched on. A wool rug never qualifies, not even with
+     * the override.
      *
      * @param  array<string, mixed>  $parent
      * @param  array<int, array<string, mixed>>  $variants
      */
     private function beschikbaar(array $parent, array $variants): bool
     {
-        if (! $this->featureIsIngeschakeld()) {
+        if (! $this->featureIsIngeschakeld() || $this->heeftUitgeslotenMateriaal($parent, $variants)) {
             return false;
         }
 
@@ -83,6 +84,32 @@ class AfwerkingOptieService
 
         return $this->heeftMaatwerk($parent, $variants)
             && $this->merkIsToegestaan($this->merkVan($parent, $variants), config('afwerkingen.merken', []));
+    }
+
+    /**
+     * Whether the rug is made of a material that rules out finishing options.
+     * `materiaal` is a pipe list whose parts can be phrases ("Wol en katoen"),
+     * so each part is matched on the whole word. Like the brand, the variants
+     * count too: the material is not filled on every parent.
+     *
+     * @param  array<string, mixed>  $parent
+     * @param  array<int, array<string, mixed>>  $variants
+     */
+    private function heeftUitgeslotenMateriaal(array $parent, array $variants): bool
+    {
+        $uitgesloten = config('afwerkingen.uitgesloten_materialen', []);
+
+        foreach ([$parent, ...$variants] as $scope) {
+            foreach (explode('|', (string) ($scope['materiaal'] ?? '')) as $deel) {
+                foreach ($uitgesloten as $materiaal) {
+                    if (preg_match('/\b'.preg_quote($materiaal, '/').'\b/iu', $deel)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

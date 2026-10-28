@@ -237,3 +237,26 @@ it('geeft null als alle afwerkingstypes wegvallen', function () {
 
     expect(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()))->toBeNull();
 });
+
+it('biedt nooit afwerkingen aan bij een wollen kleed', function (string $materiaal) {
+    $parent = eurogrosMaatwerkParent(['materiaal' => $materiaal]);
+
+    expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse()
+        ->and(afwerkingService()->payloadVoor($parent))->toBeNull();
+})->with(['Wol', ' Wol', 'Wol|Polyester', 'Katoen|Wol|Polyester', 'Wol| Overig', 'Wol en katoen']);
+
+it('biedt afwerkingen aan bij kleden zonder wol', function (string $materiaal) {
+    expect(afwerkingService()->isBeschikbaar(eurogrosMaatwerkParent(['materiaal' => $materiaal])))->toBeTrue();
+})->with(['Polyester', 'Polyester|Katoen|Acryl', 'Gerecycled PET', '']);
+
+it('kijkt voor het materiaal ook naar de varianten', function () {
+    $parent = afwerkingParent(['merk' => 'Karpi'], [['materiaal' => 'Wol']]);
+
+    expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse();
+});
+
+it('laat de override "ja" niet winnen van een wollen kleed', function () {
+    $parent = eurogrosMaatwerkParent(['materiaal' => 'Wol', 'afwerking_beschikbaar' => 'ja']);
+
+    expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse();
+});

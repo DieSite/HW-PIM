@@ -473,12 +473,17 @@ class Exporter extends AbstractExporter
              * computed by the shop, because it depends on the measurements the
              * customer enters. Parent only — like minimale-prijs, the
              * storefront reads it off the parent product.
+             *
+             * Always sent: WooCommerce keeps a meta key the request leaves out,
+             * so a rug that no longer qualifies (wool, brand, override "nee")
+             * gets an empty value, which the shop reads as "no options".
              */
             $afwerkingen = app(AfwerkingOptieService::class)->payloadVoorItem($item);
 
-            if (! is_null($afwerkingen)) {
-                $meta[] = ['key' => 'afwerkingsopties', 'value' => json_encode($afwerkingen, JSON_UNESCAPED_UNICODE)];
-            }
+            $meta[] = [
+                'key'   => 'afwerkingsopties',
+                'value' => is_null($afwerkingen) ? '' : json_encode($afwerkingen, JSON_UNESCAPED_UNICODE),
+            ];
 
             /**
              * The same rug in its other shapes (andere_vormen), as comma
