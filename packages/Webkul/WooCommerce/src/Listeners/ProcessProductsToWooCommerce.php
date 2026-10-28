@@ -5,6 +5,7 @@ namespace Webkul\WooCommerce\Listeners;
 use App\Enums\WooCommerceAssumption;
 use App\Enums\WooCommerceSyncEventStatus;
 use App\Exceptions\ParentHasNoVariantsException;
+use App\Exceptions\ProductHasNoImagesException;
 use App\Exceptions\WoocommerceBadGatewayException;
 use App\Exceptions\WoocommerceInvalidImageException;
 use App\Exceptions\WoocommerceProductExistsAsVariationException;
@@ -265,7 +266,7 @@ class ProcessProductsToWooCommerce implements ShouldQueue
             $product->save();
             $this->recordFailure($product, $e->getMessage());
             throw $e;
-        } catch (ParentHasNoVariantsException $e) {
+        } catch (ParentHasNoVariantsException|ProductHasNoImagesException $e) {
             $product = Product::whereSku($this->batch->sku)->first();
             $additional = $product->additional;
             $additional['product_sync_error'] = $e->getMessage();

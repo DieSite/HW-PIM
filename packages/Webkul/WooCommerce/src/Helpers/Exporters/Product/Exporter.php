@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
+use App\Exceptions\ProductHasNoImagesException;
 use App\Models\Product;
 use App\Services\AfwerkingOptieService;
 use App\Services\AndereVormenLinker;
@@ -373,14 +374,7 @@ class Exporter extends AbstractExporter
             if (! empty($values['common']['afbeelding_zonder_logo'])) {
                 $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->generateImageUrl($values['common']['afbeelding_zonder_logo'])];
             } else {
-                $images = $values['common']['afbeelding'] ?? '';
-
-                if (is_string($images)) {
-                    $images = explode(',', $images);
-                }
-
-                $image = isset($images[0]) ? $this->generateImageUrl($images[0]) : '';
-                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $image];
+                $meta[] = ['key' => 'afbeelding_zonder_logo', 'value' => $this->firstImageUrl($values['common']['afbeelding'] ?? null)];
             }
             $formatted['meta_data'] = $meta;
         } else {
@@ -529,15 +523,7 @@ class Exporter extends AbstractExporter
             && (! isset($formatted['images'])
                 || ! is_array($formatted['images'])
                 || count($formatted['images']) < 1)) {
-            \Sentry::configureScope(function (Scope $scope) use ($formatted, $item, $imagesToExport) {
-                $scope->setContext('formatted', $formatted);
-                $scope->setContext('item', $item);
-                $scope->setContext('imagesToExport', ['imagesToExport' => $imagesToExport]);
-                $scope->setContext('mediaMappings', ['mediaMappings' => $this->mediaMappings]);
-                $scope->setContext('imageAttributeCodes', ['imageAttributeCodes' => $this->imageAttributeCodes]);
-            });
-
-            throw new \Exception('Het lijkt er op dat er voor dit product geen afbeeldingen zijn opgeslagen. Probeer het opnieuw.');
+            throw new ProductHasNoImagesException($item['code']);
         }
 
         return $formatted;
@@ -1121,6 +1107,21 @@ class Exporter extends AbstractExporter
                 ? ['id' => $imageId, 'position' => 0]
                 : ['src' => $imageUrl, 'name' => $this->getImageName($imageUrl), 'position' => 0],
         ];
+    }
+
+    /**
+     * URL of the first image in an image attribute value (comma separated
+     * asset ids, or an array of them), or '' when it holds none. A parent
+     * without images must not stop its variants from syncing: an empty id
+     * reaches S3 as an empty object key, which the SDK rejects.
+     */
+    protected function firstImageUrl(mixed $images): string
+    {
+        $first = collect(is_string($images) ? explode(',', $images) : Arr::wrap($images))
+            ->map(fn (mixed $image): string => trim((string) $image))
+            ->first(fn (string $image): bool => $image !== '');
+
+        return is_null($first) ? '' : $this->generateImageUrl($first);
     }
 
     protected function generateImageUrl(string $image): string

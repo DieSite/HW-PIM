@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\WooCommerceSyncEventStatus;
+use App\Exceptions\ProductHasNoImagesException;
 use App\Models\Product;
 use App\Models\WooCommerceSyncEvent;
 use Illuminate\Support\Facades\Cache;
@@ -85,6 +86,50 @@ it('saves a helpful error message when WooCommerce rejects the product due to mi
     $product->refresh();
     expect($product->additional['product_sync_error'])
         ->toContain('no variants');
+});
+
+it('records a product without images as a user error instead of failing the job', function () {
+    // Arrange
+    $product = Product::factory()->simple()->create();
+
+    Cache::put('wc_default_credential', [
+        'id'      => 1,
+        'shopUrl' => 'https://test.example.com',
+        'extras'  => [
+            'quicksettings' => [
+                'auto_sync'      => 1,
+                'quick_channel'  => 'default',
+                'quick_locale'   => 'en_US',
+                'quick_currency' => 'EUR',
+            ],
+        ],
+    ], 300);
+
+    $exporter = $this->mock(Exporter::class);
+    $exporter->shouldReceive('initMappingsAndAttribute')->once();
+    $exporter->shouldReceive('setMediaExport')->with(true)->once();
+    $exporter->shouldReceive('formatData')->once()->andThrow(new ProductHasNoImagesException($product->sku));
+
+    $connectorService = $this->mock(WooCommerceService::class);
+    $connectorService->shouldNotReceive('requestApiAction');
+
+    Sentry::shouldReceive('captureException')->never();
+
+    // Act — retrying cannot add an image, so the job must return instead of
+    // throwing: a throw retries it with backoff and ends in Horizon's failed jobs.
+    ProcessProductsToWooCommerce::dispatchSync(
+        ProductBatch::fromProductArray(['sku' => $product->sku, 'parent_id' => null, 'variants' => []])
+    );
+
+    // Assert
+    $product->refresh();
+    expect($product->additional['product_sync_error'])
+        ->toContain('geen afbeeldingen')
+        ->toContain('standaardafbeelding');
+
+    $event = WooCommerceSyncEvent::where('product_id', $product->id)->latest('id')->first();
+    expect($event->status)->toBe(WooCommerceSyncEventStatus::Failed)
+        ->and($event->customer_message)->toContain('geen afbeeldingen');
 });
 
 it('flags attributes that WooCommerce silently dropped from the saved product', function () {

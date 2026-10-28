@@ -5,9 +5,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Webkul\User\Models\Admin;
+use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 use Webkul\WooCommerce\Models\DataTransferMapping;
 use Webkul\WooCommerce\Repositories\DataTransferMappingRepository;
-use Webkul\WooCommerce\Helpers\Exporters\Product\Exporter;
 
 /**
  * Upload a default image through the admin Configuration screen, the way a
@@ -55,6 +55,15 @@ it('renders the default image upload field on the configuration page', function 
         ->assertOk()
         ->assertSeeText('Geen afbeelding beschikbaar')
         ->assertSee('type="file"', false);
+});
+
+it('links the default image setting from the configuration menu', function () {
+    $this->actingAs(Admin::factory()->create(['password' => Hash::make('password')]), 'admin');
+
+    $this->get(route('admin.dashboard.index'))
+        ->assertOk()
+        ->assertSee(route('admin.configuration.edit', ['product_images', 'settings']), false)
+        ->assertSeeText('Productafbeeldingen');
 });
 
 it('resolves the uploaded default image to a url', function () {

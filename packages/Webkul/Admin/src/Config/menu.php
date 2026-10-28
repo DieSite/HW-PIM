@@ -170,6 +170,13 @@ return [
         'sort'   => 2,
         'icon'   => '',
     ], [
+        'key'    => 'configuration.product-images',
+        'name'   => 'Productafbeeldingen',
+        'route'  => 'admin.configuration.edit',
+        'params' => ['product_images', 'settings'],
+        'sort'   => 2,
+        'icon'   => '',
+    ], [
         'key'    => 'configuration.ai-texts',
         'name'   => 'AI-teksten',
         'route'  => 'admin.configuration.edit',

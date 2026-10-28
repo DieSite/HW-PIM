@@ -407,5 +407,11 @@ return [
         'route'  => 'admin.configuration.edit',
         'params' => ['image_editor', 'settings'],
         'sort'   => 3,
+    ], [
+        'key'    => 'configuration.product-images',
+        'name'   => 'Productafbeeldingen',
+        'route'  => 'admin.configuration.edit',
+        'params' => ['product_images', 'settings'],
+        'sort'   => 4,
     ],
 ];
