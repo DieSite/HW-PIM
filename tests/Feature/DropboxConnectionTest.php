@@ -1,9 +1,11 @@
 <?php
 
 use App\Clients\DropboxClient;
+use App\Models\DropboxConnection;
 use App\Services\DropboxTokenStore;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Webkul\User\Models\Admin;
 
@@ -51,7 +53,7 @@ it('sends the admin to the Dropbox consent page with a state kept in the session
         ]);
 });
 
-it('stores the tokens and account in Redis when Dropbox sends the admin back', function () {
+it('stores the tokens and account when Dropbox sends the admin back', function () {
     Http::fake([
         'api.dropboxapi.com/oauth2/token'                => Http::response(['access_token' => 'short-lived', 'refresh_token' => 'long-lived', 'expires_in' => 14400]),
         'api.dropboxapi.com/2/users/get_current_account' => Http::response([
@@ -72,7 +74,9 @@ it('stores the tokens and account in Redis when Dropbox sends the admin back', f
         'account_name'  => 'HW Inkoop',
         'account_email' => 'inkoop@example.com',
         'connected_by'  => $this->admin->email,
-    ])->and($this->store->accessToken())->toBe('short-lived');
+    ])->and($this->store->accessToken())->toBe('short-lived')
+        ->and(DropboxConnection::query()->count())->toBe(1)
+        ->and(DropboxConnection::query()->toBase()->value('refresh_token'))->not->toContain('long-lived');
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.dropboxapi.com/oauth2/token'
         && $request['grant_type'] === 'authorization_code' && $request['code'] === 'the-code'
@@ -83,6 +87,27 @@ it('stores the tokens and account in Redis when Dropbox sends the admin back', f
         ->assertOk()
         ->assertSee('HW Inkoop')
         ->assertSee('Ontkoppelen');
+});
+
+it('stays connected when its Redis keys are gone and fetches a new access token', function () {
+    $this->store->connect('long-lived', 'short-lived', 14400, ['account_name' => 'HW Inkoop', 'account_email' => null, 'connected_by' => null]);
+
+    $prefix = config('services.dropbox.redis_key_prefix');
+    Redis::connection(config('services.dropbox.redis_connection'))->del([$prefix.'connection', $prefix.'access_token']);
+
+    Http::fake([
+        'api.dropboxapi.com/oauth2/token'         => Http::response(['access_token' => 'fresh', 'expires_in' => 14400]),
+        'api.dropboxapi.com/2/files/list_folder'  => Http::response(['entries' => [], 'has_more' => false]),
+    ]);
+
+    expect(app(DropboxClient::class)->isConnected())->toBeTrue()
+        ->and(app(DropboxClient::class)->listFolder('', 100)['entries'])->toBe([])
+        ->and($this->store->accessToken())->toBe('fresh');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.dropboxapi.com/oauth2/token'
+        && $request['grant_type'] === 'refresh_token' && $request['refresh_token'] === 'long-lived');
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/2/files/list_folder')
+        && $request->header('Authorization')[0] === 'Bearer fresh');
 });
 
 it('lists the app folder without a path root header, also for a team account', function () {

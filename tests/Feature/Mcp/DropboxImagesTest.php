@@ -20,9 +20,10 @@ function dropboxPhotoBytes(): string
 }
 
 /**
- * A connected Dropbox in Redis under a key prefix of this test only. It still
- * carries the team root_namespace_id that connections stored before the app
- * became an App folder app, which must be ignored.
+ * A connected Dropbox, with its access token in Redis under a key prefix of
+ * this test only. It still carries the team root_namespace_id that
+ * connections stored before the app became an App folder app, which must be
+ * ignored.
  */
 function connectDropbox(): DropboxTokenStore
 {

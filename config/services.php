@@ -32,8 +32,9 @@ return [
     /*
      * Dropbox app the MCP server fetches product photos with. Needs the scopes
      * account_info.read, files.metadata.read, files.content.read and
-     * sharing.read. The account is connected under Tools → Dropbox; its tokens
-     * live in Redis (App\Services\DropboxTokenStore), not here.
+     * sharing.read. The account is connected under Tools → Dropbox; its refresh
+     * token lives in the database and the short-lived access token in Redis
+     * (App\Services\DropboxTokenStore), not here.
      */
     'dropbox' => [
         'app_key'          => env('DROPBOX_APP_KEY'),

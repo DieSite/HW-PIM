@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\DropboxConnection;
 use Illuminate\Redis\Connections\Connection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 
 /**
- * Keeps the Dropbox connection in Redis: the refresh token and account
- * details (no expiry) and the short-lived access token (expires a few minutes
- * before Dropbox's own expiry). Redis rather than the cache store, so a
- * cache:clear on deploy never disconnects Dropbox.
+ * Keeps the Dropbox connection: the refresh token and account details in the
+ * database ({@see DropboxConnection}), so neither a cache:clear nor a flush of
+ * Redis disconnects Dropbox, and the short-lived access token in Redis
+ * (expires a few minutes before Dropbox's own expiry). Losing the access token
+ * only costs a refresh.
  */
 class DropboxTokenStore
 {
@@ -24,18 +27,18 @@ class DropboxTokenStore
      */
     public function connection(): ?array
     {
-        $fields = $this->redis()->hgetall($this->key('connection'));
+        $connection = DropboxConnection::query()->latest('id')->first();
 
-        if (empty($fields['refresh_token'])) {
+        if ($connection === null || blank($connection->refresh_token)) {
             return null;
         }
 
         return [
-            'refresh_token' => $fields['refresh_token'],
-            'account_name'  => $fields['account_name'] ?? null,
-            'account_email' => $fields['account_email'] ?? null,
-            'connected_by'  => $fields['connected_by'] ?? null,
-            'connected_at'  => $fields['connected_at'] ?? null,
+            'refresh_token' => $connection->refresh_token,
+            'account_name'  => $connection->account_name,
+            'account_email' => $connection->account_email,
+            'connected_by'  => $connection->connected_by,
+            'connected_at'  => $connection->created_at?->toIso8601String(),
         ];
     }
 
@@ -49,12 +52,15 @@ class DropboxTokenStore
      */
     public function connect(string $refreshToken, string $accessToken, int $expiresIn, array $details): void
     {
-        $this->redis()->del([$this->key('connection')]);
-        $this->redis()->hmset($this->key('connection'), array_map(fn (?string $value): string => (string) $value, [
-            'refresh_token' => $refreshToken,
-            ...$details,
-            'connected_at'  => now()->toIso8601String(),
-        ]));
+        DB::transaction(function () use ($refreshToken, $details): void {
+            DropboxConnection::query()->delete();
+            DropboxConnection::query()->create([
+                'refresh_token' => $refreshToken,
+                'account_name'  => $details['account_name'] ?? null,
+                'account_email' => $details['account_email'] ?? null,
+                'connected_by'  => $details['connected_by'] ?? null,
+            ]);
+        });
 
         $this->putAccessToken($accessToken, $expiresIn);
     }
@@ -78,7 +84,8 @@ class DropboxTokenStore
 
     public function disconnect(): void
     {
-        $this->redis()->del([$this->key('connection'), $this->key('access_token')]);
+        DropboxConnection::query()->delete();
+        $this->forgetAccessToken();
     }
 
     private function key(string $name): string

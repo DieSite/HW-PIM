@@ -68,7 +68,7 @@
         'productShape'   => $productShape,
         'currentAssetId' => $currentAssetId,
         'masksBase'      => $masksBase,
-        'outline-solid'        => $cfg['outline-solid'],
+        'outline'        => $cfg['outline'],
         'saved'          => $product->additional['primary_image_editor'] ?? null,
     ];
 @endphp

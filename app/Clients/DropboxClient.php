@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\Http;
  * Read-only Dropbox API client for fetching product photos.
  *
  * An admin connects the account under Tools → Dropbox (OAuth code flow); the
- * refresh and access tokens live in Redis through DropboxTokenStore. The app
- * has App folder access, so every path resolves from its own folder
- * (/Apps/<app name>/) and Dropbox-API-Path-Root must never be sent.
+ * refresh token lives in the database and the access token in Redis, both
+ * through DropboxTokenStore. The app has App folder access, so every path
+ * resolves from its own folder (/Apps/<app name>/) and Dropbox-API-Path-Root
+ * must never be sent.
  */
 class DropboxClient
 {

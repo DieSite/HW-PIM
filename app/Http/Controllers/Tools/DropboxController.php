@@ -15,7 +15,7 @@ use Illuminate\View\View;
 /**
  * Tools → Dropbox: connects the Dropbox account the MCP server takes product
  * photos from. The admin is sent to Dropbox's consent page and comes back on
- * callback(); the tokens are stored in Redis ({@see DropboxTokenStore}).
+ * callback(); the tokens are stored by {@see DropboxTokenStore}.
  */
 class DropboxController extends Controller
 {
