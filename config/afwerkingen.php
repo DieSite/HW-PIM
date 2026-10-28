@@ -2,201 +2,139 @@
 
 /*
 |--------------------------------------------------------------------------
-| Afwerkingsmogelijkheden bij maatwerkkleden
+| Randafwerkingen bij maatwerkkleden
 |--------------------------------------------------------------------------
 |
-| De tarieventabel uit de Asana-ticket "Bij maatwerk afwerkingsmoglijkheden
-| toevoegen". Alle bedragen hieronder zijn **verkoopprijzen website, incl.
-| BTW**, exact zoals ze in de ticket staan, zodat deze tabel er naast te
-| leggen is. Ze gaan ongewijzigd naar de shop; er zit geen marge- of
-| BTW-omrekening meer tussen.
+| Per merk, uit de Asana-ticket "Randafwerkingen maatwerk" (oktober 2026):
 |
-| De shop rekent de uiteindelijke toeslag uit, omdat die pas bekend is als de
-| klant zijn maten heeft ingevuld:
+|  - Karpi / Mart Visser: geen keuze, het kleed wordt afgewerkt zoals op het
+|    staal (meestal volume). Daarom staan ze hier niet.
+|  - Louis De Poortere: bestaat geen maatwerk van.
+|  - Eurogros (Meet & Maak, Arold, Montgomery): keuze tussen feston en band
+|    suède, zonder meerprijs. De wollen kwaliteiten (Cambell, Kapiti, Ulva…)
+|    krijgen de standaard wollen afwerking en vallen af op materiaal.
+|  - Desso: de klant kiest festonneren of blind banderen / linnen band. Onze
+|    m²-prijs is die van een gefestonneerd kleed en blijft altijd gelijk;
+|    banderen kost per m² het verschil dat de adviesverkoopprijslijst van
+|    Desso (1 oktober 2025, pagina 2 en 3) tussen die twee afwerkingen
+|    rekent, per kwaliteit en per oppervlakteband.
 |
-|     toeslag = omtrek_m × tarief + Σ vaste toeslagen
+| Alle bedragen zijn verkoopprijzen website, incl. BTW. De shop rekent, want
+| de toeslag hangt af van de maten die de klant invult. De basisprijs van het
+| kleed verandert nooit:
 |
-| waarbij de omtrek 2 × (lengte + breedte) is voor een rechthoek en π × d voor
-| een rond kleed. Een organisch gevormd kleed krijgt géén eigen omtrekformule:
-| dat rekent met de omschrijvende rechthoek en krijgt het vaste bedrag er
-| bovenop.
+|     prijs = m² × variantprijs + hoeveelheid × tarief
+|
+| met als hoeveelheid de omtrek in meters (`omtrek_m`) of de oppervlakte (`m2`).
+| Elke merkregel levert één verplichte keuze: de eerste keuze is de standaard.
 |
 */
 
 return [
     /*
-    | De merken waarvan de maatwerkkleden afwerkingen aangeboden krijgen.
-    | `Mart Visser` bestaat in de productdata alleen als onderdeel van de
-    | samengestelde string `Mart Visser|Karpi`; AfwerkingOptieService splitst
-    | daarop, dus hier staat gewoon de losse merknaam. De Munk ontbreekt
-    | bewust: maatwerk van De Munk heeft zijn afwerkingen al.
-    */
-    'merken' => ['Eurogros', 'Karpi', 'Desso', 'Mart Visser'],
-
-    /*
-    | Materialen waarbij een kleed nooit een afwerking krijgt: niet bij een
-    | toegestaan merk en ook niet met de handmatige override "ja". `materiaal`
-    | is een `|`-lijst ("Wol|Polyester"); een kleed valt af zodra één onderdeel
-    | het woord bevat, dus ook "Wol en katoen".
+    | Materialen waarbij een kleed nooit een afwerkingskeuze krijgt: niet bij
+    | een merk met regels en ook niet met de handmatige override "ja".
+    | `materiaal` is een `|`-lijst ("Wol|Polyester"); een kleed valt af zodra
+    | één onderdeel het woord bevat, dus ook "Wol en katoen".
     */
     'uitgesloten_materialen' => ['Wol'],
 
     /*
-    | De ticket gaf voor festonneren en volume eerst een tarief onder en boven
-    | de 4 meter lengte; die staffel is vervallen en vervangen door het bedrag
-    | er precies tussenin (9,00/10,50 → 9,75 en 32,00/35,00 → 33,50).
+    | Per merk de kwaliteiten met hun keuzes. Een kwaliteit zonder `match`
+    | geldt voor elk maatwerkkleed van het merk; anders moet het kleed aan
+    | alle voorwaarden voldoen (`collectie` exact, `productnaam_begint_met`
+    | als voorvoegsel, beide hoofdletterongevoelig). Een kleed van een merk
+    | met regels dat geen kwaliteit vindt, krijgt geen keuze: liever niets
+    | aanbieden dan een verkeerde prijs.
+    |
+    | Mart Visser bestaat in de productdata alleen als `Mart Visser|Karpi`;
+    | het merk wordt op `|` gesplitst, dus een regel voor "Karpi" zou daar ook
+    | gelden. Die is er bewust niet.
     */
-    'opties' => [
-        'festonneren' => [
-            'label'    => 'Festonneren',
-            'eenheid'  => 'omtrek_m',
-            'keuzes'   => [
-                'standaard' => [
-                    'label'    => 'Festonneren',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 9.75]],
-                ],
-            ],
-            'toeslagen' => [
-                [
-                    'code'       => 'organisch',
-                    'label'      => 'Organische vorm',
-                    'type'       => 'vast',
-                    'voorwaarde' => 'organische_vorm',
-                    'prijs'      => 30.00,
+    'merken' => [
+        'Eurogros' => [
+            'eenheid'     => 'omtrek_m',
+            'kwaliteiten' => [
+                'eurogros' => [
+                    'keuzes' => [
+                        'feston'     => ['label' => 'Feston', 'tarieven' => [['tarief' => 0.0]]],
+                        'band_suede' => ['label' => 'Band suède', 'tarieven' => [['tarief' => 0.0]]],
+                    ],
                 ],
             ],
         ],
 
-        'banderen' => [
-            'label'   => 'Banderen',
-            'eenheid' => 'omtrek_m',
-            'keuzes'  => [
-                'linnen_25_55' => [
-                    'label'    => 'Linnen/katoen/jute band 2,5 t/m 5,5 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 25.00]],
+        /*
+        | Hieronder staan de m²-prijzen letterlijk uit de prijslijst; de toeslag
+        | per band is `m2` van de keuze min `m2` van de `basiskeuze`
+        | (festonneren), dus voor Desso&Ex 55 / 49 / 43 per m² voor banderen.
+        |
+        | De prijslijst rekent in drie banden: ≤ 4 m², 4–6 m² en ≥ 6 m². Met
+        | maten in hele centimeters is een oppervlakte altijd een veelvoud van
+        | 0,0001 m², dus "4–6 m²" is tot en met 5,9999 m²: een kleed van precies
+        | 200 × 300 cm valt in de band van 6 m² en meer, zoals Desso bedoelt.
+        |
+        | Volume biedt Desso bij geen van de kwaliteiten die wij voeren aan.
+        |
+        | Art Deco, Denim, Fresco en Mozaic (68 parents) staan nog niet op de
+        | lijst: welke kwaliteit van de prijslijst dat zijn, is niet zeker.
+        */
+        'Desso' => [
+            'eenheid'     => 'm2',
+            'basiskeuze'  => 'festonneren',
+            'kwaliteiten' => [
+                'desso_ex' => [
+                    'label'  => 'Desso&Ex / Desso&Ex Nature',
+                    'match'  => ['collectie' => ['Desso & Ex', 'Desso & Ex Nature']],
+                    'keuzes' => [
+                        'festonneren'    => ['label' => 'Festonneren', 'm2' => [164.95, 148.95, 133.95]],
+                        'blind_banderen' => ['label' => 'Blind banderen', 'm2' => [219.95, 197.95, 176.95]],
+                        'linnen_band'    => ['label' => 'Linnen band', 'm2' => [219.95, 197.95, 176.95]],
+                    ],
                 ],
-                'linnen_55_90' => [
-                    'label'    => 'Linnen/katoen/jute band 5,5 t/m 9 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 31.00]],
+                'sense_of_marble' => [
+                    'label'  => 'Sense of Marble',
+                    'match'  => ['collectie' => ['Sense of Marble']],
+                    'keuzes' => [
+                        'festonneren'    => ['label' => 'Festonneren (XS garen)', 'm2' => [164.95, 148.95, 133.95]],
+                        'blind_banderen' => ['label' => 'Blind banderen', 'm2' => [219.95, 197.95, 176.95]],
+                        'linnen_band'    => ['label' => 'Linnen band', 'm2' => [219.95, 197.95, 176.95]],
+                    ],
                 ],
-                'kunstleer_25_55' => [
-                    'label'    => 'Kunstleer band 2,5 t/m 5,5 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 37.00]],
+                'canvas_botanical' => [
+                    'label'  => 'Canvas Botanical',
+                    'match'  => ['collectie' => ['Desso Weave'], 'productnaam_begint_met' => ['Desso Botanical']],
+                    'keuzes' => [
+                        'festonneren'    => ['label' => 'Festonneren', 'm2' => [154.95, 136.95, 123.95]],
+                        'blind_banderen' => ['label' => 'Blind banderen', 'm2' => [208.95, 186.95, 168.95]],
+                        'linnen_band'    => ['label' => 'Linnen band', 'm2' => [208.95, 186.95, 168.95]],
+                    ],
                 ],
-                'kunstleer_55_90' => [
-                    'label'    => 'Kunstleer band 5,5 t/m 9 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 41.00]],
+                'canvas_weave' => [
+                    'label'  => 'Canvas Weave',
+                    'match'  => ['collectie' => ['Desso Weave'], 'productnaam_begint_met' => ['Desso Weave']],
+                    'keuzes' => [
+                        'festonneren'    => ['label' => 'Festonneren', 'm2' => [152.95, 134.95, 121.95]],
+                        'blind_banderen' => ['label' => 'Blind banderen', 'm2' => [205.95, 184.95, 166.95]],
+                        'linnen_band'    => ['label' => 'Linnen band', 'm2' => [205.95, 184.95, 166.95]],
+                    ],
                 ],
-            ],
-            'toeslagen' => [
-                [
-                    'code'       => 'organisch',
-                    'label'      => 'Organische vorm',
-                    'type'       => 'vast',
-                    'voorwaarde' => 'organische_vorm',
-                    'prijs'      => 30.00,
-                ],
-            ],
-        ],
-
-        'banderen_blind' => [
-            'label'   => 'Banderen blind',
-            'eenheid' => 'omtrek_m',
-            'keuzes'  => [
-                'linnen_25_55' => [
-                    'label'    => 'Linnen/katoen/jute 2,5 t/m 5,5 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 43.00]],
-                ],
-                'linnen_60_100' => [
-                    'label'    => 'Linnen/katoen/jute 6 t/m 10 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 47.00]],
-                ],
-                'kunstleer_25_55' => [
-                    'label'    => 'Kunstleer 2,5 t/m 5,5 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 47.00]],
-                ],
-                'kunstleer_60_100' => [
-                    'label'    => 'Kunstleer 6 t/m 10 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 51.00]],
-                ],
-            ],
-            'toeslagen' => [
-                [
-                    'code'       => 'organisch',
-                    'label'      => 'Organische vorm',
-                    'type'       => 'vast',
-                    'voorwaarde' => 'organische_vorm',
-                    'prijs'      => 30.00,
-                ],
-            ],
-        ],
-
-        'volume' => [
-            'label'   => 'Volume',
-            'eenheid' => 'omtrek_m',
-            /*
-            | Het volumetarief is inclusief ondertapijt. Of dat de losse
-            | "Met onderkleed"-variatiekeuze vervangt is nog een openstaande
-            | vraag aan Hans/Jorik; de vlag staat in de payload zodat de shop
-            | het kan afhandelen zonder PIM-wijziging.
-            */
-            'inclusief_onderkleed' => true,
-            'keuzes'               => [
-                'standaard' => [
-                    'label'    => 'Volume (incl. ondertapijt)',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 33.50]],
+                'vintage' => [
+                    'label'  => 'Bonaparte Vintage',
+                    'match'  => ['collectie' => ['Bonaparte Vintage']],
+                    'keuzes' => [
+                        'festonneren'    => ['label' => 'Festonneren', 'm2' => [161.95, 144.95, 129.95]],
+                        'blind_banderen' => ['label' => 'Blind banderen', 'm2' => [215.95, 194.95, 174.95]],
+                        'linnen_band'    => ['label' => 'Linnen band', 'm2' => [215.95, 194.95, 174.95]],
+                    ],
                 ],
             ],
-            'toeslagen' => [
-                [
-                    'code'       => 'rond',
-                    'label'      => 'Rond volumekleed',
-                    'type'       => 'vast',
-                    'voorwaarde' => 'ronde_vorm',
-                    'prijs'      => 50.00,
-                ],
-                [
-                    'code'       => 'organisch',
-                    'label'      => 'Organische vorm',
-                    'type'       => 'vast',
-                    'voorwaarde' => 'organische_vorm',
-                    'prijs'      => 100.00,
-                ],
-            ],
-        ],
-
-        'biesje' => [
-            'label'   => 'Biesje',
-            'eenheid' => 'omtrek_m',
-            'keuzes'  => [
-                'linnen_05' => [
-                    'label'    => 'Linnen/katoen/jute 0,5 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 28.00]],
-                ],
-                'kunstleer_05' => [
-                    'label'    => 'Kunstleer 0,5 cm zichtzijde',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 31.50]],
-                ],
-            ],
-            'toeslagen' => [],
-        ],
-
-        'anti_slip' => [
-            'label' => 'Anti-slip',
-            /*
-            | De enige optie die per vierkante meter rekent in plaats van per
-            | strekkende meter omtrek, en de enige die naast een randafwerking
-            | gekozen mag worden.
-            */
-            'eenheid'       => 'm2',
-            'combineerbaar' => true,
-            'keuzes'        => [
-                'standaard' => [
-                    'label'    => 'Anti-slip (inclusief lijmen)',
-                    'tarieven' => [['max_lengte_cm' => null, 'prijs' => 20.00]],
-                ],
-            ],
-            'toeslagen' => [],
         ],
     ],
+
+    /*
+    | De bovengrenzen van de oppervlaktebanden bij de drie `m2`-prijzen van een
+    | Desso-keuze, in dezelfde volgorde. null = open band.
+    */
+    'm2_banden' => [4.0, 5.9999, null],
 ];

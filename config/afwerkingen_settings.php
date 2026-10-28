@@ -1,46 +1,30 @@
 <?php
 
+use Illuminate\Support\Str;
+
 /*
 |--------------------------------------------------------------------------
 | Afwerkingsmogelijkheden – admin configuration tree
 |--------------------------------------------------------------------------
 |
 | Merged into the "core" config (the admin Configuration screen) from
-| App\Providers\AppServiceProvider. De tarieventabel zelf staat in
+| App\Providers\AppServiceProvider. De regels en prijzen zelf staan in
 | config/afwerkingen.php; alleen de admin-instelbare velden horen hier.
 |
-| Per afwerkingstype staan er twee velden: een aan/uit-schakelaar en een
-| merkenlijst. Zo kan een heel type uitgezet worden, of beperkt worden tot een
-| groep merken, zonder code te wijzigen. Een lege merkenlijst betekent "geen
-| extra beperking" — dan gelden de merken uit config/afwerkingen.php.
-|
-| LET OP: het multiselect-veldtype slaat op als komma-gescheiden string (zie
-| packages/Webkul/Admin/src/Resources/views/configuration/field-type.blade.php),
-| dus AfwerkingOptieService splitst de waarde zelf.
+| Per merk met regels staat er een aan/uit-schakelaar, zodat een merk uitgezet
+| kan worden zonder code te wijzigen. De sleutel is de merknaam als slug
+| ("Eurogros" → `eurogros_enabled`), zie AfwerkingOptieService.
 |
 */
 
-$merkOpties = array_map(
-    fn (string $merk): array => ['title' => $merk, 'value' => $merk],
-    config('afwerkingen.merken', [])
-);
+$merkVelden = [];
 
-$typeVelden = [];
-
-foreach (config('afwerkingen.opties', []) as $code => $optie) {
-    $typeVelden[] = [
-        'name'          => $code.'_enabled',
-        'title'         => $optie['label'].' aanbieden',
+foreach (array_keys(config('afwerkingen.merken', [])) as $merk) {
+    $merkVelden[] = [
+        'name'          => Str::slug($merk, '_').'_enabled',
+        'title'         => "Randafwerkingen voor {$merk} aanbieden",
         'type'          => 'boolean',
         'default_value' => 1,
-    ];
-
-    $typeVelden[] = [
-        'name'    => $code.'_merken',
-        'title'   => $optie['label'].' – alleen voor deze merken',
-        'type'    => 'multiselect',
-        'options' => $merkOpties,
-        'info'    => 'Laat leeg om geen extra beperking op te leggen.',
     ];
 }
 
@@ -48,29 +32,29 @@ return [
     [
         'key'  => 'general.afwerkingen',
         'name' => 'Afwerkingen',
-        'info' => 'Afwerkingsmogelijkheden bij maatwerkkleden',
+        'info' => 'Randafwerkingen bij maatwerkkleden',
         'sort' => 4,
     ],
     [
         'key'    => 'general.afwerkingen.settings',
         'name'   => 'Algemeen',
-        'info'   => 'Of afwerkingen aangeboden worden',
+        'info'   => 'Of randafwerkingen aangeboden worden',
         'sort'   => 1,
         'fields' => [
             [
                 'name'          => 'enabled',
                 'title'         => 'Afwerkingen ingeschakeld',
                 'type'          => 'boolean',
-                'info'          => 'Zet het aanbieden van afwerkingen bij maatwerkkleden aan of uit.',
+                'info'          => 'Zet het aanbieden van randafwerkingen bij maatwerkkleden aan of uit.',
                 'default_value' => 1,
             ],
         ],
     ],
     [
-        'key'    => 'general.afwerkingen.types',
-        'name'   => 'Per afwerking',
-        'info'   => 'Zet losse afwerkingen uit of beperk ze tot bepaalde merken',
+        'key'    => 'general.afwerkingen.merken',
+        'name'   => 'Per merk',
+        'info'   => 'Zet de randafwerkingen van een merk uit',
         'sort'   => 2,
-        'fields' => $typeVelden,
+        'fields' => $merkVelden,
     ],
 ];

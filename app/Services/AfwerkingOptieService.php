@@ -4,24 +4,28 @@ namespace App\Services;
 
 use App\Models\Product;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 /**
- * Decides which finishing options (afwerkingen) a maatwerk rug offers and at
- * what consumer rate, and shapes that into the payload the shop consumes.
+ * Decides which edge finishes (randafwerkingen) a maatwerk rug offers and at
+ * what price, and shapes that into the payload the shop consumes.
  *
- * The rug's final surcharge cannot be computed here: it depends on the
- * measurements the customer types in on the product page. So the PIM ships the
- * rate table and the shop does `omtrek_m × tarief + Σ vaste toeslagen`.
+ * The final price cannot be computed here: it depends on the measurements the
+ * customer types in on the product page. So the PIM ships the rule for this
+ * rug — its choices and their rates, per config/afwerkingen.php — and the shop
+ * does the arithmetic.
  */
 class AfwerkingOptieService
 {
     /**
      * Bumped when the payload shape changes in a way the shop must notice.
+     * Version 2: one required choice per rug, per-brand rules, and rates per
+     * m² in area bands (`max_m2`).
      */
-    public const PAYLOAD_VERSIE = 1;
+    public const PAYLOAD_VERSIE = 2;
 
     /**
-     * Whether this parent product offers finishing options at all.
+     * Whether this parent product offers edge finishes at all.
      */
     public function isBeschikbaar(Product $parent): bool
     {
@@ -29,8 +33,7 @@ class AfwerkingOptieService
     }
 
     /**
-     * The rate table for this product, filtered down to the types that are
-     * enabled for its brand.
+     * The edge finish rule for this product.
      *
      * @return array<string, mixed>|null
      */
@@ -58,10 +61,10 @@ class AfwerkingOptieService
     }
 
     /**
-     * The manual `afwerking_beschikbaar` override wins over the brand rule, so
-     * a single rug can be switched off, and a rug from a brand that is not on
-     * the list can be switched on. A wool rug never qualifies, not even with
-     * the override.
+     * A rug qualifies when its brand has a rule that covers its quality and it
+     * is maatwerk. The manual `afwerking_beschikbaar` override can switch a rug
+     * off, or on without a maatwerk variant, but it cannot invent a price: a
+     * rug without a matching rule never qualifies, and neither does a wool rug.
      *
      * @param  array<string, mixed>  $parent
      * @param  array<int, array<string, mixed>>  $variants
@@ -72,18 +75,162 @@ class AfwerkingOptieService
             return false;
         }
 
+        if ($this->regelVan($parent, $variants) === null) {
+            return false;
+        }
+
         $override = strtolower(trim((string) ($parent['afwerking_beschikbaar'] ?? '')));
 
         if ($override === 'nee') {
             return false;
         }
 
-        if ($override === 'ja') {
-            return true;
+        return $override === 'ja' || $this->heeftMaatwerk($parent, $variants);
+    }
+
+    /**
+     * Returns null when the product offers nothing; the exporter then sends an
+     * empty meta value, which the shop reads as "no options".
+     *
+     * @param  array<string, mixed>  $parent
+     * @param  array<int, array<string, mixed>>  $variants
+     * @return array<string, mixed>|null
+     */
+    private function payload(array $parent, array $variants): ?array
+    {
+        if (! $this->beschikbaar($parent, $variants)) {
+            return null;
         }
 
-        return $this->heeftMaatwerk($parent, $variants)
-            && $this->merkIsToegestaan($this->merkVan($parent, $variants), config('afwerkingen.merken', []));
+        [$merkRegel, $kwaliteit] = $this->regelVan($parent, $variants);
+
+        return [
+            'versie'         => self::PAYLOAD_VERSIE,
+            'valuta'         => 'EUR',
+            'btw_inbegrepen' => true,
+            'opties'         => [$this->formatOptie($merkRegel, $kwaliteit)],
+        ];
+    }
+
+    /**
+     * The single required choice for this rug. Its rates are a surcharge on
+     * top of the rug price, which never changes: per metre of perimeter, or per
+     * m² in area bands. Rates given as list prices per m² (Desso) become the
+     * difference with the base choice, the finish our own price already has.
+     *
+     * @param  array<string, mixed>  $merkRegel
+     * @param  array<string, mixed>  $kwaliteit
+     * @return array<string, mixed>
+     */
+    private function formatOptie(array $merkRegel, array $kwaliteit): array
+    {
+        $basis = $kwaliteit['keuzes'][$merkRegel['basiskeuze'] ?? ''] ?? null;
+
+        $keuzes = [];
+
+        foreach ($kwaliteit['keuzes'] ?? [] as $code => $keuze) {
+            $keuzes[] = [
+                'code'     => $code,
+                'label'    => $keuze['label'] ?? $code,
+                'tarieven' => isset($keuze['m2'])
+                    ? $this->m2Tarieven($keuze['m2'], $basis['m2'] ?? [])
+                    : array_map(fn (array $tarief): array => [
+                        'max_lengte_cm' => $tarief['max_lengte_cm'] ?? null,
+                        'tarief'        => (float) $tarief['tarief'],
+                    ], $keuze['tarieven'] ?? []),
+            ];
+        }
+
+        return [
+            'code'      => 'randafwerking',
+            'label'     => 'Randafwerking',
+            'verplicht' => true,
+            'eenheid'   => $merkRegel['eenheid'] ?? 'omtrek_m',
+            'keuzes'    => $keuzes,
+            'toeslagen' => [],
+        ];
+    }
+
+    /**
+     * The surcharge per m² for each area band: the list price of this choice
+     * minus that of the base choice in the same band.
+     *
+     * @param  list<float|int>  $prijzen
+     * @param  list<float|int>  $basisPrijzen
+     * @return list<array{max_m2: float|null, tarief: float}>
+     */
+    private function m2Tarieven(array $prijzen, array $basisPrijzen): array
+    {
+        $banden = config('afwerkingen.m2_banden', []);
+        $basisPrijzen = array_values($basisPrijzen);
+        $tarieven = [];
+
+        foreach (array_values($prijzen) as $index => $prijs) {
+            $tarieven[] = [
+                'max_m2' => isset($banden[$index]) ? (float) $banden[$index] : null,
+                'tarief' => round((float) $prijs - (float) ($basisPrijzen[$index] ?? $prijs), 2),
+            ];
+        }
+
+        return $tarieven;
+    }
+
+    /**
+     * The brand rule and the quality within it that cover this rug, or null.
+     *
+     * @param  array<string, mixed>  $parent
+     * @param  array<int, array<string, mixed>>  $variants
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}|null
+     */
+    private function regelVan(array $parent, array $variants): ?array
+    {
+        $merk = $this->merkVan($parent, $variants);
+
+        if ($merk === null) {
+            return null;
+        }
+
+        $delen = array_map(fn (string $deel): string => strtolower(trim($deel)), explode('|', $merk));
+
+        foreach (config('afwerkingen.merken', []) as $naam => $merkRegel) {
+            if (! in_array(strtolower($naam), $delen, true) || ! $this->merkIsIngeschakeld($naam)) {
+                continue;
+            }
+
+            foreach ($merkRegel['kwaliteiten'] ?? [] as $kwaliteit) {
+                if ($this->kwaliteitPast($kwaliteit['match'] ?? [], $parent, $variants)) {
+                    return [$merkRegel, $kwaliteit];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, list<string>>  $match
+     * @param  array<string, mixed>  $parent
+     * @param  array<int, array<string, mixed>>  $variants
+     */
+    private function kwaliteitPast(array $match, array $parent, array $variants): bool
+    {
+        if (isset($match['collectie'])) {
+            $collectie = strtolower(trim((string) $this->eersteWaarde('collectie', $parent, $variants)));
+
+            if (! in_array($collectie, array_map('strtolower', $match['collectie']), true)) {
+                return false;
+            }
+        }
+
+        if (isset($match['productnaam_begint_met'])) {
+            $naam = (string) $this->eersteWaarde('productnaam', $parent, $variants);
+
+            if (! Str::startsWith(strtolower($naam), array_map('strtolower', $match['productnaam_begint_met']))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -112,118 +259,14 @@ class AfwerkingOptieService
         return false;
     }
 
-    /**
-     * Returns null when the product offers nothing — the exporter then leaves
-     * the meta off the product entirely.
-     *
-     * @param  array<string, mixed>  $parent
-     * @param  array<int, array<string, mixed>>  $variants
-     * @return array<string, mixed>|null
-     */
-    private function payload(array $parent, array $variants): ?array
-    {
-        if (! $this->beschikbaar($parent, $variants)) {
-            return null;
-        }
-
-        $merk = $this->merkVan($parent, $variants);
-
-        $opties = [];
-
-        foreach (config('afwerkingen.opties', []) as $code => $optie) {
-            if (! $this->typeIsToegestaan($code, $merk)) {
-                continue;
-            }
-
-            $opties[] = $this->formatOptie($code, $optie);
-        }
-
-        if ($opties === []) {
-            return null;
-        }
-
-        return [
-            'versie'          => self::PAYLOAD_VERSIE,
-            'valuta'          => 'EUR',
-            'btw_inbegrepen'  => true,
-            'opties'          => $opties,
-        ];
-    }
-
-    /**
-     * One finishing type. The configured prices are the website prices incl.
-     * BTW and pass through unchanged.
-     *
-     * @param  array<string, mixed>  $optie
-     * @return array<string, mixed>
-     */
-    private function formatOptie(string $code, array $optie): array
-    {
-        $keuzes = [];
-
-        foreach ($optie['keuzes'] ?? [] as $keuzeCode => $keuze) {
-            $keuzes[] = [
-                'code'     => $keuzeCode,
-                'label'    => $keuze['label'] ?? $keuzeCode,
-                'tarieven' => array_map(fn (array $tarief): array => [
-                    'max_lengte_cm' => $tarief['max_lengte_cm'] ?? null,
-                    'tarief'        => (float) $tarief['prijs'],
-                ], $keuze['tarieven'] ?? []),
-            ];
-        }
-
-        $formatted = [
-            'code'    => $code,
-            'label'   => $optie['label'] ?? $code,
-            'eenheid' => $optie['eenheid'] ?? 'omtrek_m',
-            'keuzes'  => $keuzes,
-            /*
-             * Vaste toeslagen worden ná de metervermenigvuldiging opgeteld,
-             * niet in het metertarief verwerkt. Het expliciete `type` maakt dat
-             * aan de shop-kant onmiskenbaar.
-             */
-            'toeslagen' => array_map(fn (array $toeslag): array => [
-                'code'       => $toeslag['code'],
-                'label'      => $toeslag['label'],
-                'type'       => $toeslag['type'],
-                'voorwaarde' => $toeslag['voorwaarde'],
-                'bedrag'     => (float) $toeslag['prijs'],
-            ], $optie['toeslagen'] ?? []),
-        ];
-
-        if (! empty($optie['combineerbaar'])) {
-            $formatted['combineerbaar'] = true;
-        }
-
-        if (! empty($optie['inclusief_onderkleed'])) {
-            $formatted['inclusief_onderkleed'] = true;
-        }
-
-        return $formatted;
-    }
-
     private function featureIsIngeschakeld(): bool
     {
         return $this->vlag('general.afwerkingen.settings.enabled');
     }
 
-    /**
-     * Whether a finishing type is offered for this brand: it must be switched
-     * on, and — if it carries a brand restriction — the brand must be in it.
-     */
-    private function typeIsToegestaan(string $code, ?string $merk): bool
+    private function merkIsIngeschakeld(string $merk): bool
     {
-        if (! $this->vlag("general.afwerkingen.types.{$code}_enabled")) {
-            return false;
-        }
-
-        $merken = $this->lijst(core()->getConfigData("general.afwerkingen.types.{$code}_merken"));
-
-        if ($merken === []) {
-            return true;
-        }
-
-        return $this->merkIsToegestaan($merk, $merken);
+        return $this->vlag('general.afwerkingen.merken.'.Str::slug($merk, '_').'_enabled');
     }
 
     /**
@@ -241,48 +284,6 @@ class AfwerkingOptieService
     }
 
     /**
-     * The multiselect field type stores its value as a comma-joined string, so
-     * both shapes have to be tolerated here.
-     *
-     * @return list<string>
-     */
-    private function lijst(mixed $value): array
-    {
-        if (is_string($value)) {
-            $value = explode(',', $value);
-        }
-
-        if (! is_array($value)) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map('trim', $value), fn (string $item): bool => $item !== ''));
-    }
-
-    /**
-     * Brands are stored free-text and can be compound: Mart Visser only ever
-     * appears as "Mart Visser|Karpi", so both sides are split on the pipe.
-     *
-     * @param  list<string>  $toegestaan
-     */
-    private function merkIsToegestaan(?string $merk, array $toegestaan): bool
-    {
-        if ($merk === null || $merk === '') {
-            return false;
-        }
-
-        $delen = array_map('strtolower', array_map('trim', explode('|', $merk)));
-
-        foreach ($toegestaan as $kandidaat) {
-            if (in_array(strtolower(trim($kandidaat)), $delen, true)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * The brand, falling back to the first variant that carries one — merk is
      * normally filled on the parent, but not on every product.
      *
@@ -291,11 +292,24 @@ class AfwerkingOptieService
      */
     private function merkVan(array $parent, array $variants): ?string
     {
-        foreach ([$parent, ...$variants] as $scope) {
-            $merk = $scope['merk'] ?? null;
+        $merk = $this->eersteWaarde('merk', $parent, $variants);
 
-            if ($merk !== null && $merk !== '' && $merk !== 'null') {
-                return (string) $merk;
+        return $merk === null ? null : (string) $merk;
+    }
+
+    /**
+     * The first non-empty value of an attribute, parent first.
+     *
+     * @param  array<string, mixed>  $parent
+     * @param  array<int, array<string, mixed>>  $variants
+     */
+    private function eersteWaarde(string $attribuut, array $parent, array $variants): mixed
+    {
+        foreach ([$parent, ...$variants] as $scope) {
+            $waarde = $scope[$attribuut] ?? null;
+
+            if ($waarde !== null && $waarde !== '' && $waarde !== 'null') {
+                return $waarde;
             }
         }
 

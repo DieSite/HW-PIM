@@ -52,115 +52,100 @@ function afwerkingService(): AfwerkingOptieService
 }
 
 /**
- * @param  array<string, mixed>  $payload
- * @return array<string, mixed>|null
+ * A Desso maatwerk parent with a plain and a "Met onderkleed" variant, the way
+ * the catalogue stores them.
+ *
+ * @param  array<string, mixed>  $parentValues
  */
-function optieUitPayload(array $payload, string $code): ?array
+function dessoMaatwerkParent(array $parentValues = []): Product
 {
-    return collect($payload['opties'])->firstWhere('code', $code);
+    return afwerkingParent(
+        array_merge(['merk' => 'Desso', 'collectie' => 'Desso & Ex', 'productnaam' => 'Desso & Ex 4311-618'], $parentValues),
+        [
+            ['onderkleed' => 'Zonder onderkleed', 'prijs' => ['EUR' => 145]],
+            ['onderkleed' => 'Met onderkleed', 'prijs' => ['EUR' => '156']],
+        ]
+    );
 }
 
-it('exporteert de verkoopprijzen van de website ongewijzigd', function () {
-    $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
+/**
+ * @param  array<string, mixed>  $payload
+ * @return array<string, mixed>
+ */
+function randafwerking(array $payload): array
+{
+    expect($payload['opties'])->toHaveCount(1);
 
-    $tarieven = collect($payload['opties'])->mapWithKeys(fn (array $optie): array => [
-        $optie['code'] => collect($optie['keuzes'])->mapWithKeys(fn (array $keuze): array => [
-            $keuze['code'] => array_column($keuze['tarieven'], 'tarief'),
-        ])->all(),
+    return $payload['opties'][0];
+}
+
+/**
+ * @param  array<string, mixed>  $optie
+ * @return array<string, list<float>>
+ */
+function tarievenPerKeuze(array $optie): array
+{
+    return collect($optie['keuzes'])->mapWithKeys(fn (array $keuze): array => [
+        $keuze['code'] => array_column($keuze['tarieven'], 'tarief'),
     ])->all();
+}
 
-    expect($payload['btw_inbegrepen'])->toBeTrue()
-        ->and($tarieven)->toBe([
-            'festonneren' => ['standaard' => [9.75]],
-            'banderen'    => [
-                'linnen_25_55'    => [25.0],
-                'linnen_55_90'    => [31.0],
-                'kunstleer_25_55' => [37.0],
-                'kunstleer_55_90' => [41.0],
-            ],
-            'banderen_blind' => [
-                'linnen_25_55'     => [43.0],
-                'linnen_60_100'    => [47.0],
-                'kunstleer_25_55'  => [47.0],
-                'kunstleer_60_100' => [51.0],
-            ],
-            'volume'    => ['standaard' => [33.5]],
-            'biesje'    => ['linnen_05' => [28.0], 'kunstleer_05' => [31.5]],
-            'anti_slip' => ['standaard' => [20.0]],
-        ]);
-});
-
-it('negeert een achtergebleven marge-instelling uit de admin', function () {
-    stelAfwerkingConfigIn('general.afwerkingen.settings.marge_factor', '3');
-
+it('levert payloadversie 2 met verkoopprijzen incl. BTW', function () {
     $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
 
-    expect(optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'][0]['tarief'])->toBe(9.75);
+    expect($payload['versie'])->toBe(2)
+        ->and($payload['valuta'])->toBe('EUR')
+        ->and($payload['btw_inbegrepen'])->toBeTrue();
 });
 
-it('kent geen staffel meer onder en boven de 4 meter', function () {
-    $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
+it('laat Eurogros kiezen tussen feston en band suède, zonder meerprijs', function () {
+    $optie = randafwerking(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()));
 
-    foreach ($payload['opties'] as $optie) {
-        foreach ($optie['keuzes'] as $keuze) {
-            expect($keuze['tarieven'])->toHaveCount(1)
-                ->and($keuze['tarieven'][0]['max_lengte_cm'])->toBeNull();
-        }
-    }
-
-    expect($payload)->not->toHaveKey('staffelgrens_cm');
+    expect($optie['code'])->toBe('randafwerking')
+        ->and($optie['verplicht'])->toBeTrue()
+        ->and($optie['eenheid'])->toBe('omtrek_m')
+        ->and(array_column($optie['keuzes'], 'label'))->toBe(['Feston', 'Band suède'])
+        ->and(tarievenPerKeuze($optie))->toBe(['feston' => [0.0], 'band_suede' => [0.0]])
+        ->and($optie['toeslagen'])->toBe([]);
 });
 
-it('levert vaste toeslagen als los bedrag, niet verwerkt in het metertarief', function () {
-    $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
+it('laat bij Desso festonneren gratis en rekent banderen als verschil uit de prijslijst', function () {
+    $optie = randafwerking(afwerkingService()->payloadVoor(dessoMaatwerkParent()));
 
-    foreach (['festonneren', 'banderen', 'banderen_blind'] as $code) {
-        $toeslag = optieUitPayload($payload, $code)['toeslagen'][0];
-
-        expect($toeslag['type'])->toBe('vast')
-            ->and($toeslag['voorwaarde'])->toBe('organische_vorm')
-            ->and($toeslag['bedrag'])->toBe(30.0);
-    }
-
-    expect(optieUitPayload($payload, 'festonneren')['keuzes'][0]['tarieven'][0]['tarief'])->toBe(9.75);
+    expect($optie['eenheid'])->toBe('m2')
+        ->and($optie['verplicht'])->toBeTrue()
+        ->and($optie)->not->toHaveKeys(['minimum_m2', 'referentie_m2_prijs', 'prijsmodel'])
+        ->and(tarievenPerKeuze($optie))->toBe([
+            'festonneren'    => [0.0, 0.0, 0.0],
+            'blind_banderen' => [55.0, 49.0, 43.0],
+            'linnen_band'    => [55.0, 49.0, 43.0],
+        ])
+        ->and(array_column($optie['keuzes'][1]['tarieven'], 'max_m2'))->toBe([4.0, 5.9999, null]);
 });
 
-it('legt de optelvolgorde vast die de shop moet reproduceren', function () {
-    $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
-    $festonneren = optieUitPayload($payload, 'festonneren');
+it('kiest de Desso-kwaliteit op collectie en productnaam', function (array $waarden, array $banderen) {
+    $optie = randafwerking(afwerkingService()->payloadVoor(dessoMaatwerkParent($waarden)));
 
-    $tarief = $festonneren['keuzes'][0]['tarieven'][0]['tarief'];
-    $vast = $festonneren['toeslagen'][0]['bedrag'];
+    expect(tarievenPerKeuze($optie)['blind_banderen'])->toBe($banderen);
+})->with([
+    'Desso&Ex Nature'  => [['collectie' => 'Desso & Ex Nature'], [55.0, 49.0, 43.0]],
+    'Sense of Marble'  => [['collectie' => 'Sense of Marble', 'productnaam' => 'Sense of Marble 1103'], [55.0, 49.0, 43.0]],
+    'Canvas Botanical' => [['collectie' => 'Desso Weave', 'productnaam' => 'Desso Botanical 1320'], [54.0, 50.0, 45.0]],
+    'Canvas Weave'     => [['collectie' => 'Desso Weave', 'productnaam' => 'Desso Weave 1318'], [53.0, 50.0, 45.0]],
+    'Vintage'          => [['collectie' => 'Bonaparte Vintage', 'productnaam' => 'Vintage 118.202'], [54.0, 50.0, 45.0]],
+]);
 
-    // Organisch kleed van 200 x 300 cm: omtrek van de omschrijvende rechthoek
-    // is 2 x (2,00 + 3,00) = 10 m. Toeslag = omtrek x tarief + vast bedrag.
-    $omtrekMeter = 2 * (2.00 + 3.00);
+it('biedt geen keuze aan bij een Desso-kwaliteit die niet op de prijslijst staat', function () {
+    $parent = dessoMaatwerkParent(['collectie' => 'Art Deco', 'productnaam' => 'Art Deco 2022']);
 
-    expect(round($omtrekMeter * $tarief + $vast, 2))->toBe(127.5);
+    expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse()
+        ->and(afwerkingService()->payloadVoor($parent))->toBeNull();
 });
 
-it('rekent anti-slip per vierkante meter en markeert het als combineerbaar', function () {
-    $antiSlip = optieUitPayload(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()), 'anti_slip');
+it('noemt het XS-garen bij festonneren van Sense of Marble', function () {
+    $optie = randafwerking(afwerkingService()->payloadVoor(dessoMaatwerkParent(['collectie' => 'Sense of Marble'])));
 
-    expect($antiSlip['eenheid'])->toBe('m2')
-        ->and($antiSlip['combineerbaar'])->toBeTrue()
-        ->and($antiSlip['keuzes'][0]['tarieven'][0]['tarief'])->toBe(20.0);
-});
-
-it('rekent randafwerkingen per strekkende meter omtrek', function () {
-    $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
-
-    foreach (['festonneren', 'banderen', 'banderen_blind', 'volume', 'biesje'] as $code) {
-        expect(optieUitPayload($payload, $code)['eenheid'])->toBe('omtrek_m');
-    }
-});
-
-it('markeert volume als inclusief onderkleed en kent de ronde toeslag', function () {
-    $volume = optieUitPayload(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()), 'volume');
-
-    expect($volume['inclusief_onderkleed'])->toBeTrue()
-        ->and(collect($volume['toeslagen'])->firstWhere('voorwaarde', 'ronde_vorm')['bedrag'])->toBe(50.0)
-        ->and(collect($volume['toeslagen'])->firstWhere('voorwaarde', 'organische_vorm')['bedrag'])->toBe(100.0);
+    expect($optie['keuzes'][0]['label'])->toBe('Festonneren (XS garen)');
 });
 
 it('geeft null als de feature is uitgeschakeld', function () {
@@ -170,16 +155,26 @@ it('geeft null als de feature is uitgeschakeld', function () {
         ->and(afwerkingService()->isBeschikbaar(eurogrosMaatwerkParent()))->toBeFalse();
 });
 
-it('biedt afwerkingen aan bij de toegestane merken', function (string $merk) {
-    expect(afwerkingService()->isBeschikbaar(afwerkingParent(['merk' => $merk])))->toBeTrue();
-})->with(['Eurogros', 'Karpi', 'Desso', 'Mart Visser', 'Mart Visser|Karpi']);
+it('laat een merk uitzetten in de admin', function () {
+    stelAfwerkingConfigIn('general.afwerkingen.merken.desso_enabled', '0');
 
-it('biedt geen afwerkingen aan bij andere merken', function (string $merk) {
+    expect(afwerkingService()->isBeschikbaar(dessoMaatwerkParent()))->toBeFalse()
+        ->and(afwerkingService()->isBeschikbaar(eurogrosMaatwerkParent()))->toBeTrue();
+});
+
+it('biedt randafwerkingen aan bij Eurogros en Desso', function (Product $parent) {
+    expect(afwerkingService()->isBeschikbaar($parent))->toBeTrue();
+})->with([
+    'Eurogros' => fn (): Product => eurogrosMaatwerkParent(),
+    'Desso'    => fn (): Product => dessoMaatwerkParent(),
+]);
+
+it('biedt geen keuze aan bij merken zonder regels', function (string $merk) {
     expect(afwerkingService()->isBeschikbaar(afwerkingParent(['merk' => $merk])))->toBeFalse();
-})->with(['De Munk', 'Louis De Poortere', '']);
+})->with(['Karpi', 'Mart Visser|Karpi', 'De Munk', 'Louis De Poortere', '']);
 
 it('valt terug op het merk van een variant als de parent er geen heeft', function () {
-    $parent = afwerkingParent([], [['merk' => 'Karpi']]);
+    $parent = afwerkingParent([], [['merk' => 'Eurogros']]);
 
     expect(afwerkingService()->isBeschikbaar($parent))->toBeTrue();
 });
@@ -190,17 +185,23 @@ it('slaat parents zonder maatwerk-variant over', function () {
     expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse();
 });
 
-it('laat de handmatige override "nee" winnen van een toegestaan merk', function () {
+it('laat de handmatige override "nee" winnen van een merk met regels', function () {
     $parent = eurogrosMaatwerkParent(['afwerking_beschikbaar' => 'nee']);
 
     expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse()
         ->and(afwerkingService()->payloadVoor($parent))->toBeNull();
 });
 
-it('laat de handmatige override "ja" winnen van een niet-toegestaan merk', function () {
-    $parent = afwerkingParent(['merk' => 'De Munk', 'afwerking_beschikbaar' => 'ja']);
+it('laat de override "ja" een kleed zonder maatwerk-variant aanzetten', function () {
+    $parent = afwerkingParent(['merk' => 'Eurogros', 'afwerking_beschikbaar' => 'ja'], [['maat' => '200 cm x 300 cm']]);
 
     expect(afwerkingService()->isBeschikbaar($parent))->toBeTrue();
+});
+
+it('kan met de override "ja" geen prijs verzinnen voor een merk zonder regels', function () {
+    $parent = afwerkingParent(['merk' => 'De Munk', 'afwerking_beschikbaar' => 'ja']);
+
+    expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse();
 });
 
 it('behandelt een lege override als automatisch', function () {
@@ -208,34 +209,18 @@ it('behandelt een lege override als automatisch', function () {
         ->and(afwerkingService()->isBeschikbaar(afwerkingParent(['merk' => 'De Munk', 'afwerking_beschikbaar' => ''])))->toBeFalse();
 });
 
-it('laat een uitgeschakeld afwerkingstype weg uit de payload', function () {
-    stelAfwerkingConfigIn('general.afwerkingen.types.volume_enabled', '0');
+it('leest de payload ook uit de exporter-array', function () {
+    $item = [
+        'values'   => ['common' => ['merk' => 'Desso', 'collectie' => 'Desso & Ex']],
+        'variants' => [
+            ['values' => json_encode(['common' => ['maat' => 'Maatwerk', 'prijs' => ['EUR' => 145]]])],
+        ],
+    ];
 
-    $payload = afwerkingService()->payloadVoor(eurogrosMaatwerkParent());
+    $optie = randafwerking(afwerkingService()->payloadVoorItem($item));
 
-    expect(optieUitPayload($payload, 'volume'))->toBeNull()
-        ->and(optieUitPayload($payload, 'festonneren'))->not->toBeNull();
-});
-
-it('beperkt een afwerkingstype tot de ingestelde merken', function () {
-    stelAfwerkingConfigIn('general.afwerkingen.types.biesje_merken', 'Desso,Karpi');
-
-    expect(optieUitPayload(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()), 'biesje'))->toBeNull()
-        ->and(optieUitPayload(afwerkingService()->payloadVoor(afwerkingParent(['merk' => 'Desso'])), 'biesje'))->not->toBeNull();
-});
-
-it('legt geen beperking op bij een lege merkenlijst', function () {
-    stelAfwerkingConfigIn('general.afwerkingen.types.biesje_merken', '');
-
-    expect(optieUitPayload(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()), 'biesje'))->not->toBeNull();
-});
-
-it('geeft null als alle afwerkingstypes wegvallen', function () {
-    foreach (array_keys(config('afwerkingen.opties')) as $code) {
-        stelAfwerkingConfigIn("general.afwerkingen.types.{$code}_enabled", '0');
-    }
-
-    expect(afwerkingService()->payloadVoor(eurogrosMaatwerkParent()))->toBeNull();
+    expect($optie['eenheid'])->toBe('m2')
+        ->and(tarievenPerKeuze($optie)['blind_banderen'])->toBe([55.0, 49.0, 43.0]);
 });
 
 it('biedt nooit afwerkingen aan bij een wollen kleed', function (string $materiaal) {
@@ -250,7 +235,7 @@ it('biedt afwerkingen aan bij kleden zonder wol', function (string $materiaal) {
 })->with(['Polyester', 'Polyester|Katoen|Acryl', 'Gerecycled PET', '']);
 
 it('kijkt voor het materiaal ook naar de varianten', function () {
-    $parent = afwerkingParent(['merk' => 'Karpi'], [['materiaal' => 'Wol']]);
+    $parent = afwerkingParent(['merk' => 'Eurogros'], [['materiaal' => 'Wol']]);
 
     expect(afwerkingService()->isBeschikbaar($parent))->toBeFalse();
 });
