@@ -2,45 +2,72 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Local development: shared Docker stack (`dev`)
+
+This project runs locally on the shared Diesite Docker stack (`~/Development/Intern/docker-nginx`,
+docs in its `docs/devstack.md`), not on its own Sail/compose containers. Its settings live in
+`.devstack/` (`stack.env`, `nginx.conf`, `compose.yml`). Run every command through `dev`.
+`vendor/bin/sail` and `docker compose` in this directory do **not** work here; wherever this file
+(including generated Boost guidelines) says `vendor/bin/sail …`, run `dev …` instead.
+
+- URL: https://pim.huis-en-wonen.localhost
+- PHP 8.3, PHP-FPM in the shared `php83` container.
+- MySQL: host `mysql84`, database `hw_pim`.
+- Redis: host `redis`, database index 18 (shared with other projects; indexes are allocated in docs/devstack.md).
+- Own containers (`.devstack/compose.yml`): `horizon`.
+
+| Task | Command |
+|---|---|
+| Start (also happens automatically before any `dev` command) | `dev up` |
+| Stop this project | `dev down` |
+| Artisan | `dev art <command>` |
+| Tests | `dev test [--compact] [--filter=…] [path]` |
+| PHP / Composer / npm | `dev php …`, `dev composer …`, `dev npm …` |
+| Pint | `dev php vendor/bin/pint --dirty` |
+| MySQL shell | `dev mysql` |
+| Shell in the PHP container | `dev shell` |
+| Logs | `dev logs [service]` |
+| Xdebug | `dev xdebug on` / `dev xdebug off` |
+
 ## Project Overview
 
 HW-PIM is a customized fork of [UnoPim](https://unopim.com/), an open-source Product Information Management (PIM) system built on Laravel 13. It is extended with integrations for Bol.com, WooCommerce, Eurogros (a vendor), and Digital Ocean Spaces for file storage.
 
 ## Common Commands
 
-All `php` commands must be run inside the `unopim-web` Docker container:
+All `php` commands run in the shared `php83` container through `dev` (see "Local development" above):
 
 ```bash
-docker exec -i unopim-web php artisan <command>
+dev art <command>
 # or open a shell:
-docker exec -i unopim-web bash
+dev shell
 ```
 
 ### Development
 
 ```bash
-# Start containers (web + MySQL + queue worker)
-docker-compose up -d
+# Start PHP-FPM, MySQL, Redis and the Horizon container
+dev up
 
 # Build frontend assets (run on host)
-npm run dev       # development (Vite with hot reload)
-npm run build     # production
+dev npm run dev       # development (Vite with hot reload)
+dev npm run build     # production
 ```
 
 ### Testing
 
 ```bash
 # Run all tests
-docker exec -i unopim-web php artisan test
+dev test
 
 # Run a specific test suite
-docker exec -i unopim-web php artisan test --testsuite="Core Unit Test"
-docker exec -i unopim-web php artisan test --testsuite="Api Feature Test"
-docker exec -i unopim-web php artisan test --testsuite="User Feature Test"
-docker exec -i unopim-web php artisan test --testsuite="Admin Feature Test"
+dev test --testsuite="Core Unit Test"
+dev test --testsuite="Api Feature Test"
+dev test --testsuite="User Feature Test"
+dev test --testsuite="Admin Feature Test"
 
 # Run a single test file
-docker exec -i unopim-web php artisan test packages/Webkul/Core/tests/Unit/SomeTest.php
+dev test packages/Webkul/Core/tests/Unit/SomeTest.php
 ```
 
 Test suites are defined in `phpunit.xml`. Tests live inside each package under `packages/Webkul/*/tests/`.
@@ -48,29 +75,29 @@ Test suites are defined in `phpunit.xml`. Tests live inside each package under `
 ### Artisan Commands (custom)
 
 ```bash
-docker exec -i unopim-web php artisan unopim:install                  # Initial installation
-docker exec -i unopim-web php artisan user:create                     # Create admin user
+dev art unopim:install                  # Initial installation
+dev art user:create                     # Create admin user
 
 # Bol.com sync
-docker exec -i unopim-web php artisan fetch:bol-categories
-docker exec -i unopim-web php artisan fetch:bol-catalog-product-details
-docker exec -i unopim-web php artisan fetch:bol-content-status
-docker exec -i unopim-web php artisan fetch:bol-upload-report
+dev art fetch:bol-categories
+dev art fetch:bol-catalog-product-details
+dev art fetch:bol-content-status
+dev art fetch:bol-upload-report
 
 # Product updates
-docker exec -i unopim-web php artisan update:all-products
-docker exec -i unopim-web php artisan update:all-parent-products
-docker exec -i unopim-web php artisan update:products-by-file
+dev art update:all-products
+dev art update:all-parent-products
+dev art update:products-by-file
 
 # Eurogros vendor sync
-docker exec -i unopim-web php artisan import:eurogros-voorraad
-docker exec -i unopim-web php artisan import:eurogros-ean
+dev art import:eurogros-voorraad
+dev art import:eurogros-ean
 
 # Misc
-docker exec -i unopim-web php artisan pull:from-sftp
-docker exec -i unopim-web php artisan pull:from-do
-docker exec -i unopim-web php artisan pull:missing-ean-numbers
-docker exec -i unopim-web php artisan calculate:met-onderkleed-prices
+dev art pull:from-sftp
+dev art pull:from-do
+dev art pull:missing-ean-numbers
+dev art calculate:met-onderkleed-prices
 ```
 
 ## Architecture
@@ -124,7 +151,7 @@ Laravel Horizon manages background jobs on the `redis` queue driver. Besides the
 
 **Timing invariant** (enforced by `tests/Unit/QueueTimingInvariantsTest.php`): every job/supervisor timeout must stay strictly below its connection's `retry_after`, or a running job gets re-reserved mid-flight and fails with `MaxAttemptsExceededException`. New queueable classes must be registered in that test's factory map. Job lifecycle transitions are logged to `storage/logs/queue-*.log` (see `App\Listeners\QueueLifecycleLogger`).
 
-The `unopim-q` container runs `php artisan horizon` automatically. To run manually: `docker exec -i unopim-web php artisan horizon`. After changing queue/horizon config: `php artisan horizon:terminate` so a fresh master picks it up.
+The `horizon` container (`.devstack/compose.yml`) runs `dev art horizon` automatically. To run manually: `dev art horizon`. After changing queue/horizon config: `dev art horizon:terminate` so a fresh master picks it up.
 
 ### Routes
 
@@ -198,7 +225,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 
 ## Frontend Bundling
 
-- If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.
+- If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `dev npm run build`, `dev npm run dev`, or `dev composer run dev`. Ask them.
 
 ## Documentation Files
 
@@ -291,14 +318,14 @@ protected function isAccessible(User $user, ?string $path = null): bool
 # Test Enforcement
 
 - Every change must be programmatically tested. Write a new test or update an existing test, then run the affected tests to make sure they pass.
-- Run the minimum number of tests needed to ensure code quality and speed. Use `php artisan test --compact` with a specific filename or filter.
+- Run the minimum number of tests needed to ensure code quality and speed. Use `dev test --compact` with a specific filename or filter.
 
 === laravel/core rules ===
 
 # Do Things the Laravel Way
 
-- Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using the `list-artisan-commands` tool.
-- If you're creating a generic PHP class, use `php artisan make:class`.
+- Use `dev art make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using the `list-artisan-commands` tool.
+- If you're creating a generic PHP class, use `dev art make:class`.
 - Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
 
 ## Database
@@ -311,7 +338,7 @@ protected function isAccessible(User $user, ?string $path = null): bool
 
 ### Model Creation
 
-- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `list-artisan-commands` to check the available options to `php artisan make:model`.
+- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `list-artisan-commands` to check the available options to `dev art make:model`.
 
 ### APIs & Eloquent Resources
 
@@ -342,11 +369,11 @@ protected function isAccessible(User $user, ?string $path = null): bool
 
 - When creating models for tests, use the factories for the models. Check if the factory has custom states that can be used before manually setting up the model.
 - Faker: Use methods such as `$this->faker->word()` or `fake()->randomDigit()`. Follow existing conventions whether to use `$this->faker` or `fake()`.
-- When creating tests, make use of `php artisan make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
+- When creating tests, make use of `dev art make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
 
 ## Vite Error
 
-- If you receive an "Illuminate\Foundation\ViteException: Unable to locate file in Vite manifest" error, you can run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
+- If you receive an "Illuminate\Foundation\ViteException: Unable to locate file in Vite manifest" error, you can run `dev npm run build` or ask the user to run `dev npm run dev` or `dev composer run dev`.
 
 === laravel/v12 rules ===
 
@@ -378,15 +405,15 @@ protected function isAccessible(User $user, ?string $path = null): bool
 
 # Laravel Pint Code Formatter
 
-- If you have modified any PHP files, you must run `vendor/bin/pint --dirty --format agent` before finalizing changes to ensure your code matches the project's expected style.
-- Do not run `vendor/bin/pint --test --format agent`, simply run `vendor/bin/pint --format agent` to fix any formatting issues.
+- If you have modified any PHP files, you must run `dev php vendor/bin/pint --dirty --format agent` before finalizing changes to ensure your code matches the project's expected style.
+- Do not run `dev php vendor/bin/pint --test --format agent`, simply run `dev php vendor/bin/pint --format agent` to fix any formatting issues.
 
 === pest/core rules ===
 
 ## Pest
 
-- This project uses Pest for testing. Create tests: `php artisan make:test --pest {name}`.
-- Run tests: `php artisan test --compact` or filter: `php artisan test --compact --filter=testName`.
+- This project uses Pest for testing. Create tests: `dev art make:test --pest {name}`.
+- Run tests: `dev test --compact` or filter: `dev test --compact --filter=testName`.
 - Do NOT delete tests without approval.
 - CRITICAL: ALWAYS use `search-docs` tool for version-specific Pest documentation and updated code examples.
 - IMPORTANT: Activate `pest-testing` every time you're working with a Pest or testing-related task.

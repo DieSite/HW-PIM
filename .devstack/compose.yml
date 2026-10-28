@@ -1,0 +1,7 @@
+# Project containers on the shared PHP image (~/Development/Intern/docker-nginx/compose/app.yml).
+services:
+  horizon:
+    extends: { file: '${DEVSTACK}/compose/app.yml', service: app }
+    command: [ 'bash', '-lc', 'php artisan horizon' ]
+networks: { diesite: { external: true } }
+volumes: { devstack-home: { external: true }, devstack-fpm-sockets: { external: true } }
