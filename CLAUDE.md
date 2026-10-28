@@ -11,7 +11,7 @@ docs in its `docs/devstack.md`), not on its own Sail/compose containers. Its set
 (including generated Boost guidelines) says `vendor/bin/sail …`, run `dev …` instead.
 
 - URL: https://pim.huis-en-wonen.localhost
-- PHP 8.3, PHP-FPM in the shared `php83` container.
+- PHP 8.5, PHP-FPM in the shared `php85` container.
 - MySQL: host `mysql84`, database `hw_pim`.
 - Redis: host `redis`, database index 18 (shared with other projects; indexes are allocated in docs/devstack.md).
 - Own containers (`.devstack/compose.yml`): `horizon`.
@@ -35,7 +35,7 @@ HW-PIM is a customized fork of [UnoPim](https://unopim.com/), an open-source Pro
 
 ## Common Commands
 
-All `php` commands run in the shared `php83` container through `dev` (see "Local development" above):
+All `php` commands run in the shared `php85` container through `dev` (see "Local development" above):
 
 ```bash
 dev art <command>
@@ -189,7 +189,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- php - 8.3.12
+- php - 8.5.12
 - laravel/framework (LARAVEL) - v13
 - laravel/horizon (HORIZON) - v5
 - laravel/passport (PASSPORT) - v13
@@ -199,8 +199,8 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/boost (BOOST) - v2
 - laravel/mcp (MCP) - v0
 - laravel/pint (PINT) - v1
-- pestphp/pest (PEST) - v4
-- phpunit/phpunit (PHPUNIT) - v12
+- pestphp/pest (PEST) - v5
+- phpunit/phpunit (PHPUNIT) - v13
 
 ## Skills Activation
 

@@ -3,25 +3,28 @@
 namespace Webkul\Core;
 
 use Illuminate\Database\Eloquent\Model;
+use Shetabit\Visitor\Models\Visit;
 use Shetabit\Visitor\Visitor as BaseVisitor;
 use Webkul\Core\Jobs\UpdateCreateVisitIndex;
 
 class Visitor extends BaseVisitor
 {
     /**
-     * Create a visit log.
+     * Queue a visit log; the record is written by the job, so nothing is returned.
      *
-     * @return void
+     * @param  array<string, mixed>  $extraAttributes
      */
-    public function visit(?Model $model = null)
+    public function visit(?Model $model = null, array $extraAttributes = []): ?Visit
     {
         foreach ($this->except as $path) {
             if ($this->request->is($path)) {
-                return;
+                return null;
             }
         }
 
         UpdateCreateVisitIndex::dispatch($model, $this->prepareLog());
+
+        return null;
     }
 
     /**
