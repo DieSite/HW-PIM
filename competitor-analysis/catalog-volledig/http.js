@@ -9,7 +9,7 @@ const https = require('https');
 const http  = require('http');
 const { URL } = require('url');
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36';
 
 const DEFAULT_HEADERS = {
   'User-Agent': UA,
@@ -43,7 +43,10 @@ async function get(url, { timeout = 20000, maxRedirects = 6, extraHeaders = {} }
       }
       if (res.statusCode >= 400) {
         res.resume();
-        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+        const err = new Error(`HTTP ${res.statusCode} for ${url}`);
+        err.status = res.statusCode;
+        err.retryAfterMs = retryAfterMs(res.headers['retry-after']);
+        return reject(err);
       }
       const chunks = [];
       res.on('data', c => chunks.push(c));
@@ -58,6 +61,18 @@ async function get(url, { timeout = 20000, maxRedirects = 6, extraHeaders = {} }
     req.on('error', reject);
     req.end();
   });
+}
+
+/**
+ * De wachttijd uit een Retry-After-header (seconden of een HTTP-datum), in ms.
+ * null als de header ontbreekt of onleesbaar is.
+ */
+function retryAfterMs(header) {
+  if (header == null || header === '') return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(header);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
 }
 
 /** GET en parse als JSON. */
@@ -129,4 +144,4 @@ function createQueue(limit = 8) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-module.exports = { get, getJson, getText, post, createQueue, sleep };
+module.exports = { get, getJson, getText, post, createQueue, sleep, retryAfterMs };

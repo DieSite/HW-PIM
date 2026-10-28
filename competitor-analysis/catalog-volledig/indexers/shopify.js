@@ -137,7 +137,14 @@ async function indexShopify(db, { shop, base, brands, catalogModels, bySku, requ
  * dan 1.500 producten te hebben, zonder één Eurogros-kleed, terwijl er 451
  * waren. Blijft een pagina falen, dan gooien we: een halve index moet als fout
  * in de log staan, niet als een winkel die toevallig weinig verkoopt.
+ *
+ * Noemt de winkel bij een 429 een Retry-After, dan wachten we minstens zo
+ * lang (hetdesignhuys.nl: 60 s, waar onze eerste poging na 30 s kwam en dus
+ * gegarandeerd weer geweigerd werd). Begrensd op MAX_RETRY_AFTER_MS, zodat
+ * één winkel niet de hele tijdslimiet van zijn kindproces opsoupeert.
  */
+const MAX_RETRY_AFTER_MS = 5 * 60_000;
+
 async function fetchPage(url, shop, page, retryDelaysMs) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -147,8 +154,9 @@ async function fetchPage(url, shop, page, retryDelaysMs) {
       if (attempt >= retryDelaysMs.length) {
         throw new Error(`${shop} pagina ${page} blijft falen (${e.message}); index is ONVOLLEDIG`);
       }
-      console.warn(`  [shopify] ${shop} p${page}: ${e.message}, opnieuw over ${retryDelaysMs[attempt] / 1000}s`);
-      await sleep(retryDelaysMs[attempt]);
+      const wait = Math.max(retryDelaysMs[attempt], Math.min(e.retryAfterMs ?? 0, MAX_RETRY_AFTER_MS));
+      console.warn(`  [shopify] ${shop} p${page}: ${e.message}, opnieuw over ${wait / 1000}s`);
+      await sleep(wait);
     }
   }
 }

@@ -19,6 +19,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shopify-indexer-'));
 process.env.CATALOG_DB = path.join(dir, 'test.db');
 
 const { indexShopify } = require('./shopify');
+const { retryAfterMs } = require('../http');
 const { openDb } = require('../storage');
 const { loadCatalog } = require('../catalog');
 
@@ -80,12 +81,14 @@ const CSV = [
 /** Paden die de server zag, en hoeveel verzoeken hij nog met 429 weigert. */
 const requested = [];
 let refuseNext = 0;
+let retryAfter = null;
 
 const server = http.createServer((req, res) => {
   requested.push(new URL(req.url, 'http://x').pathname);
   if (refuseNext > 0) {
     refuseNext--;
     res.statusCode = 429;
+    if (retryAfter !== null) res.setHeader('retry-after', retryAfter);
     return res.end('Verifying your connection...');
   }
   const page = Number(new URL(req.url, 'http://x').searchParams.get('page'));
@@ -226,4 +229,36 @@ test('mooierthuis: alleen de collectie, en een 429 is een pauze, geen einde', as
   refuseNext = 3;
   await assert.rejects(indexShopify(openDb(), opts), /ONVOLLEDIG/);
   refuseNext = 0;
+});
+
+test('hetdesignhuys: na een 429 wachten we minstens de Retry-After van de winkel', async () => {
+  await listening;
+  const csvPath = path.join(dir, 'catalog-hd.csv');
+  fs.writeFileSync(csvPath, 'ERG1040.3,Eurogros,Acampo 2626,200 cm x 290 cm,499,Grijs');
+  const catalog = loadCatalog(csvPath);
+
+  refuseNext = 1;
+  retryAfter = '1';
+  const started = Date.now();
+  const result = await indexShopify(openDb(), {
+    shop: 'hetdesignhuys.nl',
+    base,
+    brands: ['Eurogros'],
+    catalogModels: catalog.models,
+    bySku: catalog.bySku,
+    pageDelayMs: 0,
+    retryDelaysMs: [0, 0],
+  });
+  retryAfter = null;
+
+  assert.ok(Date.now() - started >= 1000, `opnieuw geprobeerd na ${Date.now() - started} ms, Retry-After was 1 s`);
+  assert.strictEqual(result.priced, 1);
+});
+
+test('retryAfterMs leest seconden en HTTP-datums', () => {
+  assert.strictEqual(retryAfterMs('60'), 60_000);
+  assert.strictEqual(retryAfterMs(undefined), null);
+  assert.strictEqual(retryAfterMs('onzin'), null);
+  const ms = retryAfterMs(new Date(Date.now() + 30_000).toUTCString());
+  assert.ok(ms > 28_000 && ms <= 30_000, String(ms));
 });

@@ -81,6 +81,9 @@ const SHOPIFY_SHOPS = [
     // Zelfde XS-band als vloerkledenloods: 21 varianten op "80 x 150 cm" en
     // geen enkele op 80 x 160.
     sizeAliases: [{ from: [80, 160], to: [80, 150] }],
+    // Geeft 429's met "Retry-After: 60" (oktober 2026). ~1.000 producten zijn
+    // 4 pagina's, dus een ruime pauze kost ons nog geen 20 s.
+    pageDelayMs: 5000,
   },
   {
     key:    'youlikeitwonen.nl',
