@@ -8,7 +8,7 @@
         </div>
 
         <!-- Content -->
-        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
             <form method="POST" action="{{ route('admin.custom.bolCom.update', $credential->id) }}" class="space-y-6">
                 @csrf
                 @method('PUT')

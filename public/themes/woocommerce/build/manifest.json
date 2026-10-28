@@ -1,11 +1,18 @@
 {
   "src/Resources/assets/css/app.css": {
-    "file": "assets/app-18d0bfef.css",
+    "file": "assets/app-BGxk3MUm.css",
+    "name": "app",
+    "names": [
+      "app.css"
+    ],
+    "src": "src/Resources/assets/css/app.css",
     "isEntry": true,
-    "src": "src/Resources/assets/css/app.css"
+    "assets": [
+      "assets/unopim-woocommerce-C63MyUr6.woff"
+    ]
   },
   "src/Resources/assets/fonts/unopim-woocommerce.woff": {
-    "file": "assets/unopim-woocommerce-acea6d77.woff",
+    "file": "assets/unopim-woocommerce-C63MyUr6.woff",
     "src": "src/Resources/assets/fonts/unopim-woocommerce.woff"
   }
 }

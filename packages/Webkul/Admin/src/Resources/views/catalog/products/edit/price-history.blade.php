@@ -10,7 +10,7 @@
         ->get();
 @endphp
 
-<div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+<div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
         Prijshistorie
     </p>

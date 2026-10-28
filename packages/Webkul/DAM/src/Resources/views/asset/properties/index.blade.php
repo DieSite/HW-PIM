@@ -81,22 +81,22 @@
 
                         <p 
                             v-html="record.name"
-                            class="break-words"
+                            class="wrap-break-word"
                         ></p>
 
                         <p 
                             v-html="record.type"
-                            class="break-words"
+                            class="wrap-break-word"
                         ></p>
 
                         <p 
                             v-html="record.language"
-                            class="break-words"
+                            class="wrap-break-word"
                         ></p>
 
                         <p 
                             v-html="record.value"
-                            class="break-words"
+                            class="wrap-break-word"
                         ></p>
 
                         <div class="flex justify-end">

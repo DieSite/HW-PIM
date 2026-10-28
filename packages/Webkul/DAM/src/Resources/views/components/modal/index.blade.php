@@ -66,7 +66,7 @@
                 leave-to-class="opacity-0"
             >
                 <div
-                    class="fixed inset-0 bg-gray-500 bg-opacity-30 bg-opacity-50 transition-opacity z-[10001]"
+                    class="fixed inset-0 bg-gray-500 bg-opacity-30 bg-opacity-50 transition-opacity z-10001"
                     v-show="isOpen"
                 ></div>
             </transition>
@@ -82,7 +82,7 @@
                 leave-to-class="opacity-0 translate-y-4 md:translate-y-0 md:scale-95"
             >
                 <div
-                    class="fixed inset-0 z-[10002] transform transition overflow-y-auto"
+                    class="fixed inset-0 z-10002 transform transition overflow-y-auto"
                     v-if="isOpen"
                 >
                     <div :class="{
@@ -91,7 +91,7 @@
                     >
                         <div
                             :class="{
-                                'w-full max-w-6xl max-h-[96%] overflow-y-auto z-[999] absolute ltr:left-1/2 rtl:right-1/2 top-1/2 rounded-lg bg-white dark:bg-gray-900 box-shadow max-md:w-[90%] ltr:-translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2': noClass == false 
+                                'w-full max-w-6xl max-h-[96%] overflow-y-auto z-999 absolute ltr:left-1/2 rtl:right-1/2 top-1/2 rounded-lg bg-white dark:bg-gray-900 box-shadow max-md:w-[90%] ltr:-translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2': noClass == false 
                             }"
                         >
                             <!-- Header Slot -->

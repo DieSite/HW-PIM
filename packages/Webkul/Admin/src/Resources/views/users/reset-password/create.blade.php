@@ -4,7 +4,7 @@
         @lang('admin::app.users.reset-password.title')
     </x-slot>
 
-    <div class="flex justify-center items-center h-[100vh]">
+    <div class="flex justify-center items-center h-screen">
         <div class="flex flex-col gap-5 items-center">
             <!-- Logo -->
             @if ($logo = core()->getConfigData('general.design.admin_logo.logo_image'))

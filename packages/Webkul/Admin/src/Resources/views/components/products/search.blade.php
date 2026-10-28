@@ -41,7 +41,7 @@
             </x-slot>
 
             <!-- Drawer Content -->
-            <x-slot:content class="!p-0">
+            <x-slot:content class="p-0!">
                 <div
                     class="grid"
                     v-if="filteredSearchedProducts.length"
@@ -70,7 +70,7 @@
 
                             <!-- Image -->
                             <div
-                                class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded overflow-hidden"
+                                class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded-sm overflow-hidden"
                                 :class="{'border border-dashed border-gray-300 dark:border-cherry-800 dark:invert dark:mix-blend-exclusion': ! product?.image, 'w-[60px]': product?.image}"
                             >
                                 <template v-if="! product?.image">

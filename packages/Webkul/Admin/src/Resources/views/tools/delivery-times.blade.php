@@ -17,7 +17,7 @@
         </div>
 
         <div class="flex flex-col gap-4 mt-3.5">
-            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
                 <x-admin::flash-group />
 
                 @if ($errors->any())
@@ -40,7 +40,7 @@
                     achtergrond bijgewerkt. Daarna houdt elke voorraadwijziging de levertijd vanzelf bij.
                 </p>
 
-                <x-admin::form.control-group class="!mb-0 w-[320px]">
+                <x-admin::form.control-group class="mb-0! w-[320px]">
                     <x-admin::form.control-group.label>Op voorraad in de HW-showroom (alle merken)</x-admin::form.control-group.label>
                     <input
                         type="text"
@@ -52,7 +52,7 @@
                 </x-admin::form.control-group>
             </div>
 
-            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
                 <p class="text-lg text-gray-800 dark:text-slate-50 font-bold mb-3">
                     Per merk
                 </p>

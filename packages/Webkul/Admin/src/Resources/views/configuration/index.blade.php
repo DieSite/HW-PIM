@@ -40,7 +40,7 @@
                     </p>
                 </div>
 
-                <div class="grid grid-cols-4 gap-12 flex-wrap justify-between p-4 mt-2 bg-white dark:bg-cherry-900 rounded box-shadow max-1580:grid-cols-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
+                <div class="grid grid-cols-4 gap-12 flex-wrap justify-between p-4 mt-2 bg-white dark:bg-cherry-900 rounded-sm box-shadow max-1580:grid-cols-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
                     <!-- Menus cards -->
                     @foreach ($item['children'] as $childKey =>  $child)
                         <a 

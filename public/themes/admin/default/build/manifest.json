@@ -1,107 +1,111 @@
 {
   "src/Resources/assets/css/app.css": {
-    "file": "assets/app-5554c15e.css",
+    "file": "assets/app-CsUzJ0rB.css",
+    "name": "app",
+    "names": [
+      "app.css"
+    ],
+    "src": "src/Resources/assets/css/app.css",
     "isEntry": true,
-    "src": "src/Resources/assets/css/app.css"
+    "assets": [
+      "assets/unopim-admin-udGhv9Qc.woff"
+    ]
   },
   "src/Resources/assets/fonts/unopim-admin.woff": {
-    "file": "assets/unopim-admin-ac35ebd3.woff",
+    "file": "assets/unopim-admin-udGhv9Qc.woff",
     "src": "src/Resources/assets/fonts/unopim-admin.woff"
   },
   "src/Resources/assets/images/dark_logo.svg": {
-    "file": "assets/dark_logo-2e4f30fb.svg",
+    "file": "assets/dark_logo-BPr7gLeV.svg",
     "src": "src/Resources/assets/images/dark_logo.svg"
   },
   "src/Resources/assets/images/error.svg": {
-    "file": "assets/error-f6a0b3bc.svg",
+    "file": "assets/error-BF2UPdlc.svg",
     "src": "src/Resources/assets/images/error.svg"
   },
   "src/Resources/assets/images/favicon.svg": {
-    "file": "assets/favicon-37556e74.svg",
-    "src": "src/Resources/assets/images/square-logo.svg"
+    "file": "assets/favicon-DKfxvuRr.svg",
+    "src": "src/Resources/assets/images/favicon.svg"
   },
   "src/Resources/assets/images/icon-add-product.svg": {
-    "file": "assets/icon-add-product-7a003ffd.svg",
+    "file": "assets/icon-add-product-DOZzzvVi.svg",
     "src": "src/Resources/assets/images/icon-add-product.svg"
   },
   "src/Resources/assets/images/icon-attribute.svg": {
-    "file": "assets/icon-attribute-652c6173.svg",
+    "file": "assets/icon-attribute-Bw_LtSGv.svg",
     "src": "src/Resources/assets/images/icon-attribute.svg"
   },
   "src/Resources/assets/images/icon-categories.svg": {
-    "file": "assets/icon-categories-49da1e2f.svg",
+    "file": "assets/icon-categories-yrmfMUh2.svg",
     "src": "src/Resources/assets/images/icon-categories.svg"
   },
   "src/Resources/assets/images/icon-channel.svg": {
-    "file": "assets/icon-channel-9cac6e4a.svg",
+    "file": "assets/icon-channel-BPIiFNAX.svg",
     "src": "src/Resources/assets/images/icon-channel.svg"
   },
   "src/Resources/assets/images/icon-currency.svg": {
-    "file": "assets/icon-currency-f793010c.svg",
+    "file": "assets/icon-currency-CQ98tJ_8.svg",
     "src": "src/Resources/assets/images/icon-currency.svg"
   },
   "src/Resources/assets/images/icon-families.svg": {
-    "file": "assets/icon-families-09543cd2.svg",
+    "file": "assets/icon-families-Bb0GNP4M.svg",
     "src": "src/Resources/assets/images/icon-families.svg"
   },
   "src/Resources/assets/images/icon-groups.svg": {
-    "file": "assets/icon-groups-a6b60c98.svg",
+    "file": "assets/icon-groups-ikN4iL5x.svg",
     "src": "src/Resources/assets/images/icon-groups.svg"
   },
   "src/Resources/assets/images/icon-locale.svg": {
-    "file": "assets/icon-locale-547afb14.svg",
+    "file": "assets/icon-locale-eUng-xdH.svg",
     "src": "src/Resources/assets/images/icon-locale.svg"
   },
   "src/Resources/assets/images/icon-products.svg": {
-    "file": "assets/icon-products-5b431497.svg",
+    "file": "assets/icon-products-DekXdJvQ.svg",
     "src": "src/Resources/assets/images/icon-products.svg"
   },
   "src/Resources/assets/images/logo.svg": {
-    "file": "assets/logo-4d5bf5bd.svg",
+    "file": "assets/logo-BoElEEB5.svg",
     "src": "src/Resources/assets/images/logo.svg"
   },
   "src/Resources/assets/images/product-placeholders/front.svg": {
-    "file": "assets/front-93490c30.svg",
+    "file": "assets/front-CFI3VfdH.svg",
     "src": "src/Resources/assets/images/product-placeholders/front.svg"
   },
   "src/Resources/assets/images/product-placeholders/next-1.svg": {
-    "file": "assets/next-1-91bb148a.svg",
+    "file": "assets/next-1-C2hl59rC.svg",
     "src": "src/Resources/assets/images/product-placeholders/next-1.svg"
   },
   "src/Resources/assets/images/product-placeholders/next-2.svg": {
-    "file": "assets/next-2-6aace5ca.svg",
+    "file": "assets/next-2-wWoAa-nH.svg",
     "src": "src/Resources/assets/images/product-placeholders/next-2.svg"
   },
   "src/Resources/assets/images/product-placeholders/size.svg": {
-    "file": "assets/size-04e2a252.svg",
+    "file": "assets/size-DCBc_ei4.svg",
     "src": "src/Resources/assets/images/product-placeholders/size.svg"
   },
   "src/Resources/assets/images/product-placeholders/use-cases.svg": {
-    "file": "assets/use-cases-4a33de1a.svg",
+    "file": "assets/use-cases-D4JhqD_Z.svg",
     "src": "src/Resources/assets/images/product-placeholders/use-cases.svg"
   },
   "src/Resources/assets/images/product-placeholders/zoom.svg": {
-    "file": "assets/zoom-0c75bed3.svg",
+    "file": "assets/zoom-CynTuPTI.svg",
     "src": "src/Resources/assets/images/product-placeholders/zoom.svg"
   },
   "src/Resources/assets/images/spinner.svg": {
-    "file": "assets/spinner-75cc5358.svg",
+    "file": "assets/spinner-DWDyD8Tr.svg",
     "src": "src/Resources/assets/images/spinner.svg"
   },
   "src/Resources/assets/images/square-logo.svg": {
-    "file": "assets/favicon-37556e74.svg",
-    "src": "src/Resources/assets/images/square-logo.svg"
-  },
-  "src/Resources/assets/js/app.css": {
-    "file": "assets/app-9e2a2734.css",
-    "src": "src/Resources/assets/js/app.css"
+    "file": "assets/favicon-DKfxvuRr.svg",
+    "src": "src/Resources/assets/images/favicon.svg"
   },
   "src/Resources/assets/js/app.js": {
-    "css": [
-      "assets/app-9e2a2734.css"
-    ],
-    "file": "assets/app-702b5950.js",
+    "file": "assets/app-CQp5mb_r.js",
+    "name": "app",
+    "src": "src/Resources/assets/js/app.js",
     "isEntry": true,
-    "src": "src/Resources/assets/js/app.js"
+    "css": [
+      "assets/app-B0eFe30k.css"
+    ]
   }
 }

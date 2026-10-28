@@ -74,7 +74,7 @@
                         @change="emitChangeEvent(filterField.name, $event.target.checked ? '1' : '0')"
                     />
 
-                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-900 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-violet-700"></div>
+                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-hidden rounded-full peer dark:bg-gray-900 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:inset-s-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-violet-700"></div>
                 </label>
             </template>
 
@@ -164,7 +164,7 @@
                             :type="filterField.type"
                             :name="filterField.name"
                             v-bind="field"
-                            :class="[errors.length ? 'border !border-red-600 hover:border-red-600' : '']"
+                            :class="[errors.length ? 'border border-red-600! hover:border-red-600' : '']"
                             class="w-full py-2.5 px-3 border rounded-md text-sm text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 dark:bg-cherry-900 dark:hover:border-slate-300 dark:border-gray-600"
                             autocomplete="off"
                             @change="emitChangeEvent(filterField.name, $event.target.value)"
@@ -186,7 +186,7 @@
                             :type="filterField.type"
                             :name="filterField.name"
                             v-bind="field"
-                            :class="[errors.length ? 'border !border-red-600 hover:border-red-600' : '']"
+                            :class="[errors.length ? 'border border-red-600! hover:border-red-600' : '']"
                             class="w-full py-2.5 px-3 border rounded-md text-sm text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 dark:bg-cherry-900 dark:hover:border-slate-300 dark:border-gray-600"
                             autocomplete="off"
                             @change="emitChangeEvent(filterField.name, $event.target.value)"
@@ -207,7 +207,7 @@
                         :type="filterField.type"
                         :name="filterField.name"
                         v-bind="field"
-                        :class="[errors.length ? 'border !border-red-600 hover:border-red-600' : '']"
+                        :class="[errors.length ? 'border border-red-600! hover:border-red-600' : '']"
                         class="w-full py-2.5 px-3 border rounded-md text-sm text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 dark:bg-cherry-900 dark:hover:border-slate-300 dark:border-gray-600"
                         @change="emitChangeEvent(filterField.name, $event.target.value)"
                     >
@@ -227,7 +227,7 @@
                         :type="filterField.type"
                         :name="filterField.name"
                         v-bind="field"
-                        :class="[errors.length ? 'border !border-red-600 hover:border-red-600' : '']"
+                        :class="[errors.length ? 'border border-red-600! hover:border-red-600' : '']"
                         class="w-full py-2.5 px-3 border rounded-md text-sm text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 dark:bg-cherry-900 dark:hover:border-slate-300 dark:border-gray-600"
                         @change="emitChangeEvent(filterField.name, $event.target.value)"
                     />

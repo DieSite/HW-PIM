@@ -44,7 +44,7 @@
                 {!! view_render_event('unopim.admin.settings.data_transfer.imports.create.card.general.before') !!}
 
                 <!-- Setup Import Panel -->
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                         @lang('admin::app.settings.data-transfer.imports.create.general')
                     </p>
@@ -102,7 +102,7 @@
                     </x-admin::form.control-group>
                 </div>
 
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                         @lang('admin::app.settings.data-transfer.imports.create.media')
                     </p>
@@ -141,10 +141,10 @@
                         @lang('admin::app.settings.data-transfer.imports.create.images')
                     </x-admin::form.control-group.label>
 
-                    <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                    <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                         <div class="flex flex-col">
                             <!-- Images Directory Path -->
-                            <x-admin::form.control-group class="!mb-0">
+                            <x-admin::form.control-group class="mb-0!">
                                 <div class="flex items-center space-x-4 gap-2">
                                     <x-admin::form.control-group.label>
                                         @lang('admin::app.settings.data-transfer.imports.create.images-directory')

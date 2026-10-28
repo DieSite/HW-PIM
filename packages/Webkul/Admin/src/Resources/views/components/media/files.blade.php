@@ -26,7 +26,7 @@
                 <!-- Upload File Button -->
 
                 <label
-                    class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded cursor-pointer transition-all hover:border-gray-400"
+                    class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded-sm cursor-pointer transition-all hover:border-gray-400"
                     :class="[errors['inputFiles.files[0]'] ? 'border border-red-500' : 'border-gray-300']"
                     :for="$.uid + '_fileInput'"
                     v-if="0 == inputFiles.length"
@@ -79,7 +79,7 @@
     </script>
 
     <script type="text/x-template" id="v-media-files-item-template">
-        <div class="grid justify-items-center h-[120px] max-w-[210px] min-w-[210px] max-h-[120px] relative border border-dashed border-gray-300 dark:border-cherry-800 rounded overflow-hidden transition-all hover:border-gray-400 group">
+        <div class="grid justify-items-center h-[120px] max-w-[210px] min-w-[210px] max-h-[120px] relative border border-dashed border-gray-300 dark:border-cherry-800 rounded-sm overflow-hidden transition-all hover:border-gray-400 group">
             <!-- File Name -->
             <div class="flex flex-col justify-between visible w-full p-3 bg-white dark:bg-cherry-800 absolute top-0 bottom-0 opacity-80 transition-all group-hover:invisible">
                 <p class="text-xs text-gray-600 dark:text-gray-300 font-semibold break-all" v-text="inputFile?.file?.name ?? inputFile.fileName"></p>

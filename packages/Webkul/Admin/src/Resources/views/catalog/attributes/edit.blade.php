@@ -59,7 +59,7 @@
                         {!! view_render_event('unopim.admin.catalog.attributes.edit.card.label.before', ['attribute' => $attribute]) !!}
 
                         <!-- Label -->
-                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                                 @lang('admin::app.catalog.attributes.edit.general')
                             </p>
@@ -170,7 +170,7 @@
                         {!! view_render_event('unopim.admin.catalog.attributes.edit.card.label.after', ['attribute' => $attribute]) !!}
 
                         <!-- Labels -->
-                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <div class="flex justify-between items-center p-1.5">
                                 <p class="p-2.5 text-gray-800 dark:text-white text-base font-semibold">
                                     @lang('admin::app.catalog.attributes.edit.label')
@@ -199,7 +199,7 @@
 
                         <!-- Options -->
                         <div
-                            class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded"
+                            class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm"
                             v-if="(
                                     selectedAttributeType == 'select'
                                     || selectedAttributeType == 'multiselect'
@@ -237,7 +237,7 @@
                                         <x-admin::table>
                                             <x-admin::table.thead class="text-sm font-medium dark:bg-gray-800">
                                                 <x-admin::table.thead.tr>
-                                                    <x-admin::table.th class="!p-0"></x-admin::table.th>
+                                                    <x-admin::table.th class="p-0!"></x-admin::table.th>
     
                                                     <!-- Swatch Select -->
                                                     <x-admin::table.th v-if="showSwatch && (selectedSwatchType == 'color' || selectedSwatchType == 'image')">
@@ -288,7 +288,7 @@
                                                         >
     
                                                         <!-- Draggable Icon -->
-                                                        <x-admin::table.td class="!px-0 text-center">
+                                                        <x-admin::table.td class="px-0! text-center">
                                                             <i class="icon-drag text-2xl transition-all group-hover:text-gray-700 cursor-grab"></i>
     
                                                             <input
@@ -330,7 +330,7 @@
                                                         </x-admin::table.td>
     
                                                         <!-- Actions Button -->
-                                                        <x-admin::table.td class="!px-0">
+                                                        <x-admin::table.td class="px-0!">
                                                             <span
                                                                 class="icon-edit p-1.5 rounded-md text-2xl cursor-pointer transition-all hover:bg-violet-100 dark:hover:bg-gray-800 max-sm:place-self-center"
                                                                 @click="editOptions(element)"
@@ -441,7 +441,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Is Required -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! select-none">
                                     @php
                                         $selectedOption = old('is_required') ?? $attribute->is_required
                                     @endphp
@@ -470,7 +470,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Is Unique -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-0 opacity-70 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-0! opacity-70 select-none">
                                     <x-admin::form.control-group.control
                                         type="checkbox"
                                         id="is_unique"
@@ -505,7 +505,7 @@
 
                             <x-slot:content>
                                 <!-- Value Per Locale -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 opacity-70 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! opacity-70 select-none">
                                     @php
                                         $valuePerLocale = old('value_per_locale') ?? $attribute->value_per_locale;
                                     @endphp
@@ -533,7 +533,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Value Per Channel -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 opacity-70 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! opacity-70 select-none">
                                     @php
                                         $valuePerChannel = old('value_per_channel') ?? $attribute->value_per_channel
                                     @endphp

@@ -43,7 +43,7 @@
 
                 {!! view_render_event('unopim.admin.settings.channels.create.card.general.before') !!}
 
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                         @lang('admin::app.settings.channels.create.general')
                     </p>
@@ -102,7 +102,7 @@
 
                 {!! view_render_event('unopim.admin.settings.channels.create.card.translations.before') !!}
 
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                         @lang('admin::app.settings.channels.edit.name-translations')
                     </p>

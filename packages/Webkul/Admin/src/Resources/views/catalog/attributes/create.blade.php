@@ -60,7 +60,7 @@
                     <!-- Left sub Component -->
                     <div class="flex flex-col gap-2 flex-1 overflow-auto">
                         <!-- General -->
-                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                                 @lang('admin::app.catalog.attributes.create.general')
                             </p>
@@ -151,7 +151,7 @@
                         </div>
 
                         <!-- Labels -->
-                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <div class="flex justify-between items-center p-1.5">
                                 <p class="p-2.5 text-gray-800 dark:text-white text-base font-semibold">                                    
                                     @lang('admin::app.catalog.attributes.create.label')
@@ -161,7 +161,7 @@
                             <div class="px-4 pb-4">
                                 <!-- Locales Inputs -->
                                 @foreach ($locales as $locale)
-                                    <x-admin::form.control-group class="last:!mb-0">
+                                    <x-admin::form.control-group class="last:mb-0!">
                                         <x-admin::form.control-group.label>
                                             {{ $locale->name }}
                                         </x-admin::form.control-group.label>
@@ -178,7 +178,7 @@
 
                         <!-- Options -->
                         <div
-                            class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded"
+                            class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm"
                             v-if=" (
                                     selectedAttributeType == 'select'
                                     || selectedAttributeType == 'multiselect'
@@ -212,7 +212,7 @@
                                     <x-admin::table>
                                         <x-admin::table.thead class="text-sm font-medium dark:bg-gray-800">
                                             <x-admin::table.thead.tr>
-                                                <x-admin::table.th class="!p-0" />
+                                                <x-admin::table.th class="p-0!" />
 
                                                 <!-- Swatch Select -->
                                                 <x-admin::table.th v-if="selectedSwatchType == 'color' || selectedSwatchType == 'image'">
@@ -248,7 +248,7 @@
                                             <template #item="{ element, index }">
                                                 <x-admin::table.thead.tr class="hover:bg-violet-50 hover:bg-opacity-30 dark:hover:bg-cherry-800">
                                                     <!-- Draggable Icon -->
-                                                    <x-admin::table.td class="!px-0 text-center">
+                                                    <x-admin::table.td class="px-0! text-center">
                                                         <i class="icon-drag text-2xl transition-all group-hover:text-gray-700 cursor-grab"></i>
 
                                                         <input
@@ -288,7 +288,7 @@
                                                     </x-admin::table.td>
 
                                                     <!-- Actions button -->
-                                                    <x-admin::table.td class="!px-0">
+                                                    <x-admin::table.td class="px-0!">
                                                         <span
                                                             class="icon-edit p-1.5 rounded-md text-2xl cursor-pointer transition-all hover:bg-violet-100 dark:hover:bg-gray-800 max-sm:place-self-center"
                                                             @click="editModal(element)"
@@ -407,7 +407,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Is Required -->
-                                 <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2">
+                                 <x-admin::form.control-group class="flex gap-2.5 items-center mb-2!">
                                     <x-admin::form.control-group.control
                                         type="checkbox"
                                         id="is_required"
@@ -426,7 +426,7 @@
 
                                 <!-- Is Unique -->
                                 <x-admin::form.control-group
-                                    class="flex gap-2.5 items-center !mb-0 select-none"
+                                    class="flex gap-2.5 items-center mb-0! select-none"
                                     v-if="selectedAttributeType == 'text' || selectedAttributeType == 'date' || selectedAttributeType == 'datetime'"
                                 >
                                     <x-admin::form.control-group.control
@@ -457,7 +457,7 @@
 
                             <x-slot:content>
                                 <!-- Value Per Locale -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! select-none">
                                     <x-admin::form.control-group.control
                                         type="checkbox"
                                         id="value_per_locale"
@@ -475,7 +475,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Value Per Channel -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! select-none">
                                     <x-admin::form.control-group.control
                                         type="checkbox"
                                         id="value_per_channel"

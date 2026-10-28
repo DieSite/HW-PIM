@@ -43,7 +43,7 @@
 
             {!! view_render_event('unopim.admin.catalog.families.edit.card.attributes-panel.before', ['attributeFamily' => $attributeFamily]) !!}
 
-            <div class="flex flex-col gap-2 flex-1 bg-white dark:bg-cherry-900 rounded box-shadow">
+            <div class="flex flex-col gap-2 flex-1 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                 <v-family-attributes>
                     <x-admin::shimmer.families.attributes-panel />
                 </v-family-attributes>
@@ -61,7 +61,7 @@
                         @lang('admin::app.catalog.attributes.edit.general')
                     </p>
                     <x-admin::form.control-group>
-                        <x-admin::form.control-group.label class="!text-gray-800 dark:!text-white">
+                        <x-admin::form.control-group.label class="text-gray-800! dark:text-white!">
                             @lang('admin::app.catalog.families.edit.code')
                         </x-admin::form.control-group.label>
 
@@ -186,7 +186,7 @@
                                         >
                                         </i>
                                         <div
-                                            class="group_node flex gap-[6px] max-w-max py-[6px] ltr:pr-[6px] rtl:pl-[6px] rounded transition-all text-gray-600 dark:text-gray-300 group cursor-pointer"
+                                            class="group_node flex gap-[6px] max-w-max py-[6px] ltr:pr-[6px] rtl:pl-[6px] rounded-sm transition-all text-gray-600 dark:text-gray-300 group cursor-pointer"
                                             :class="{'bg-violet-100 dark:text-violet-800 text-violet-600 group-hover:text-gray-800 dark:group-hover:text-violet-800': selectedGroup.id == element.id}"
                                             @click="groupSelected(element)"
                                         >
@@ -231,7 +231,7 @@
                                         v-show="! element.hide"
                                     >
                                         <template #item="{ element, index }">
-                                            <div class="flex gap-1.5 max-w-max py-1.5 ltr:pr-1.5 rtl:pl-1.5 rounded text-gray-600 dark:text-gray-300 group cursor-pointer">
+                                            <div class="flex gap-1.5 max-w-max py-1.5 ltr:pr-1.5 rtl:pl-1.5 rounded-sm text-gray-600 dark:text-gray-300 group cursor-pointer">
                                                 <i class="icon-drag text-[20px] transition-all group-hover:text-gray-700"></i>
 
                                                 <span 
@@ -284,7 +284,7 @@
                             group="attributes"
                         >
                             <template #item="{ element, index }">
-                                   <div class="flex gap-1.5 max-w-max py-1.5 ltr:pr-1.5 rtl:pl-1.5 rounded text-gray-600 dark:text-gray-300 group">
+                                   <div class="flex gap-1.5 max-w-max py-1.5 ltr:pr-1.5 rtl:pl-1.5 rounded-sm text-gray-600 dark:text-gray-300 group">
                                         <i class="icon-drag text-xl transition-all group-hover:text-gray-800 dark:group-hover:text-white cursor-grab"></i>
                                         <i class="text-xl transition-all group-hover:text-gray-800 dark:group-hover:text-white"></i>
                                         <span 

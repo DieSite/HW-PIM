@@ -28,7 +28,7 @@
                     <x-slot:toggle>
                         <button
                             type="button"
-                            class="inline-flex w-full cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-cherry-800 bg-white dark:bg-cherry-800 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
+                            class="inline-flex w-full cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-cherry-800 bg-white dark:bg-cherry-800 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow-sm hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
                         >
                             <span 
                                 class="text-sm text-gray-400 dark:text-gray-400" 
@@ -54,14 +54,14 @@
 
             <div class="mb-4 flex gap-2 flex-wrap">
                 <p
-                    class="flex items-center rounded bg-violet-100 px-2 py-1 font-semibold text-violet-700"
+                    class="flex items-center rounded-sm bg-violet-100 px-2 py-1 font-semibold text-violet-700"
                     v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
                 >
                     <!-- Retrieving the label from the options based on the applied column value. -->
                     <span v-text="column.options.find((option => option.value == appliedColumnValue)).label"></span>
 
                     <span
-                        class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                        class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                         @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
                     >
                     </span>
@@ -99,7 +99,7 @@
                         <x-slot:toggle>
                             <button
                                 type="button"
-                                class="inline-flex w-full cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-cherry-800 bg-white dark:bg-cherry-800 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 "
+                                class="inline-flex w-full cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-cherry-800 bg-white dark:bg-cherry-800 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow-sm hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 "
                             >
                                 <span 
                                     class="text-sm text-gray-400 dark:text-gray-400" 
@@ -125,14 +125,14 @@
 
                 <div class="mb-4 flex gap-2 flex-wrap">
                     <p
-                        class="flex items-center rounded bg-violet-100 px-2 py-1 font-semibold text-violet-700"
+                        class="flex items-center rounded-sm bg-violet-100 px-2 py-1 font-semibold text-violet-700"
                         v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
                     >
                         <!-- Retrieving the label from the options based on the applied column value. -->
                         <span v-text="column.options.params.options.find((option => option.value == appliedColumnValue)).label"></span>
 
                         <span
-                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                             @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
                         >
                         </span>
@@ -173,13 +173,13 @@
 
                 <div class="mb-4 flex gap-2 flex-wrap">
                     <p
-                        class="flex items-center rounded bg-violet-100 px-2 py-1 font-semibold text-violet-700"
+                        class="flex items-center rounded-sm bg-violet-100 px-2 py-1 font-semibold text-violet-700"
                         v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
                     >
                         <span v-text="appliedColumnValue"></span>
 
                         <span
-                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                             @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
                         >
                         </span>
@@ -257,13 +257,13 @@
 
                 <div class="mb-4 flex gap-2 flex-wrap">
                     <p
-                        class="flex items-center rounded bg-violet-100 px-2 py-1 font-semibold text-violet-700"
+                        class="flex items-center rounded-sm bg-violet-100 px-2 py-1 font-semibold text-violet-700"
                         v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
                     >
                         <span v-text="appliedColumnValue.join(' to ')"></span>
 
                         <span
-                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                             @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
                         >
                         </span>
@@ -341,13 +341,13 @@
 
                 <div class="mb-4 flex gap-2 flex-wrap">
                     <p
-                        class="flex items-center rounded bg-violet-100 px-2 py-1 font-semibold text-violet-700"
+                        class="flex items-center rounded-sm bg-violet-100 px-2 py-1 font-semibold text-violet-700"
                         v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
                     >
                         <span v-text="appliedColumnValue.join(' to ')"></span>
 
                         <span
-                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                            class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                             @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
                         >
                         </span>
@@ -390,13 +390,13 @@
 
             <div class="mb-4 flex gap-2 flex-wrap">
                 <p
-                    class="flex items-center rounded bg-violet-100 px-2 py-1 font-semibold text-violet-700"
+                    class="flex items-center rounded-sm bg-violet-100 px-2 py-1 font-semibold text-violet-700"
                     v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
                 >
                     <span v-text="appliedColumnValue"></span>
 
                     <span
-                        class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                        class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                         @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
                     >
                     </span>
@@ -413,7 +413,7 @@
             <x-slot:toggle>
                 <button
                     type="button"
-                    class="inline-flex w-full cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-cherry-800 bg-white dark:bg-cherry-800 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
+                    class="inline-flex w-full cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-cherry-800 bg-white dark:bg-cherry-800 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow-sm hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
                 >
                     <span
                         class="text-sm text-gray-400 dark:text-gray-400" 
@@ -428,7 +428,7 @@
             <!-- Dropdown Content -->
             <x-slot:menu>
                 <div class="relative">
-                    <div class="relative rounded">
+                    <div class="relative rounded-sm">
                         <ul class="list-reset">
                             <li class="p-2">
                                 <input

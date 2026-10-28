@@ -2,7 +2,7 @@
     $admin = auth()->guard('admin')->user();
 @endphp
 
-<header class="flex justify-between items-center px-4 py-2.5 bg-white dark:bg-cherry-700  border-b dark:border-cherry-800 sticky top-0 z-[10001]">
+<header class="flex justify-between items-center px-4 py-2.5 bg-white dark:bg-cherry-700  border-b dark:border-cherry-800 sticky top-0 z-10001">
     <div class="flex gap-1.5 items-center">
         <!-- Hamburger Menu -->
         <i
@@ -60,7 +60,7 @@
             </x-slot>
 
             <!-- Admin Dropdown -->
-            <x-slot:content class="!p-0">
+            <x-slot:content class="p-0!">
                 <div class="flex gap-1.5 items-center px-5 py-2.5 border border-b-gray-300 dark:border-gray-800">
                     <img
                         src="{{ url('cache/logo/unopim.png') }}"
@@ -147,7 +147,7 @@
                         </a>
 
                         @if (count($menuItem['children']))
-                            <div class="{{ $menu->getActive($menuItem) ? '!grid' : '' }} hidden min-w-[180px] ltr:pl-10 rtl:pr-10 pb-2 rounded-b-lg z-[100]">
+                            <div class="{{ $menu->getActive($menuItem) ? 'grid!' : '' }} hidden min-w-[180px] ltr:pl-10 rtl:pr-10 pb-2 rounded-b-lg z-100">
                                 @foreach ($menuItem['children'] as $subMenuItem)
                                     <a
                                         href="{{ $subMenuItem['url'] }}"

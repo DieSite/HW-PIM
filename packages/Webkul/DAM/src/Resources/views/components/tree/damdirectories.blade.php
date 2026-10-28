@@ -369,12 +369,12 @@
             <!-- Context Menu -->
             <div v-if="showContextMenuFlag" 
                 :style="{ top: `${contextMenuPosition.y}px`, left: `${contextMenuPosition.x}px` }" 
-                class="absolute bg-white border border-gray-300 px-4 py-2 rounded shadow-lg z-50 dark:border-cherry-800 dark:bg-cherry-800 dark:text-white"
+                class="absolute bg-white border border-gray-300 px-4 py-2 rounded-sm shadow-lg z-50 dark:border-cherry-800 dark:bg-cherry-800 dark:text-white"
             >
                 <div>
                     @if (bouncer()->hasPermission('dam.asset.upload'))
                      <div 
-                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                         @click="uploadFile"
                         v-if="requestType != 'asset'"
                     >
@@ -393,7 +393,7 @@
 
                     @if (bouncer()->hasPermission('dam.directory.store'))
                         <div 
-                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 !leading-normal dark:text-slate-300" 
+                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 leading-normal! dark:text-slate-300" 
                             @click="createDirectory"
                             v-if="requestType != 'asset'"
                         >
@@ -402,22 +402,22 @@
                         </div>
                     @endif
                     <!-- @TODO: Feature Update -->
-                    <!-- <div class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" @click="copyDirectory">
+                    <!-- <div class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" @click="copyDirectory">
                         <i class="icon-dam-copy"></i>
                         <span class="text-sm text-zinc-600 dark:text-white">@lang('dam::app.admin.dam.index.directory.actions.copy')</span>
                     </div>
-                    <div class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" @click="copyDirectory">
+                    <div class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" @click="copyDirectory">
                         <i class="icon-dam-cut"></i>
                         <span class="text-sm text-zinc-600 dark:text-white">@lang('dam::app.admin.dam.index.directory.actions.cut')</span>
                     </div>
-                    <div class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 !leading-normal dark:text-slate-300" @click="pasteDirectory">
+                    <div class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 leading-normal! dark:text-slate-300" @click="pasteDirectory">
                         <i class="icon-export"></i>
                         <span class="text-sm text-zinc-600 dark:text-white">@lang('dam::app.admin.dam.index.directory.actions.paste')</span>
                     </div> -->
 
                     @if (bouncer()->hasPermission('dam.directory.rename'))
                     <div 
-                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                         @click="renameItem"
                         v-if="requestType == 'directory'"
                     >
@@ -428,7 +428,7 @@
 
                     @if (bouncer()->hasPermission('dam.asset.rename'))
                         <div 
-                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                             @click="renameItem"
                             v-if="requestType == 'asset'"
                         >
@@ -439,7 +439,7 @@
 
                     @if (bouncer()->hasPermission('dam.directory.destroy'))
                     <div 
-                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                         @click="deleteItem"
                         v-if="requestType == 'directory'"
                     >
@@ -450,7 +450,7 @@
 
                     @if (bouncer()->hasPermission('dam.asset.destroy'))
                         <div 
-                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                             @click="deleteFile"
                             v-if="requestType == 'asset'"
                         >
@@ -461,7 +461,7 @@
 
                     @if (bouncer()->hasPermission('dam.directory.copy_structure'))
                         <div 
-                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                             @click="copyDirectory"
                             v-if="requestType != 'asset'"
                         >
@@ -472,7 +472,7 @@
 
                     @if (bouncer()->hasPermission('dam.directory.download_zip'))
                         <div 
-                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                            class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                             @click="downloadItem('directory')"
                             v-if="requestType != 'asset'"
                         >
@@ -483,7 +483,7 @@
 
                     @if (bouncer()->hasPermission('dam.asset.download'))
                     <div 
-                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white !leading-normal dark:text-slate-300" 
+                        class="flex items-center justify-start rounded-md p-1.5 gap-2 cursor-pointer text-sm text-zinc-600 dark:text-white leading-normal! dark:text-slate-300" 
                         @click="downloadItem('asset')"
                         v-if="requestType == 'asset'"
                     >

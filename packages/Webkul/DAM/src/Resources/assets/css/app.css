@@ -1,18 +1,36 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@config '../../../../tailwind.config.js';
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 .image-card {
-    @apply h-[206px]
+    @apply h-[206px];
 }
 
 @font-face {
-    font-family: 'UnoPim-DAM';    
-    src:  url('../fonts/UnoPim-DAM.woff?9ynohi') format('woff');
+    font-family: 'UnoPim-DAM';
+    src: url('../fonts/UnoPim-DAM.woff?9ynohi') format('woff');
     font-weight: normal;
     font-style: normal;
     font-display: block;
-  }
+}
   
 @layer components {
   [class^="icon-dam-"], [class*=" icon-dam-"] {
@@ -202,11 +220,11 @@
 
 @keyframes skeleton {
     0% {
-        @apply bg-[-1250px_0];
+        background-position: -1250px 0;
     }
 
     100% {
-        @apply bg-[1250px_0];
+        background-position: 1250px 0;
     }
 }
 
@@ -215,6 +233,6 @@
 }
 
 .CodeMirror {
-    @apply !h-[calc(100vh-367px)]
+    @apply h-[calc(100vh-367px)]!
 }
 }

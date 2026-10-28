@@ -43,7 +43,7 @@
             <!-- Body Content -->
             <div class="grid gap-2.5 mt-3.5 p-5 max-xl:flex-wrap box-shadow">
                 <div
-                    class="flex flex-col gap-1.5 w-full p-3 border border-orange-200 rounded-sm"
+                    class="flex flex-col gap-1.5 w-full p-3 border border-orange-200 rounded-xs"
                 >
                     <p class="flex gap-2 items-center dark:text-white">
                         <i class="text-2xl text-orange-600 dark:text-orange-600! bg-orange-200 rounded-full"></i>

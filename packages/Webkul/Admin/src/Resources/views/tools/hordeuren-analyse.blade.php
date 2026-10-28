@@ -10,7 +10,7 @@
     </div>
 
     <div class="flex flex-col gap-4 mt-3.5">
-        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
             <x-admin::flash-group />
 
             <p class="text-gray-600 dark:text-gray-300 mb-2">
@@ -41,7 +41,7 @@
             <form action="{{ route('admin.tools.hordeuren-analyse.run') }}" method="POST" class="flex items-end gap-2.5">
                 @csrf
 
-                <x-admin::form.control-group class="!mb-0 w-[350px]">
+                <x-admin::form.control-group class="mb-0! w-[350px]">
                     <x-admin::form.control-group.label>
                         E-mailadres voor het rapport
                     </x-admin::form.control-group.label>

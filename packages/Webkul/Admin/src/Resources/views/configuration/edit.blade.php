@@ -52,7 +52,7 @@
                         </p>
                     </div>
 
-                    <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                    <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                         @foreach ($item['fields'] as $field)
                             @include ('admin::configuration.field-type')
                         

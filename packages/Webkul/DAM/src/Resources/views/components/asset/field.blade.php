@@ -14,14 +14,14 @@
     default-search="{{ $defaultSearch }}"
     :errors="errors"
 >
-    <x-admin::shimmer.image class="w-[110px] h-[110px] rounded"/>
+    <x-admin::shimmer.image class="w-[110px] h-[110px] rounded-sm"/>
 </v-asset-field>
 
 @pushOnce('scripts')
     <script type="text/x-template" id="v-asset-field-template">
         <!-- Panel Content -->
         <div class="grid">
-            <x-admin::shimmer.image class="w-[110px] h-[110px] rounded" v-if="isLoading"/>
+            <x-admin::shimmer.image class="w-[110px] h-[110px] rounded-sm" v-if="isLoading"/>
 
             <div class="flex flex-wrap gap-3" v-else>
                 <input type="hidden" :name="name + '[]'" value="" v-if="assets.length === 0">
@@ -52,7 +52,7 @@
 
                 <!-- Add Asset -->
                 <label
-                    class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded cursor-pointer transition-all hover:border-gray-400 border-gray-300"
+                    class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded-sm cursor-pointer transition-all hover:border-gray-400 border-gray-300"
                     :style="{'max-width': this.width, 'max-height': this.height}"
                     :for="$.uid + '_assetImageInput'"
                     @click="setCurrentAssets();$refs.assetPickerModal.open()"
@@ -185,7 +185,7 @@
     <script type="text/x-template" id="v-asset-field-item-template">
         <div class="grid gap-2">
             <div
-                class="grid justify-items-center min-w-[120px] max-h-[120px] relative rounded overflow-hidden transition-all hover:border-gray-400 group"
+                class="grid justify-items-center min-w-[120px] max-h-[120px] relative rounded-sm overflow-hidden transition-all hover:border-gray-400 group"
                 :style="{'width': this.width, 'height': this.height}">
                 <!-- Image Preview -->
                 <img

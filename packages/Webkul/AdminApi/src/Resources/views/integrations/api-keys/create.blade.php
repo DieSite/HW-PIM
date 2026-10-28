@@ -51,7 +51,7 @@
 
                             {!! view_render_event('unopim.admin.configuration.integrations.create.card.access_control.before') !!}
                             <!-- Access Control Input Fields -->
-                            <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                            <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                                 <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                                     @lang('admin::app.configuration.integrations.create.access-control')
                                 </p>

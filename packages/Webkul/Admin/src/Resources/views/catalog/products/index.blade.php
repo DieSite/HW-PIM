@@ -73,7 +73,7 @@
                         @endif
 
                         <p class="text-gray-600 dark:text-gray-300">
-                            <span class="[&>*]:after:content-['_/_']">
+                            <span class="*:after:content-['_/_']">
                                 <template v-for="column in columnGroup">
                                     <span
                                         class="after:content-['/'] last:after:content-['']"
@@ -385,13 +385,13 @@
 
                                         <div class="flex flex-wrap gap-1 min-h-[38px] p-1.5 border dark:border-cherry-800 rounded-md">
                                             <p
-                                                class="flex items-center py-1 px-2 bg-violet-100 rounded text-violet-700 font-semibold"
+                                                class="flex items-center py-1 px-2 bg-violet-100 rounded-sm text-violet-700 font-semibold"
                                                 v-for="attribute in attributes"
                                             >
                                                 @{{ attribute.name }}
 
                                                 <span
-                                                    class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:!text-violet-700"
+                                                    class="icon-cancel cursor-pointer text-lg text-violet-700 ltr:ml-1.5 rtl:mr-1.5 dark:text-violet-700!"
                                                     @click="removeAttribute(attribute)"
                                                 >
                                                 </span>

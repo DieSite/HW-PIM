@@ -52,7 +52,7 @@
                         {!! view_render_event('unopim.admin.settings.data_transfer.exports.edit.card.general.before') !!}
 
                         <!-- Setup Import Panel -->
-                        <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                        <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                             <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                                 @lang('admin::app.settings.data-transfer.exports.edit.general')
                             </p>

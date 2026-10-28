@@ -16,7 +16,7 @@
     height="{{ $height }}"
     :errors="errors"
 >
-    <x-admin::shimmer.image class="w-[110px] h-[110px] rounded" />
+    <x-admin::shimmer.image class="w-[110px] h-[110px] rounded-sm" />
 </v-media-images>
 
 @pushOnce('scripts')
@@ -28,7 +28,7 @@
                 <template v-if="allowMultiple || images.length == 0">
                     <!-- AI Image Generation Button -->
                     <label
-                        class="grid justify-items-center items-center w-full h-[120px] max-w-[120px] min-w-[110px] max-h-[120px] min-h-[110px] border border-dashed border-violet-300 rounded cursor-pointer transition-all hover:border-violet-700  dark:invert dark:mix-blend-exclusion"
+                        class="grid justify-items-center items-center w-full h-[120px] max-w-[120px] min-w-[110px] max-h-[120px] min-h-[110px] border border-dashed border-violet-300 rounded-sm cursor-pointer transition-all hover:border-violet-700  dark:invert dark:mix-blend-exclusion"
                         :style="{'max-width': this.width, 'max-height': this.height}"
                         v-if="ai.enabled"
                         @click="resetAIModal(); $refs.magicAIImageModal.open()"
@@ -48,7 +48,7 @@
 
                     <!-- Upload Image Button -->
                     <label
-                        class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded cursor-pointer transition-all hover:border-gray-400 border-gray-300"
+                        class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded-sm cursor-pointer transition-all hover:border-gray-400 border-gray-300"
                         :style="{'max-width': this.width, 'max-height': this.height}"
                         :for="$.uid + '_imageInput'"
                     >
@@ -241,8 +241,8 @@
                                 <div v-show="ai.images.length">
                                     <div class="grid grid-cols-4 gap-5">
                                         <div
-                                            class="grid justify-items-center min-w-[120px] max-h-[120px] relative border-[3px] border-transparent rounded overflow-hidden transition-all hover:opacity-80 cursor-pointer"
-                                            :class="{'!border-violet-700 ': image.selected}"
+                                            class="grid justify-items-center min-w-[120px] max-h-[120px] relative border-[3px] border-transparent rounded-sm overflow-hidden transition-all hover:opacity-80 cursor-pointer"
+                                            :class="{'border-violet-700! ': image.selected}"
                                             v-for="image in ai.images"
                                             @click="image.selected = ! image.selected"
                                         >
@@ -317,7 +317,7 @@
     </script>
 
     <script type="text/x-template" id="v-media-image-item-template">
-        <div class="grid justify-items-center min-w-[120px] max-h-[120px] relative rounded overflow-hidden transition-all hover:border-gray-400 group"  :style="{'width': this.width, 'height': this.height}">
+        <div class="grid justify-items-center min-w-[120px] max-h-[120px] relative rounded-sm overflow-hidden transition-all hover:border-gray-400 group"  :style="{'width': this.width, 'height': this.height}">
             <!-- Image Preview -->
             <img
                 :src="image.url"

@@ -39,11 +39,6 @@ class MagicAIController extends Controller
      */
     public function image(): JsonResponse
     {
-        config([
-            'openai.api_key'      => core()->getConfigData('general.magic_ai.settings.api_key'),
-            'openai.organization' => core()->getConfigData('general.magic_ai.settings.organization'),
-        ]);
-
         $this->validate(request(), [
             'prompt'  => 'required',
             'model'   => 'required|in:dall-e-2,dall-e-3',

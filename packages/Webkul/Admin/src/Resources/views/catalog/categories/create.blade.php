@@ -46,7 +46,7 @@
                 {!! view_render_event('unopim.admin.catalog.categories.create.card.general.before') !!}
 
                 <!-- General -->
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                         @lang('admin::app.catalog.categories.create.general')
                     </p>
@@ -81,7 +81,7 @@
 
                 <!-- Left Section -->
                 @if (! $leftCategoryFields->isEmpty())
-                    <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                    <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                         <x-admin::categories.dynamic-fields
                             :fields="$leftCategoryFields"
                         >
@@ -95,7 +95,7 @@
             <!-- Right Section -->
             <div class="flex flex-col gap-2 w-[360px] max-w-full">
                 <!-- Parent category -->
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <h2 class="block mb-2.5 text-base text-gray-800 dark:text-white font-medium leading-6">
                         @lang('admin::app.catalog.categories.create.parent-category')
                     </h2>

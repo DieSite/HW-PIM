@@ -96,7 +96,7 @@
                 <!-- Pagination -->
                 <div class="flex gap-x-2 items-center p-4 border-t dark:border-gray-800">
                     <div
-                        class="inline-flex gap-x-1 items-center justify-between w-full max-w-max py-1.5 px-2 ltr:ml-2 rtl:mr-2 bg-white dark:bg-cherry-800 border dark:border-cherry-800 rounded-md text-gray-600 dark:text-gray-300 leading-6 text-center marker:shadow appearance-none focus:ring-2 focus:outline-none focus:ring-black max-sm:hidden"
+                        class="inline-flex gap-x-1 items-center justify-between w-full max-w-max py-1.5 px-2 ltr:ml-2 rtl:mr-2 bg-white dark:bg-cherry-800 border dark:border-cherry-800 rounded-md text-gray-600 dark:text-gray-300 leading-6 text-center marker:shadow-sm appearance-none focus:ring-2 focus:outline-hidden focus:ring-black max-sm:hidden"
                         v-text="pagination.per_page"
                     >
                     </div>
@@ -120,14 +120,14 @@
                     <!-- Prev & Next Page Button -->
                     <div class="flex gap-1 items-center">
                         <a @click="getResults(pagination.prev_page_url)">
-                            <div class="inline-flex gap-x-1 items-center justify-between w-full max-w-max ltr:ml-2 rtl:mr-2 p-1.5 bg-white dark:bg-cherry-800 border rounded-md dark:border-cherry-800 text-gray-600 dark:text-gray-300 text-center cursor-pointer transition-all hover:border hover:bg-violet-50 dark:hover:bg-cherry-800 marker:shadow appearance-none focus:ring-2 focus:outline-none focus:ring-black">
+                            <div class="inline-flex gap-x-1 items-center justify-between w-full max-w-max ltr:ml-2 rtl:mr-2 p-1.5 bg-white dark:bg-cherry-800 border rounded-md dark:border-cherry-800 text-gray-600 dark:text-gray-300 text-center cursor-pointer transition-all hover:border hover:bg-violet-50 dark:hover:bg-cherry-800 marker:shadow-sm appearance-none focus:ring-2 focus:outline-hidden focus:ring-black">
                                 <span class="icon-chevron-left text-2xl"></span>
                             </div>
                         </a>
 
                         <a @click="getResults(pagination.next_page_url)">
                             <div
-                                class="inline-flex gap-x-1 items-center justify-between w-full max-w-max ltr:ml-2 rtl:mr-2 p-1.5 bg-white dark:bg-cherry-800 border rounded-md dark:border-cherry-800 text-gray-600 dark:text-gray-300 text-center cursor-pointer transition-all hover:border hover:bg-violet-50 dark:hover:bg-cherry-800 marker:shadow appearance-none focus:ring-2 focus:outline-none focus:ring-black">
+                                class="inline-flex gap-x-1 items-center justify-between w-full max-w-max ltr:ml-2 rtl:mr-2 p-1.5 bg-white dark:bg-cherry-800 border rounded-md dark:border-cherry-800 text-gray-600 dark:text-gray-300 text-center cursor-pointer transition-all hover:border hover:bg-violet-50 dark:hover:bg-cherry-800 marker:shadow-sm appearance-none focus:ring-2 focus:outline-hidden focus:ring-black">
                                 <span class="icon-chevron-right text-2xl"></span>
                             </div>
                         </a>

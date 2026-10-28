@@ -32,7 +32,7 @@
                     <input type="hidden" name="_token" :value="csrfToken">
 
                     <!-- 1. Which rugs -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6 mb-4">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6 mb-4">
                         <p class="text-lg font-bold mb-1 text-gray-800 dark:text-slate-50">1. Selecteer producten</p>
                         <p class="text-sm text-gray-500 dark:text-slate-300 mb-4">
                             Alleen hoofdproducten krijgen teksten: de webshop leest de beschrijving daar, varianten hebben geen eigen tekst.
@@ -72,7 +72,7 @@
                     </div>
 
                     <!-- 2. Which texts -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6 mb-4">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6 mb-4">
                         <p class="text-lg font-bold mb-4 text-gray-800 dark:text-slate-50">2. Welke teksten</p>
 
                         <div class="flex flex-col gap-2">
@@ -90,7 +90,7 @@
                     </div>
 
                     <!-- 3. Sample then run -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
                         <p class="text-lg font-bold mb-1 text-gray-800 dark:text-slate-50">3. Proefdraaien en starten</p>
                         <p class="text-sm text-gray-500 dark:text-slate-300 mb-4">
                             Het voorbeeld schrijft drie echte teksten, zodat je de kwaliteit ziet voordat de hele reeks draait.
@@ -146,7 +146,7 @@
                     </div>
                 </form>
 
-                <div v-if="runs.length" class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+                <div v-if="runs.length" class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
                     <p class="text-lg font-bold mb-4 text-gray-800 dark:text-slate-50">Recente reeksen</p>
                     <table class="w-full text-left text-sm border-collapse">
                         <thead>

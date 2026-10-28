@@ -10,7 +10,7 @@
         id="v-datagrid-table-template"
     >
         <div class="w-full">
-            <div class="table-responsive grid w-full box-shadow rounded bg-white dark:bg-cherry-900 overflow-hidden">
+            <div class="table-responsive grid w-full box-shadow rounded-sm bg-white dark:bg-cherry-900 overflow-hidden">
                 <slot name="header">
                     <template v-if="$parent.isLoading">
                         <x-admin::shimmer.datagrid.table.head :isMultiRow="$isMultiRow" />
@@ -48,7 +48,7 @@
                             <!-- Columns -->
                             <p
                                 v-for="column in $parent.available.columns"
-                                class="flex gap-1.5 items-center break-words"
+                                class="flex gap-1.5 items-center wrap-break-word"
                                 :class="{'cursor-pointer select-none hover:text-gray-800 dark:hover:text-white': column.sortable}"
                                 @click="$parent.sortPage(column)"
                             >
@@ -108,7 +108,7 @@
 
                                 <!-- Columns -->
                                 <p
-                                    class="break-words"
+                                    class="wrap-break-word"
                                     v-for="column in $parent.available.columns"
                                     v-html="record[column.index]"
                                     v-if="record.is_closure"
@@ -116,7 +116,7 @@
                                 </p>
 
                                 <p
-                                    class="break-words"
+                                    class="wrap-break-word"
                                     v-for="column in $parent.available.columns"
                                     v-html="record[column.index]"
                                     v-else

@@ -1,4 +1,4 @@
-<div class="p-4 rounded bg-white dark:bg-cherry-800 box-shadow">
+<div class="p-4 rounded-sm bg-white dark:bg-cherry-800 box-shadow">
     <div class="flex gap-4 flex-wrap">
         @for ($i = 1; $i <= 6; $i++)
             <div class="flex gap-2.5 flex-1 min-w-[200px]">

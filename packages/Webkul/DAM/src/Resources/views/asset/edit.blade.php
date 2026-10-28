@@ -215,7 +215,7 @@
                                 </x-slot>
 
                                 <x-slot:content class="gap-4">
-                                    <p class="text-sm text-zinc-600 !leading-normal dark:text-slate-300"> {{ $asset->getPathWithOutFileSystemRoot() }}</p>
+                                    <p class="text-sm text-zinc-600 leading-normal! dark:text-slate-300"> {{ $asset->getPathWithOutFileSystemRoot() }}</p>
                                 </x-slot>
                             </x-admin::accordion>
 
@@ -232,7 +232,7 @@
                                         </p>
                                     </x-slot>
         
-                                    <x-slot:content class="overflow-x-auto max-w-full !px-0 !pb-0">
+                                    <x-slot:content class="overflow-x-auto max-w-full px-0! pb-0!">
                                         <x-admin::table class="w-full text-sm text-left min-w-[400px]">
                                             <x-admin::table.thead class="text-sm font-medium dark:bg-gray-800">
                                                     <x-admin::table.thead.tr>

@@ -17,7 +17,7 @@
                 leave-to-class="opacity-0"
             >
                 <div
-                    class="fixed inset-0 bg-gray-500 bg-opacity-50 transition-opacity z-[10002]"
+                    class="fixed inset-0 bg-gray-500 bg-opacity-50 transition-opacity z-10002"
                     v-show="isOpen"
                 ></div>
             </transition>
@@ -33,13 +33,13 @@
                 leave-to-class="opacity-0 translate-x-full"
             >
                 <div
-                    class="fixed inset-0 z-[10002] transform  left-20  right-20 top-24 bottom-4"
+                    class="fixed inset-0 z-10002 transform  left-20  right-20 top-24 bottom-4"
                     v-if="isOpen"
                 >
                     <!-- Modal Overlay -->
-                    <div class="fixed inset-0 z-[9999] flex items-center justify-center outline-none">
+                    <div class="fixed inset-0 z-9999 flex items-center justify-center outline-hidden">
                         <!-- Modal Container -->
-                        <div class="w-full max-w-[568px] z-[999] absolute ltr:left-1/2 rtl:right-1/2 top-1/2 rounded-lg bg-white dark:bg-gray-900 box-shadow max-md:w-[90%] ltr:-translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2">
+                        <div class="w-full max-w-[568px] z-999 absolute ltr:left-1/2 rtl:right-1/2 top-1/2 rounded-lg bg-white dark:bg-gray-900 box-shadow max-md:w-[90%] ltr:-translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2">
                             <!-- Modal Header -->
                             <div class="flex justify-between items-center p-4 border-b dark:border-cherry-800 text-lg text-gray-800 dark:text-white font-bold">
                                 <div>

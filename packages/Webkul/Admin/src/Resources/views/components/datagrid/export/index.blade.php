@@ -61,7 +61,7 @@
                             >
                             </x-admin::form.control-group.control>
                         </x-admin::form.control-group>
-                        <x-admin::form.control-group v-if="!['csv', 'xls', 'xlsx'].includes(format) && format" class="!mb-0">
+                        <x-admin::form.control-group v-if="!['csv', 'xls', 'xlsx'].includes(format) && format" class="mb-0!">
                             <x-admin::form.control-group.label>
                                With Media
                             </x-admin::form.control-group.label>

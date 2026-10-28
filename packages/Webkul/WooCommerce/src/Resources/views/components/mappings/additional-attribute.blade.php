@@ -15,7 +15,7 @@
 
 @pushOnce('scripts')
 <script type="text/x-template" id="v-additional-attribute-mapping-template">
-    <div class="mt-5 bg-white dark:bg-cherry-900 rounded-lg shadow-md border border-gray-300 dark:border-gray-800 !mb-2">
+    <div class="mt-5 bg-white dark:bg-cherry-900 rounded-lg shadow-md border border-gray-300 dark:border-gray-800 mb-2!">
         <table class="w-full table-auto">
             <thead class="bg-violet-50 dark:bg-cherry-800">
                 <tr class="text-left">

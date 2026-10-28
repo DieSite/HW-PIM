@@ -67,7 +67,7 @@
                             v-for="(columnGroup, index) in ['user_id', 'user_name', 'status', 'email', 'role_name']"
                         >
                             <p class="text-gray-600 dark:text-gray-300">
-                                <span class="[&>*]:after:content-['_/_']">
+                                <span class="*:after:content-['_/_']">
                                     <span
                                         class="after:content-['/'] last:after:content-['']"
                                         :class="{
@@ -147,7 +147,7 @@
                         <p v-html="record.status"></p>
 
                         <!-- Email -->
-                        <p class="break-words" v-text="record.email"></p>
+                        <p class="wrap-break-word" v-text="record.email"></p>
 
                         <!-- Role -->
                         <p v-text="record.role_name"></p>
@@ -377,7 +377,7 @@
 
                             <div class="flex gap-4 mb-4"> 
                                 <template v-if="currentUserId != data.user.id">
-                                    <x-admin::form.control-group class="w-full flex-1 !mb-0">
+                                    <x-admin::form.control-group class="w-full flex-1 mb-0!">
                                         <x-admin::form.control-group.label>
                                             @lang('admin::app.settings.users.index.create.status')
                                         </x-admin::form.control-group.label>

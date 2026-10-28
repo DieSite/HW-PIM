@@ -8,7 +8,7 @@
         </div>
 
         <!-- Import Section -->
-        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
             <form method="POST" action="{{ route('admin.custom.imports.upload') }}" enctype="multipart/form-data" class="space-y-6">
                 @csrf
                 <div class="max-w-xl">

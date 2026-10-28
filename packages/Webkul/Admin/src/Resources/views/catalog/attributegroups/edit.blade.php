@@ -59,7 +59,7 @@
                         {!! view_render_event('unopim.admin.catalog.attributes.edit.card.label.before', ['attributeGroup' => $attributeGroup]) !!}
 
                         <!-- Label -->
-                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                                 @lang('admin::app.catalog.attribute-groups.edit.general')
                             </p>
@@ -96,7 +96,7 @@
                         {!! view_render_event('unopim.admin.catalog.attribute.groups.edit.card.label.after', ['attributeGroup' => $attributeGroup]) !!}
 
                         <!-- Labels -->
-                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <div class="flex justify-between items-center p-1.5">
                                 <p class="p-2.5 text-gray-800 dark:text-white text-base font-semibold">
                                     @lang('admin::app.catalog.attributes.edit.label')

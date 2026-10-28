@@ -1,7 +1,7 @@
 
 
 <!-- Panel -->
-<div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow w-[360px]">
+<div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow w-[360px]">
     <!-- Panel Header -->
     <p class="flex justify-between text-base text-gray-800 dark:text-white font-semibold mb-4">
         @lang('dam::app.admin.dam.index.directory.title')

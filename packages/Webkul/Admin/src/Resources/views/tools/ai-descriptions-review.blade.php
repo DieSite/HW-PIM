@@ -35,7 +35,7 @@
             </div>
         @endif
 
-        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-4 flex flex-wrap items-center gap-3">
+        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-4 flex flex-wrap items-center gap-3">
             @foreach (['pending' => 'Te beoordelen', 'approved' => 'Goedgekeurd', 'rejected' => 'Afgekeurd', 'applied' => 'Gepubliceerd', 'failed' => 'Mislukt', 'processing' => 'Bezig', 'all' => 'Alles'] as $key => $label)
                 <a
                     href="{{ route('admin.tools.ai-descriptions.review', array_filter(['run' => $run?->id, 'status' => $key])) }}"
@@ -120,7 +120,7 @@
                 $fieldConfig = config('ai.fields');
             @endphp
 
-            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6" id="draft-{{ $draft->id }}" data-draft="{{ $draft->id }}">
+            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6" id="draft-{{ $draft->id }}" data-draft="{{ $draft->id }}">
                 <div class="flex justify-between items-start gap-4 mb-4">
                     <div>
                         <p class="font-bold text-gray-800 dark:text-slate-50">
@@ -205,7 +205,7 @@
                 </div>
             </div>
         @empty
-            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6 text-sm text-gray-500">
+            <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6 text-sm text-gray-500">
                 Geen concepten in deze weergave.
             </div>
         @endforelse

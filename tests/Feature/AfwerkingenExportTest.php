@@ -29,8 +29,8 @@ it('bouwt de payload uit de array die de exporter al in handen heeft', function 
     expect($payload)->not->toBeNull()
         ->and($payload['versie'])->toBe(AfwerkingOptieService::PAYLOAD_VERSIE)
         ->and($payload['valuta'])->toBe('EUR')
-        ->and(collect($payload['opties'])->pluck('code')->all())
-        ->toBe(['festonneren', 'banderen', 'banderen_blind', 'volume', 'biesje', 'anti_slip']);
+        ->and(collect($payload['opties'])->pluck('code')->all())->toBe(['randafwerking'])
+        ->and(collect($payload['opties'][0]['keuzes'])->pluck('code')->all())->toBe(['feston', 'band_suede']);
 });
 
 it('levert een payload die als geldige JSON de meta in kan', function () {
@@ -60,7 +60,7 @@ it('geeft geen payload voor een parent zonder maatwerk-variant', function () {
 });
 
 it('leest het merk van een variant als de parent er geen heeft', function () {
-    $item = exporterItem([], [['maat' => 'Maatwerk', 'merk' => 'Karpi']]);
+    $item = exporterItem([], [['maat' => 'Maatwerk', 'merk' => 'Eurogros']]);
 
     expect(app(AfwerkingOptieService::class)->payloadVoorItem($item))->not->toBeNull();
 });

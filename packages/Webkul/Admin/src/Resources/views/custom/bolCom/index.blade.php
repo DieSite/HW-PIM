@@ -12,7 +12,7 @@
                     @csrf
                     <select
                         name="credential_id"
-                        class="border border-gray-300 dark:border-gray-700 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500 dark:bg-cherry-900 dark:text-white"
+                        class="border border-gray-300 dark:border-gray-700 rounded-sm px-3 py-1 text-sm focus:outline-hidden focus:border-blue-500 dark:bg-cherry-900 dark:text-white"
                     >
                         <option value="">Select Credentials</option>
                         @foreach($credentials->where('is_active', true) as $credential)
@@ -39,7 +39,7 @@
         </div>
 
         <!-- Content -->
-        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
             @if (session('success'))
                 <div class="mb-4 p-4 rounded-lg bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-600">
                     {{ session('success') }}
@@ -71,7 +71,7 @@
                                 <td class="px-4 py-3">{{ $credential->name }}</td>
                                 <td class="px-4 py-3">{{ $credential->client_id }}</td>
                                 <td class="px-4 py-3">
-                                        <span class="px-2 py-1 rounded text-xs font-medium {{ $credential->is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' }}">
+                                        <span class="px-2 py-1 rounded-sm text-xs font-medium {{ $credential->is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' }}">
                                             {{ $credential->is_active ? 'Active' : 'Inactive' }}
                                         </span>
                                 </td>
@@ -94,7 +94,7 @@
                                             @method('DELETE')
                                             <button
                                                 type="submit"
-                                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 focus:outline-none bg-transparent"
+                                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 focus:outline-hidden bg-transparent"
                                                 onclick="return confirm('Are you sure you want to delete these credentials?')"
                                             >
                                                 Delete

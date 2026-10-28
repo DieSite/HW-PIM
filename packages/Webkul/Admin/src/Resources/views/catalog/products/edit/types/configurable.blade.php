@@ -10,7 +10,7 @@
         type="text/x-template"
         id="v-product-variations-template"
     >
-        <div class="relative bg-white dark:bg-cherry-900 rounded box-shadow">
+        <div class="relative bg-white dark:bg-cherry-900 rounded-sm box-shadow">
             <!-- Panel Header -->
             <div class="flex flex-wrap gap-2.5 justify-between mb-2.5 p-4">
                 <div class="flex flex-col gap-2">
@@ -203,7 +203,7 @@
                                     <template v-if="selectedType == 'editPrices'">
                                         <div class="pb-2.5 border-b dark:border-gray-800">
                                             <div class="flex gap-2.5 items-end">
-                                                <x-admin::form.control-group class="flex-1 !mb-0">
+                                                <x-admin::form.control-group class="flex-1 mb-0!">
                                                     <x-admin::form.control-group.label>
                                                         @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-sku')
                                                     </x-admin::form.control-group.label>
@@ -252,7 +252,7 @@
                                     <template v-if="selectedType == 'editWeight'">
                                         <div class="pb-2.5 border-b dark:border-gray-800">
                                             <div class="flex gap-2.5 items-end">
-                                                <x-admin::form.control-group class="flex-1 !mb-0">
+                                                <x-admin::form.control-group class="flex-1 mb-0!">
                                                     <x-admin::form.control-group.label>
                                                         @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-weight')
                                                     </x-admin::form.control-group.label>
@@ -280,7 +280,7 @@
                                     <template v-if="selectedType == 'editName'">
                                         <div class="pb-2.5 border-b dark:border-gray-800">
                                             <div class="flex gap-2.5 items-end">
-                                                <x-admin::form.control-group class="flex-1 !mb-0">
+                                                <x-admin::form.control-group class="flex-1 mb-0!">
                                                     <x-admin::form.control-group.label>
                                                         @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-name')
                                                     </x-admin::form.control-group.label>
@@ -307,7 +307,7 @@
                                     <template v-if="selectedType == 'editStatus'">
                                         <div class="pb-2.5 border-b dark:border-gray-800">
                                             <div class="flex gap-2.5 items-end">
-                                                <x-admin::form.control-group class="flex-1 !mb-0">
+                                                <x-admin::form.control-group class="flex-1 mb-0!">
                                                     <x-admin::form.control-group.label>
                                                         @lang('admin::app.catalog.products.edit.types.configurable.mass-edit.apply-to-all-status')
                                                     </x-admin::form.control-group.label>
@@ -463,7 +463,7 @@
                                         class="flex-1 mb-0"
                                         ::class="{
                                             'max-w-[115px]' : selectedType !== 'editName',
-                                            '!mb-0': selectedType === 'editName'
+                                            'mb-0!': selectedType === 'editName'
                                         }"
                                     >
                                         <div class="relative">
@@ -497,7 +497,7 @@
                                         class="flex-1 mb-0"
                                         ::class="{
                                             'max-w-[115px]' : selectedType !== 'editSku',
-                                            '!mb-0': selectedType === 'editSku'
+                                            'mb-0!': selectedType === 'editSku'
                                         }"
                                     >
                                         <div class="relative">
@@ -587,7 +587,7 @@
 
                 <!-- Image -->
                 <div
-                    class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded overflow-hidden"
+                    class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded-sm overflow-hidden"
                     :class="{'border border-dashed border-gray-300 dark:border-cherry-800 dark:invert dark:mix-blend-exclusion': ! variant?.image, 'w-[60px]': variant?.image}"
                 >
                     <template v-if="! variant?.image">

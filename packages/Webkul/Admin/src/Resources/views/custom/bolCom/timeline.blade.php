@@ -18,7 +18,7 @@
     $canRetry = in_array($state, [BolSyncState::Failed, BolSyncState::Idle, BolSyncState::Retired], true);
 @endphp
 
-<div class="relative p-4 bg-white dark:bg-cherry-900 rounded box-shadow mt-4" id="bolcom-timeline">
+<div class="relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow mt-4" id="bolcom-timeline">
     <div class="flex items-center justify-between mb-4">
         <div>
             <p class="text-base text-gray-800 dark:text-white font-semibold">
@@ -49,7 +49,7 @@
                     @csrf
                     <button
                         type="submit"
-                        class="px-3 py-1.5 text-xs font-medium rounded border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900"
+                        class="px-3 py-1.5 text-xs font-medium rounded-sm border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900"
                     >
                         Sync opnieuw proberen
                     </button>
@@ -59,7 +59,7 @@
     </div>
 
     @if ($product->additional['product_sync_error'] ?? null)
-        <div class="p-3 mb-4 text-sm rounded bg-red-50 text-red-800 dark:bg-red-900 dark:text-red-100 border border-red-200 dark:border-red-700">
+        <div class="p-3 mb-4 text-sm rounded-sm bg-red-50 text-red-800 dark:bg-red-900 dark:text-red-100 border border-red-200 dark:border-red-700">
             {{ $product->additional['product_sync_error'] }}
         </div>
     @endif
@@ -85,14 +85,14 @@
                     };
                 @endphp
 
-                <li class="border border-gray-200 dark:border-gray-700 rounded p-3">
+                <li class="border border-gray-200 dark:border-gray-700 rounded-sm p-3">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex-1">
                             <div class="flex items-center gap-2">
                                 <span class="text-sm font-medium text-gray-800 dark:text-gray-100">
                                     {{ $event->step->label() }}
                                 </span>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide {{ $eventBadgeClasses }}">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wide {{ $eventBadgeClasses }}">
                                     {{ $eventStatus?->value ?? $event->status }}
                                 </span>
                             </div>
@@ -108,7 +108,7 @@
                                     <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700 dark:text-gray-400">
                                         Technische details
                                     </summary>
-                                    <pre class="mt-2 p-2 text-[11px] bg-gray-50 dark:bg-gray-800 dark:text-gray-200 rounded overflow-x-auto">{{ json_encode($event->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                                    <pre class="mt-2 p-2 text-[11px] bg-gray-50 dark:bg-gray-800 dark:text-gray-200 rounded-sm overflow-x-auto">{{ json_encode($event->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
                                 </details>
                             @endif
                         </div>

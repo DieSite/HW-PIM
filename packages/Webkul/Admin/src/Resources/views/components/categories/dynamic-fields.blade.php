@@ -48,7 +48,7 @@
 
             <div class="self-end mb-2 text-xs flex gap-1">
                 @if ($isLocalizable)
-                    <span class="icon-language uppercase box-shadow p-1 rounded-full bg-gray-100 border border-gray-200 rounded text-gray-600 dark:!text-gray-600">
+                    <span class="icon-language uppercase box-shadow p-1 rounded-full bg-gray-100 border border-gray-200 rounded-sm text-gray-600 dark:text-gray-600!">
                         {{ "{$currentLocaleCode}" }}
                     </span>
                 @endif
@@ -123,7 +123,7 @@
 
                 <x-admin::media.images
                     name="{{ $fieldName }}"
-                    ::class="[errors && errors['{{ $fieldName }}'] ? 'border !border-red-600 hover:border-red-600' : '']"
+                    ::class="[errors && errors['{{ $fieldName }}'] ? 'border border-red-600! hover:border-red-600' : '']"
                     :id="$field->code"
                     ::rules="{{ $field->getValidationsField() }}"
                     :uploaded-images="! empty($value) ? [$savedImage] : []"

@@ -20,7 +20,7 @@
             >
 
                 <!-- actions buttons -->
-                <div class="flex justify-between items-center sticky z-[10002] bg-white border-b" style="top: calc(57px + .75rem)">
+                <div class="flex justify-between items-center sticky z-10002 bg-white border-b" style="top: calc(57px + .75rem)">
                     <p class="text-xl text-gray-800 dark:text-slate-50 font-bold">
                         Productvoorraad updaten
                     </p>
@@ -62,7 +62,7 @@
                 <div class="flex flex-col gap-4">
 
                     <!-- Content -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
 
                         <x-admin::flash-group />
 

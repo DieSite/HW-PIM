@@ -18,7 +18,7 @@
     >
         <div class="grid gap-2.5">
             <!-- Panel -->
-            <div class="bg-white grid gap-2.5 p-4 dark:bg-cherry-900 rounded box-shadow">
+            <div class="bg-white grid gap-2.5 p-4 dark:bg-cherry-900 rounded-sm box-shadow">
                 <p class="flex justify-between text-base text-gray-800 dark:text-white font-semibold mb-4">
                     @lang('admin::app.catalog.products.edit.links.title')
                 </p>
@@ -75,7 +75,7 @@
                             <div class="flex gap-2.5">
                                 <!-- Image -->
                                 <div
-                                    class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded overflow-hidden"
+                                    class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded-sm overflow-hidden"
                                     :class="{'border border-dashed border-gray-300 dark:border-cherry-800 dark:invert dark:mix-blend-exclusion': ! product?.image, 'w-[60px]': product?.image}"
                                 >
                                     <template v-if="! product?.afbeelding">

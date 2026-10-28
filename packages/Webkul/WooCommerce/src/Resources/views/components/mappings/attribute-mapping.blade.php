@@ -82,15 +82,15 @@
                     }
                     
                     @endphp
-                       <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                       <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                         <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all">
-                            <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.field-woocommerce')</p>
-                            <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.unopim-attribute')</p>
-                            <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.fixed-value')</p>
+                            <p class="wrap-break-word font-bold">@lang('woocommerce::app.mappings.attribute-mapping.field-woocommerce')</p>
+                            <p class="wrap-break-word font-bold">@lang('woocommerce::app.mappings.attribute-mapping.unopim-attribute')</p>
+                            <p class="wrap-break-word font-bold">@lang('woocommerce::app.mappings.attribute-mapping.fixed-value')</p>
                         </div>
                         <template v-for="(field, fieldIndex) in standardAttributes" :key="fieldIndex">
                             <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-violet-50 hover:bg-opacity-30 dark:hover:bg-cherry-800">
-                                <p class="break-words">@{{ field.label }} {{ ' [' }}@{{ field.name }}{{ ']' }}
+                                <p class="wrap-break-word">@{{ field.label }} {{ ' [' }}@{{ field.name }}{{ ']' }}
                                     <span 
                                             class="required text-red-600" 
                                             v-if="field.required"
@@ -103,7 +103,7 @@
                                     </p>
                                 </p>
 
-                                <x-admin::form.control-group class="!mb-0">
+                                <x-admin::form.control-group class="mb-0!">
                                     <v-async-select-handler
                                         :type="field.name === 'tags' ? 'multiselect' : 'select'"
                                         :name="field.name"
@@ -131,7 +131,7 @@
                                     </v-error-message>
                                 </x-admin::form.control-group>
                                 <div class="flex w-full">
-                                <x-admin::form.control-group class="!mb-0 w-full" ::class="{'cursor-not-allowed' : isDisabled(getDefaultFieldName(field.name)) ? 'cursor-not-allowed' : '' } ">
+                                <x-admin::form.control-group class="mb-0! w-full" ::class="{'cursor-not-allowed' : isDisabled(getDefaultFieldName(field.name)) ? 'cursor-not-allowed' : '' } ">
                                     <x-admin::form.control-group.control
                                         type="text"
                                         ::name="getDefaultFieldName(field.name)"
@@ -159,9 +159,9 @@
 
             <x-woocommerce::mappings.additional-attribute :credentialId="$id"/>
 
-            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded box-shadow !mb-2">
+            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow mb-2!">
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all">
-                    <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.title')</p>
+                    <p class="wrap-break-word font-bold">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.title')</p>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
                 <p> @lang('woocommerce::app.mappings.attribute-mapping.other-mapping.enabled') </p>
@@ -189,12 +189,12 @@
                 </x-admin::form.control-group>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-violet-50 hover:bg-opacity-30 dark:hover:bg-cherry-800">
-                    <p class="break-words">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.custom-mapping')</p>
+                    <p class="wrap-break-word">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.custom-mapping')</p>
                     @php 
 
                     $oldValues = implode(',',json_decode($customAttributes));
                     @endphp
-                    <x-admin::form.control-group class="!mb-0"  v-if=" (nonSelectAsSelect == true)">
+                    <x-admin::form.control-group class="mb-0!"  v-if=" (nonSelectAsSelect == true)">
                         <x-admin::form.control-group.control
                         type="multiselect"
                         name="custom_field"
@@ -213,7 +213,7 @@
                         <x-admin::form.control-group.error control-name="custom_field" />
                     </x-admin::form.control-group>
 
-                    <x-admin::form.control-group class="!mb-0"  v-else>
+                    <x-admin::form.control-group class="mb-0!"  v-else>
                         <x-admin::form.control-group.control
                         type="multiselect"
                         name="custom_field"
@@ -233,11 +233,11 @@
                     </x-admin::form.control-group>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-violet-50 hover:bg-opacity-30 dark:hover:bg-cherry-800">
-                    <p class="break-words">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.media-mapping')</p>
+                    <p class="wrap-break-word">@lang('woocommerce::app.mappings.attribute-mapping.other-mapping.media-mapping')</p>
                     @php 
                     $oldValues = implode(',',json_decode($mediaMapping));
                     @endphp
-                    <x-admin::form.control-group class="!mb-0">
+                    <x-admin::form.control-group class="mb-0!">
                         <x-admin::form.control-group.control
                         type="multiselect"
                         name="media"
@@ -256,16 +256,16 @@
                 </div>
             </div>
 
-            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+            <div class="w-full p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all">
-                    <p class="break-words font-bold">@lang('woocommerce::app.mappings.attribute-mapping.quick-export.title')</p>
+                    <p class="wrap-break-word font-bold">@lang('woocommerce::app.mappings.attribute-mapping.quick-export.title')</p>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-opacity-30 dark:hover:bg-cherry-800">
                     <p>@lang('woocommerce::app.mappings.attribute-mapping.quick-export.quick-channel')</p>
                     @php 
                     $oldValues = !empty($quickSettings['quick_channel']) ? $quickSettings['quick_channel'] : '' ;
                     @endphp
-                    <x-admin::form.control-group class="!mb-0">
+                    <x-admin::form.control-group class="mb-0!">
                         <x-admin::form.control-group.control
                         type="select"
                         name="quick_channel"
@@ -287,7 +287,7 @@
                     @php 
                     $oldValues = !empty($quickSettings['quick_locale']) ? $quickSettings['quick_locale'] : '' ;
                     @endphp
-                    <x-admin::form.control-group class="!mb-0">
+                    <x-admin::form.control-group class="mb-0!">
                         <x-admin::form.control-group.control
                         type="select"
                         name="quick_locale"
@@ -309,7 +309,7 @@
                     @php 
                     $oldValues = !empty($quickSettings['quick_currency']) ? $quickSettings['quick_currency'] : '' ;
                     @endphp
-                    <x-admin::form.control-group class="!mb-0">
+                    <x-admin::form.control-group class="mb-0!">
                         <x-admin::form.control-group.control
                         type="select"
                         name="quick_currency"

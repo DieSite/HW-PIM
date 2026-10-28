@@ -184,7 +184,7 @@
                     {{ $selectedOption ? 'checked' : '' }}
                 >
 
-                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-violet-700"></div>
+                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-hidden rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:inset-s-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-violet-700"></div>
             </label>
 
         @elseif ($field['type'] == 'image')
@@ -229,7 +229,7 @@
 
                     <label
                         for="{{ $name }}[delete]"
-                        class="!text-sm !font-semibold !text-gray-600 dark:!text-gray-300 cursor-pointer"
+                        class="text-sm! font-semibold! text-gray-600! dark:text-gray-300! cursor-pointer"
                     >
                         @lang('admin::app.configuration.index.delete')
                     </label>

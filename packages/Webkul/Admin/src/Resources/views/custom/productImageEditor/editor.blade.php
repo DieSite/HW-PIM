@@ -68,12 +68,12 @@
         'productShape'   => $productShape,
         'currentAssetId' => $currentAssetId,
         'masksBase'      => $masksBase,
-        'outline'        => $cfg['outline'],
+        'outline-solid'        => $cfg['outline-solid'],
         'saved'          => $product->additional['primary_image_editor'] ?? null,
     ];
 @endphp
 
-<div class="relative p-4 bg-white dark:bg-cherry-900 rounded box-shadow mt-4" id="hw-image-editor">
+<div class="relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow mt-4" id="hw-image-editor">
     <script type="application/json" id="hw-image-editor-config">@json($editorConfig)</script>
 
     <div class="flex items-center justify-between">
@@ -88,13 +88,13 @@
         <button
             type="button"
             id="hw-image-editor-open"
-            class="px-3 py-1.5 text-xs font-medium rounded border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900"
+            class="px-3 py-1.5 text-xs font-medium rounded-sm border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900"
         >
             Bewerk hoofdafbeelding
         </button>
     </div>
 
-    <p id="hw-image-editor-status" class="hidden mt-3 p-2 text-xs rounded bg-green-50 text-green-800 dark:bg-green-900 dark:text-green-100 border border-green-200 dark:border-green-700"></p>
+    <p id="hw-image-editor-status" class="hidden mt-3 p-2 text-xs rounded-sm bg-green-50 text-green-800 dark:bg-green-900 dark:text-green-100 border border-green-200 dark:border-green-700"></p>
 
     <!-- Modal -->
     <div id="hw-image-editor-modal" style="display:none; position:fixed; inset:0; z-index:99999; align-items:center; justify-content:center; background:rgba(17,24,39,0.55); padding:16px;">
@@ -111,7 +111,7 @@
             <!-- Body -->
             <div style="flex:1 1 auto; min-height:0; overflow:auto; padding:22px;">
                 <div class="flex flex-col md:flex-row gap-6">
-                    <div class="flex-shrink-0">
+                    <div class="shrink-0">
                         <div style="background:#f3f4f6; border:1px solid #eef0f2; border-radius:10px; padding:16px; display:flex; justify-content:center;">
                             <div
                                 id="hw-image-editor-stage"
@@ -133,7 +133,7 @@
                     <div class="flex-1 space-y-5" style="min-width:230px;">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1" for="hw-shape">Vorm</label>
-                            <select id="hw-shape" class="w-full text-sm rounded border border-gray-300 dark:border-gray-600 dark:bg-cherry-800 dark:text-gray-200" style="padding:8px 10px;">
+                            <select id="hw-shape" class="w-full text-sm rounded-sm border border-gray-300 dark:border-gray-600 dark:bg-cherry-800 dark:text-gray-200" style="padding:8px 10px;">
                                 @foreach ($shapes as $shapeKey => $shape)
                                     <option value="{{ $shapeKey }}">{{ $shape['label'] }}</option>
                                 @endforeach

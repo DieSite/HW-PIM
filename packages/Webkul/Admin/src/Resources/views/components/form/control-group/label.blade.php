@@ -2,7 +2,7 @@
     {{ $slot }}
 
 @if(('true' == $attributes->get('localizable') || 1 == $attributes->get('localizable')))
-    <span class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-[10px] text-gray-600 font-semibold leading-normal uppercase">
+    <span class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded-sm text-[10px] text-gray-600 font-semibold leading-normal uppercase">
         {{ $attributes->get('currentLocaleCode') ?? core()->getRequestedLocaleCode() }}
     </span>
 @endif

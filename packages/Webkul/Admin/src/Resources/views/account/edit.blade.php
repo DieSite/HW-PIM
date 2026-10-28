@@ -38,7 +38,7 @@
             <!-- Left sub Component -->
             <div class="flex flex-col gap-2 flex-1">
                 <!-- General -->
-                <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded">
+                <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                     <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                         @lang('admin::app.account.edit.general')
                     </p>
@@ -113,7 +113,7 @@
                     </x-admin::form.control-group>
 
                     <!-- TImezone -->
-                    <x-admin::form.control-group class="!mb-0">
+                    <x-admin::form.control-group class="mb-0!">
                         <x-admin::form.control-group.label class="required">
                             @lang('admin::app.account.edit.user-timezone')
                         </x-admin::form.control-group.label>
@@ -182,7 +182,7 @@
                         </x-admin::form.control-group>
 
                         <!-- Confirm Password -->
-                        <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group class="mb-0!">
                             <x-admin::form.control-group.label>
                                 @lang('admin::app.account.edit.confirm-password')
                             </x-admin::form.control-group.label>

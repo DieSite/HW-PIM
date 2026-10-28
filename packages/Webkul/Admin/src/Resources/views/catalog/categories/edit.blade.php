@@ -62,7 +62,7 @@
                     <x-slot:toggle>
                         <button
                             type="button"
-                            class="flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow appearance-none transition-all hover:!bg-violet-50 dark:hover:!bg-cherry-900 text-gray-600 dark:!text-slate-50"
+                            class="flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow-sm appearance-none transition-all hover:bg-violet-50! dark:hover:bg-cherry-900! text-gray-600 dark:text-slate-50!"
                         >
                             <span class="icon-language text-2xl"></span>
 
@@ -75,7 +75,7 @@
                     </x-slot>
 
                     <!-- Dropdown Content -->
-                    <x-slot:content class="!p-0">
+                    <x-slot:content class="p-0!">
                         @foreach ($allActiveLocales as $locale)
                             <a
                                 href="?{{ Arr::query(['locale' => $locale->code]) }}"
@@ -97,7 +97,7 @@
                 {!! view_render_event('unopim.admin.catalog.categories.edit.card.general.before', ['category' => $category]) !!}
 
                 <!-- General -->
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                         @lang('admin::app.catalog.categories.edit.general')
                     </p>
@@ -125,7 +125,7 @@
 
                 <!-- Left Section -->
                 @if (! $leftCategoryFields->isEmpty())
-                    <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                    <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                         <x-admin::categories.dynamic-fields
                             :fields="$leftCategoryFields"
                             :fieldValues="$category->additional_data"
@@ -139,7 +139,7 @@
             @if (! $isEmptyRightSection || $categoryCount)
                 <div class="flex flex-col gap-2 w-[360px] max-w-full">
                     @if ($categoryCount)
-                        <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                        <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                             <div>
                                 <!-- Parent category -->
                                 <h2 class="block mb-2.5 text-base text-gray-800 dark:text-white font-medium leading-6">

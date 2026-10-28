@@ -28,10 +28,10 @@
                             
                                 {!! view_render_event('dam.admin.main.form.directory.before') !!}
                                 <div class="flex flex-col gap-2">
-                                    <p class="text-xl text-zinc-800 dark:text-slate-50 font-bold !leading-normal">
+                                    <p class="text-xl text-zinc-800 dark:text-slate-50 font-bold leading-normal!">
                                         @lang('dam::app.admin.dam.index.title')
                                     </p>
-                                    <p class="text-sm text-zinc-600 !leading-normal dark:text-slate-300">
+                                    <p class="text-sm text-zinc-600 leading-normal! dark:text-slate-300">
                                         @lang('dam::app.admin.dam.index.description')
                                     </p>    
                                 </div>
@@ -39,7 +39,7 @@
                                 <div class="dark:bg-cherry-700 border-b dark:border-cherry-800"></div>
                                 @if (bouncer()->hasPermission('dam.directory.index'))
                                     <div class="flex flex-col gap-5">
-                                        <p class="text-base	text-zinc-800 dark:text-slate-50 font-bold !leading-normal">
+                                        <p class="text-base	text-zinc-800 dark:text-slate-50 font-bold leading-normal!">
                                             @lang('dam::app.admin.dam.index.directory.title')
                                         </p>
                                         <x-dam::tree.damdirectories />

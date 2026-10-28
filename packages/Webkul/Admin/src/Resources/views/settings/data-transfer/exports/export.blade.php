@@ -43,7 +43,7 @@
             <!-- Body Content -->
             <div class="grid gap-2.5 mt-3.5 p-5 max-xl:flex-wrap box-shadow">
                 <div
-                    class="flex flex-col gap-1.5 w-full p-3 border border-orange-200 rounded-sm"
+                    class="flex flex-col gap-1.5 w-full p-3 border border-orange-200 rounded-xs"
                 >
                     {!! view_render_event('unopim.admin.settings.data-transfer.exports.export.profile.before') !!}
 

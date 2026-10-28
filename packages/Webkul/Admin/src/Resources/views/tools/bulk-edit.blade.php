@@ -22,7 +22,7 @@
                     <input type="hidden" name="_token" :value="csrfToken">
 
                     <!-- 1. FILTER: which products -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6 mb-4">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6 mb-4">
                         <p class="text-lg font-bold mb-4 text-gray-800 dark:text-slate-50">1. Selecteer producten</p>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -65,7 +65,7 @@
                     </div>
 
                     <!-- 2. OPERATION: what to change -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6 mb-4">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6 mb-4">
                         <p class="text-lg font-bold mb-4 text-gray-800 dark:text-slate-50">2. Wijziging</p>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -114,7 +114,7 @@
                     </div>
 
                     <!-- 3. PREVIEW + APPLY -->
-                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+                    <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
                         <div class="flex items-center gap-2.5">
                             <button type="button" class="secondary-button" @click="doPreview" :disabled="loading">
                                 <span v-if="loading">Bezig…</span>

@@ -1,6 +1,24 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@config '../../../../tailwind.config.js';
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 @font-face {
     font-family: "unopim-admin";
@@ -10,13 +28,25 @@
     font-display: block;
 }
 
+/*
+  Kept outside the components layer on purpose: an !important declaration in a
+  cascade layer beats every unlayered one, which would override the icon fonts
+  that other packages (WooCommerce) set on their own `icon-*` classes.
+*/
+[class^="icon-"],
+[class*=" icon-"] {
+    /* use !important to prevent issues with browser extensions that change fonts */
+    font-family: "unopim-admin" !important;
+    line-height: 1 !important;
+}
+
 @layer components {
     ::selection {
         background-color: rgba(0, 68, 242, .2);
     }
 
     body {
-        @apply bg-violet-50 bg-opacity-50 font-inter;
+        @apply bg-violet-50/50 font-inter;
     }
 
     button:disabled {
@@ -42,21 +72,17 @@
 
     [class^="icon-"],
     [class*=" icon-"] {
-        /* use !important to prevent issues with browser extensions that change fonts */
-        font-family: "unopim-admin" !important;
         speak: never;
         font-style: normal;
         font-weight: normal;
         font-variant: normal;
         text-transform: none;
-        line-height: 1;
         @apply text-gray-600;
-        
+
         /* Better Font Rendering =========== */
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        line-height: 1 !important;
-    }    
+    }
 
     html.dark [class^="icon-"],
     html.dark [class*=" icon-"]{
@@ -69,7 +95,7 @@
     }
 
     .box-shadow {
-        @apply shadow-[0px_0px_0px_0px_rgba(0,0,0,0.03),0px_1px_1px_0px_rgba(0,0,0,0.03),0px_3px_3px_0px_rgba(0,0,0,0.03),0px_6px_4px_0px_rgba(0,0,0,0.02),0px_11px_4px_0px_rgba(0,0,0,0.00),0px_17px_5px_0px_rgba(0,0,0,0.00)] border-[1px] dark:border-gray-800;
+        @apply shadow-[0px_0px_0px_0px_rgba(0,0,0,0.03),0px_1px_1px_0px_rgba(0,0,0,0.03),0px_3px_3px_0px_rgba(0,0,0,0.03),0px_6px_4px_0px_rgba(0,0,0,0.02),0px_11px_4px_0px_rgba(0,0,0,0.00),0px_17px_5px_0px_rgba(0,0,0,0.00)] border dark:border-gray-800;
     }
 
     .overflow-wrap {
@@ -81,7 +107,7 @@
     }
      
     p {
-        @apply text-[14px] !leading-[17px];
+        @apply text-[14px] leading-[17px]!;
     }
 
     .input-group {
@@ -91,7 +117,7 @@
     input,
     textarea,
     select {
-        @apply outline-none;
+        @apply outline-hidden;
     }
 
     .primary-button {
@@ -103,7 +129,7 @@
     }
 
     .transparent-button {
-        @apply flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md text-violet-600 font-semibold whitespace-nowrap cursor-pointer marker:shadow appearance-none transition-all hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-cherry-900  dark:text-slate-50 ;
+        @apply flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md text-violet-600 font-semibold whitespace-nowrap cursor-pointer marker:shadow-sm appearance-none transition-all hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-cherry-900  dark:text-slate-50 ;
     }
 
     .danger-button {
@@ -396,11 +422,11 @@
 
     @keyframes skeleton {
         0% {
-            @apply bg-[-1250px_0];
+            background-position: -1250px 0;
         }
 
         100% {
-            @apply bg-[1250px_0];
+            background-position: 1250px 0;
         }
     }
 
@@ -409,7 +435,7 @@
     }
 
     .CodeMirror {
-        @apply !h-[calc(100vh-367px)]
+        @apply h-[calc(100vh-367px)]!
     }
 }
 
@@ -428,40 +454,40 @@
 }
 
 .tox .tox-tbtn:hover {
-    @apply !bg-violet-100;
+    @apply bg-violet-100!;
 }
 
 .multiselect__option--highlight,
 .multiselect__tag,
 .multiselect__spinner:after {
-    @apply !bg-violet-100 dark:!bg-cherry-600;
-    @apply !text-violet-600 dark:!text-slate-50;
+    @apply bg-violet-100! dark:bg-cherry-600!;
+    @apply text-violet-600! dark:text-slate-50!;
 }
 
 .multiselect__option--selected.multiselect__option--highlight,
 .multiselect__option--highlight:after {
-    @apply !bg-violet-100 dark:!bg-cherry-600;;
-    @apply !text-violet-600 dark:!text-slate-50;
+    @apply bg-violet-100! dark:bg-cherry-600!;;
+    @apply text-violet-600! dark:text-slate-50!;
 }
 
 .multiselect__option--highlight {
-    @apply !bg-violet-100 dark:!bg-cherry-600;
-    @apply !text-violet-600 dark:!text-slate-50;;
+    @apply bg-violet-100! dark:bg-cherry-600!;
+    @apply text-violet-600! dark:text-slate-50!;;
 
 }
 
 .multiselect__option--highlight.multiselect__option--selected.multiselect__option,
 .multiselect__option--selected.multiselect__option--highlight {
-    @apply !bg-violet-100 dark:!bg-cherry-600;
-    @apply !text-red-600 dark:!text-red-600;
+    @apply bg-violet-100! dark:bg-cherry-600!;
+    @apply text-red-600! dark:text-red-600!;
 }
 
 .multiselect__tag-icon:after {
-    @apply !text-violet-600 dark:!bg-cherry-600 dark:!text-slate-50;
+    @apply text-violet-600! dark:bg-cherry-600! dark:text-slate-50!;
 }
 
 .multiselect__content-wrapper, .multiselect__tags, .multiselect__input, .multiselect__single {
-    @apply bg-violet-100 dark:bg-cherry-900 dark:!text-slate-50 dark:hover:border-slate-300 dark:border-gray-600;
+    @apply bg-violet-100 dark:bg-cherry-900 dark:text-slate-50! dark:hover:border-slate-300 dark:border-gray-600;
 }
 
 

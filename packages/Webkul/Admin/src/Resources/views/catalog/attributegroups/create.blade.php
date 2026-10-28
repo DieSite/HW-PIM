@@ -60,7 +60,7 @@
                     <!-- Left sub Component -->
                     <div class="flex flex-col gap-2 flex-1 overflow-auto">
                         <!-- General -->
-                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                                 @lang('admin::app.catalog.attribute-groups.create.general')
                             </p>
@@ -96,7 +96,7 @@
                         </div>
 
                         <!-- Labels -->
-                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <div class="flex justify-between items-center p-1.5">
                                 <p class="p-2.5 text-gray-800 dark:text-white text-base font-semibold">                                    
                                     @lang('admin::app.catalog.attribute-groups.create.label')
@@ -106,7 +106,7 @@
                             <div class="px-4 pb-4">
                                 <!-- Locales Inputs -->
                                 @foreach ($locales as $locale)
-                                    <x-admin::form.control-group class="last:!mb-0">
+                                    <x-admin::form.control-group class="last:mb-0!">
                                         <x-admin::form.control-group.label>
                                             {{ $locale->name }}
                                         </x-admin::form.control-group.label>

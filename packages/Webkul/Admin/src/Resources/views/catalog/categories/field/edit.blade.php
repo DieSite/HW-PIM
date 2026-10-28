@@ -57,7 +57,7 @@
                         {!! view_render_event('unopim.admin.catalog.category_fields.edit.card.general.before', ['categoryField' => $categoryField]) !!}
 
                         <!-- Label -->
-                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <p class="mb-4 text-base text-gray-800 dark:text-white font-semibold">
                                 @lang('admin::app.catalog.category_fields.edit.general')
                             </p>
@@ -176,7 +176,7 @@
                         {!! view_render_event('unopim.admin.catalog.category_fields.edit.card.general.after', ['categoryField' => $categoryField]) !!}
 
                         <!-- Labels -->
-                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded">
+                        <div class="bg-white dark:bg-cherry-900 box-shadow rounded-sm">
                             <div class="flex justify-between items-center p-1.5">
                                 <p class="p-2.5 text-gray-800 dark:text-white text-base font-semibold">
                                     @lang('admin::app.catalog.category_fields.edit.label')
@@ -205,7 +205,7 @@
 
                         <!-- Options -->
                         <div
-                            class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded {{ in_array($categoryField->type, ['select', 'multiselect', 'checkbox', 'price']) ?: 'hidden' }}"
+                            class="p-4 bg-white dark:bg-cherry-900 box-shadow rounded-sm {{ in_array($categoryField->type, ['select', 'multiselect', 'checkbox', 'price']) ?: 'hidden' }}"
                             v-if="showSwatch"
                         >
                             <div class="flex justify-between items-center mb-3">
@@ -236,7 +236,7 @@
                                         <x-admin::table>
                                             <x-admin::table.thead class="text-sm font-medium dark:bg-gray-800">
                                                 <x-admin::table.thead.tr>
-                                                    <x-admin::table.th class="!p-0"></x-admin::table.th>
+                                                    <x-admin::table.th class="p-0!"></x-admin::table.th>
     
                                                     <!-- Swatch Select -->
                                                     <x-admin::table.th v-if="showSwatch && (swatchType == 'color' || swatchType == 'image')">
@@ -287,7 +287,7 @@
                                                         >
     
                                                         <!-- Draggable Icon -->
-                                                        <x-admin::table.td class="!px-0 text-center">
+                                                        <x-admin::table.td class="px-0! text-center">
                                                             <i class="icon-drag text-2xl transition-all group-hover:text-gray-700 cursor-grab"></i>
     
                                                             <input
@@ -328,7 +328,7 @@
                                                         </x-admin::table.td>
     
                                                         <!-- Actions Button -->
-                                                        <x-admin::table.td class="!px-0">
+                                                        <x-admin::table.td class="px-0!">
                                                             <span
                                                                 class="icon-edit p-1.5 rounded-md text-2xl cursor-pointer transition-all hover:bg-violet-100 dark:hover:bg-gray-800 max-sm:place-self-center"
                                                                 @click="editOptions(element)"
@@ -452,7 +452,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Is Required -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! select-none">
                                     @php
                                         $selectedOption = old('is_required') ?? $categoryField->is_required
                                     @endphp
@@ -477,7 +477,7 @@
                                 </x-admin::form.control-group>
 
                                 <!-- Is Unique -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center opacity-70 !mb-0 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center opacity-70 mb-0! select-none">
                                     <x-admin::form.control-group.control
                                         type="checkbox"
                                         id="is_unique"
@@ -512,7 +512,7 @@
 
                             <x-slot:content>
                                 <!-- Value Per Locale -->
-                                <x-admin::form.control-group class="flex gap-2.5 items-center !mb-2 opacity-70 select-none">
+                                <x-admin::form.control-group class="flex gap-2.5 items-center mb-2! opacity-70 select-none">
                                     @php
                                         $valuePerLocale = old('value_per_locale') ?? $categoryField->value_per_locale;
                                     @endphp

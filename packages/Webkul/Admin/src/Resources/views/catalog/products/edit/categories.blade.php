@@ -6,7 +6,7 @@
 {!! view_render_event('unopim.admin.catalog.product.edit.form.categories.before', ['product' => $product]) !!}
 
 <!-- Panel -->
-<div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+<div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
     <!-- Panel Header -->
     <p class="flex justify-between text-base text-gray-800 dark:text-white font-semibold mb-4">
         @lang('admin::app.catalog.products.edit.categories.title')

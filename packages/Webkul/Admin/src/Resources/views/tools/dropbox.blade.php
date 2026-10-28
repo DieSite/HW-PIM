@@ -10,7 +10,7 @@
     </div>
 
     <div class="flex flex-col gap-4 mt-3.5">
-        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-sm p-6">
+        <div class="bg-white dark:bg-cherry-800 rounded-lg shadow-xs p-6">
             <x-admin::flash-group />
 
             <p class="text-gray-600 dark:text-gray-300 mb-6">

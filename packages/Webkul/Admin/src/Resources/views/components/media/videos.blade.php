@@ -28,7 +28,7 @@
                 <!-- Upload Video Button -->
 
                 <label
-                    class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded cursor-pointer transition-all hover:border-gray-400 dark:invert dark:mix-blend-exclusion"
+                    class="grid justify-items-center items-center w-full h-[120px] max-w-[210px] max-h-[120px] border border-dashed dark:border-gray-300 rounded-sm cursor-pointer transition-all hover:border-gray-400 dark:invert dark:mix-blend-exclusion"
                     :class="[errors['videos.files[0]'] ? 'border border-red-500' : 'border-gray-300']"
                     :for="$.uid + '_videoInput'"
                     v-if="allowMultiple || videos.length == 0"
@@ -81,7 +81,7 @@
     </script>
 
     <script type="text/x-template" id="v-media-video-item-template">
-        <div class="grid justify-items-center h-[120px] max-w-[210px] min-w-[210px] max-h-[120px] relative border border-dashed border-gray-300 dark:border-cherry-800 rounded overflow-hidden transition-all hover:border-gray-400 group">
+        <div class="grid justify-items-center h-[120px] max-w-[210px] min-w-[210px] max-h-[120px] relative border border-dashed border-gray-300 dark:border-cherry-800 rounded-sm overflow-hidden transition-all hover:border-gray-400 group">
             <!-- Video Preview -->
             <video
                 class="w-[210px] h-[120px] object-cover"

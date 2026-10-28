@@ -127,7 +127,7 @@
                         <button
                             type="button"
                             class="
-                            flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow appearance-none transition-all hover:!bg-violet-50 dark:hover:!bg-cherry-900 text-gray-600 dark:!text-slate-50"
+                            flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow-sm appearance-none transition-all hover:bg-violet-50! dark:hover:bg-cherry-900! text-gray-600 dark:text-slate-50!"
                         >
                             <span class="icon-channel   text-2xl"></span>
 
@@ -140,7 +140,7 @@
                     </x-slot>
 
                     <!-- Dropdown Content -->
-                    <x-slot:content class="!p-0">
+                    <x-slot:content class="p-0!">
                         @foreach ($channels as $channel)
                             <a
                                 href="?{{ Arr::query(['channel' => $channel->code, 'locale' => $currentLocale?->code]) }}"
@@ -158,7 +158,7 @@
                     <x-slot:toggle>
                         <button
                             type="button"
-                            class="flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow appearance-none transition-all hover:!bg-violet-50 dark:hover:!bg-cherry-900 text-gray-600 dark:!text-slate-50 "
+                            class="flex gap-x-1 items-center px-3 py-1.5 border-2 border-transparent rounded-md font-semibold whitespace-nowrap cursor-pointer marker:shadow-sm appearance-none transition-all hover:bg-violet-50! dark:hover:bg-cherry-900! text-gray-600 dark:text-slate-50! "
                         >
                             <span class="icon-language text-2xl"></span>
 
@@ -171,7 +171,7 @@
                     </x-slot>
 
                     <!-- Dropdown Content -->
-                    <x-slot:content class="!p-0">
+                    <x-slot:content class="p-0!">
                         @foreach ($currentChannel->locales->sortBy('name') as $locale)
                             <a
                                 href="?{{ Arr::query(['channel' => $currentChannel->code, 'locale' => $locale->code]) }}"
@@ -206,7 +206,7 @@
                         @if (count($customAttributes))
                             {!! view_render_event('unopim.admin.catalog.product.edit.form.' . $group->code . '.before', ['product' => $product]) !!}
 
-                            <div class="relative p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                            <div class="relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                                 <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                                     {{ $groupLabel }}
                                 </p>
@@ -236,7 +236,7 @@
             </div>
             <div class="right-column flex flex-col gap-2 w-[360px] max-w-full max-sm:w-full">
                 @if(is_null($product->parent))
-                    <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                    <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                         <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                             Status
                         </p>
@@ -254,7 +254,7 @@
                 @endif
 
                 <!-- Add Bol.com Integration Box -->
-                <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                         Bol.com
                     </p>
@@ -286,7 +286,7 @@
 
                         @if(isset($product->bolComCredentials->first()->pivot->reference) && $product->bolComCredentials->first()->pivot->reference)
                             <div id="bol_com_delete_warning"
-                                 class="hidden text-xs text-orange-500 dark:text-orange-400 mt-1 mb-2 p-2 bg-orange-50 dark:bg-opacity-10 border border-orange-200 dark:border-orange-800 rounded">
+                                 class="hidden text-xs text-orange-500 dark:text-orange-400 mt-1 mb-2 p-2 bg-orange-50 dark:bg-opacity-10 border border-orange-200 dark:border-orange-800 rounded-sm">
                                 <strong>Let op:</strong> Bij het uitschakelen van de Bol.com synchronisatie en opslaan
                                 wordt dit product verwijderd van Bol.com.
                             </div>
@@ -498,11 +498,11 @@
         --}}
         <div id="ai-texts-modal" class="hidden">
             <div
-                class="fixed inset-0 bg-gray-500 bg-opacity-50 z-[10001]"
+                class="fixed inset-0 bg-gray-500 bg-opacity-50 z-10001"
                 onclick="hideAiTextsModal()"
             ></div>
 
-            <div class="fixed inset-0 z-[10002] overflow-y-auto">
+            <div class="fixed inset-0 z-10002 overflow-y-auto">
                 <div class="flex min-h-full items-center justify-center p-4">
                     <div class="w-full max-w-[900px] max-h-[96%] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 box-shadow p-6">
                         <p class="text-lg font-bold text-gray-800 dark:text-slate-50">Voorstel van de AI</p>
@@ -547,11 +547,11 @@
         --}}
         <div id="cross-sell-modal" class="hidden">
             <div
-                class="fixed inset-0 bg-gray-500 bg-opacity-50 z-[10001]"
+                class="fixed inset-0 bg-gray-500 bg-opacity-50 z-10001"
                 onclick="hideCrossSellModal()"
             ></div>
 
-            <div class="fixed inset-0 z-[10002] overflow-y-auto">
+            <div class="fixed inset-0 z-10002 overflow-y-auto">
                 <div class="flex min-h-full items-center justify-center p-4">
                     <div class="w-full max-w-[700px] max-h-[96%] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 box-shadow p-6">
                         <p class="text-lg font-bold text-gray-800 dark:text-slate-50">Kleurvarianten koppelen</p>

@@ -52,7 +52,7 @@
                             {!! view_render_event('unopim.admin.settings.roles.create.card.access_control.before') !!}
 
                             <!-- Access Control Input Fields -->
-                            <div class="p-4 bg-white dark:bg-cherry-900 rounded box-shadow">
+                            <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                                 <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                                     @lang('admin::app.settings.roles.create.access-control')
                                 </p>
@@ -144,7 +144,7 @@
                                     </x-admin::form.control-group>
 
                                     <!-- Description -->
-                                    <x-admin::form.control-group class="!mb-0">
+                                    <x-admin::form.control-group class="mb-0!">
                                         <x-admin::form.control-group.label class="required">
                                             @lang('admin::app.settings.roles.create.description')
                                         </x-admin::form.control-group.label>
