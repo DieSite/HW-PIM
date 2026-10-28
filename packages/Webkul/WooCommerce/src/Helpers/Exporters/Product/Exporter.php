@@ -4,6 +4,7 @@ namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
 use App\Models\Product;
 use App\Services\AfwerkingOptieService;
+use App\Services\AndereVormenLinker;
 use App\Services\DefaultProductImage;
 use App\Services\DeliveryTimeService;
 use Illuminate\Support\Arr;
@@ -478,6 +479,15 @@ class Exporter extends AbstractExporter
             if (! is_null($afwerkingen)) {
                 $meta[] = ['key' => 'afwerkingsopties', 'value' => json_encode($afwerkingen, JSON_UNESCAPED_UNICODE)];
             }
+
+            /**
+             * The same rug in its other shapes (andere_vormen), as comma
+             * separated SKUs the shop looks up itself: the product page links
+             * the round and the rectangular version to each other. Always
+             * sent: WooCommerce keeps a meta key the request leaves out, so an
+             * unlinked rug gets an empty value.
+             */
+            $meta[] = ['key' => AndereVormenLinker::SHOP_META_KEY, 'value' => AndereVormenLinker::shopValue($item)];
 
             $formatted['meta_data'] = $meta;
 

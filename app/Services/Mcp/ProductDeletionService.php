@@ -4,6 +4,7 @@ namespace App\Services\Mcp;
 
 use App\Exceptions\ProductUpsertException;
 use App\Mcp\AdminPermission;
+use App\Observers\AndereVormenMirror;
 use App\Services\DeliveryTimeService;
 use App\Services\ProductService;
 use Illuminate\Support\Collection;
@@ -22,13 +23,19 @@ use Webkul\User\Models\Admin;
  * search index.
  *
  * A parent is only deleted together with its variants when that is asked for
- * explicitly. Other products that list a deleted SKU as a cross-sell lose that
- * reference, and the parent of a deleted variant is re-synced so the shop's
+ * explicitly. Other products that list a deleted SKU as a cross-sell or as
+ * another shape lose that reference, and the parent of a deleted variant is re-synced so the shop's
  * size list follows.
  */
 class ProductDeletionService
 {
     public const MAX_ITEMS = 50;
+
+    /** Association lists a deleted SKU is taken out of. */
+    private const CLEANED_ASSOCIATIONS = [
+        AbstractType::CROSS_SELLS_ASSOCIATION_KEY,
+        AbstractType::ANDERE_VORMEN_ASSOCIATION_KEY,
+    ];
 
     public function __construct(
         private ProductRepository $productRepository,
@@ -164,16 +171,30 @@ class ProductDeletionService
     {
         $touched = [];
 
-        foreach ($this->crossSellingProducts($skus) as $product) {
-            $values = DeliveryTimeService::decodeValues($product->values);
-            $current = (array) ($values[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] ?? []);
+        // Each list is cleaned on every product that has it, so the mirror
+        // has nothing to add.
+        AndereVormenMirror::paused(function () use ($skus, &$touched): void {
+            foreach ($this->crossSellingProducts($skus) as $product) {
+                $values = DeliveryTimeService::decodeValues($product->values);
+                $changed = [];
 
-            $values[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] = array_values(array_diff($current, $skus));
-            $product->values = $values;
-            $product->save();
+                foreach (self::CLEANED_ASSOCIATIONS as $association) {
+                    $current = (array) ($values[AbstractType::ASSOCIATION_VALUES_KEY][$association] ?? []);
+                    $left = array_values(array_diff($current, $skus));
 
-            $touched[$product->id] = ['product' => $product, 'action' => 'updated', 'changed' => ['associations.cross_sells']];
-        }
+                    if ($left !== $current) {
+                        // A group of one is no group.
+                        $values[AbstractType::ASSOCIATION_VALUES_KEY][$association] = $association === AbstractType::ANDERE_VORMEN_ASSOCIATION_KEY && count($left) < 2 ? [] : $left;
+                        $changed[] = "associations.{$association}";
+                    }
+                }
+
+                $product->values = $values;
+                $product->save();
+
+                $touched[$product->id] = ['product' => $product, 'action' => 'updated', 'changed' => $changed];
+            }
+        });
 
         return $touched;
     }
@@ -188,7 +209,8 @@ class ProductDeletionService
     }
 
     /**
-     * Parent and standalone products that list one of the SKUs as cross-sell.
+     * Parent and standalone products that list one of the SKUs as cross-sell
+     * or as another shape.
      *
      * @param  list<string>  $skus
      * @return Collection<int, Product>
@@ -200,7 +222,9 @@ class ProductDeletionService
             ->whereNotIn('sku', $skus)
             ->where(function ($query) use ($skus): void {
                 foreach ($skus as $sku) {
-                    $query->orWhereRaw("JSON_CONTAINS(JSON_EXTRACT(`values`, '$.associations.cross_sells'), ?)", [json_encode($sku)]);
+                    foreach (self::CLEANED_ASSOCIATIONS as $association) {
+                        $query->orWhereRaw("JSON_CONTAINS(JSON_EXTRACT(`values`, '$.associations.{$association}'), ?)", [json_encode($sku)]);
+                    }
                 }
             })
             ->orderBy('sku')

@@ -8,6 +8,7 @@ use App\Jobs\SyncCategoryToWooCommerceJob;
 use App\Models\Product;
 use App\Monitor\AlertFailedJob;
 use App\Monitor\HorizonQueueStats;
+use App\Observers\AndereVormenMirror;
 use App\Services\AI\AiSettings;
 use App\Services\DeliveryTimeService;
 use Diesite\Monitor\Metrics\QueueStats;
@@ -52,6 +53,11 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Schema::defaultStringLength(191);
+
+        // Webkul code saves the package model, app code the subclass; Eloquent
+        // fires model events per class, so both are observed.
+        Product::observe(AndereVormenMirror::class);
+        WebkulProduct::observe(AndereVormenMirror::class);
 
         /**
          * OAuth consent screen for MCP clients (Passport 13 ships no views).

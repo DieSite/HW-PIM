@@ -182,6 +182,12 @@ return [
                         'title'      => 'Cross-sell producten',
                     ],
 
+                    'andere-vormen' => [
+                        'empty-info' => 'Voeg hetzelfde kleed in een andere vorm toe.',
+                        'info'       => 'Hetzelfde kleed in een andere vorm (rond, organic, ...). Wordt aan beide kanten vastgelegd; de webshop linkt de vormen naar elkaar.',
+                        'title'      => 'Andere vormen',
+                    ],
+
                     'add-btn'           => 'Toevoegen',
                     'delete'            => 'Verwijderen',
                     'empty-info'        => 'Toevoegen :type producten terecht.',

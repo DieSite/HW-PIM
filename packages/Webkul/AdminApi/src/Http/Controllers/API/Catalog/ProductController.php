@@ -116,6 +116,10 @@ class ProductController extends ApiController
             ValueSetter::setRelatedAssociation($data[ProductAbstractType::PRODUCT_VALUES_KEY][ProductAbstractType::ASSOCIATION_VALUES_KEY][ProductAbstractType::RELATED_ASSOCIATION_KEY]);
         }
 
+        if (isset($data[ProductAbstractType::PRODUCT_VALUES_KEY][ProductAbstractType::ASSOCIATION_VALUES_KEY][ProductAbstractType::ANDERE_VORMEN_ASSOCIATION_KEY])) {
+            ValueSetter::setAndereVormenAssociation($data[ProductAbstractType::PRODUCT_VALUES_KEY][ProductAbstractType::ASSOCIATION_VALUES_KEY][ProductAbstractType::ANDERE_VORMEN_ASSOCIATION_KEY]);
+        }
+
         $data['values'] = ValueSetter::getValues();
 
         $product->values = ValueSetter::getValues();

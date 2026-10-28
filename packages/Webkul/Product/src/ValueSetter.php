@@ -66,6 +66,16 @@ class ValueSetter
     }
 
     /**
+     * Sets the andere vormen association: the same rug in its other shapes.
+     *
+     * @param  array  $data  SKUs of the group.
+     */
+    public function setAndereVormenAssociation(array $data)
+    {
+        $this->values[ProductAbstractType::ASSOCIATION_VALUES_KEY][ProductAbstractType::ANDERE_VORMEN_ASSOCIATION_KEY] = $data;
+    }
+
+    /**
      * Sets related association product values.
      *
      * @param  array  $data  Related association product values.

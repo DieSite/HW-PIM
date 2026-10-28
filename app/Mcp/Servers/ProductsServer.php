@@ -39,6 +39,7 @@ use Laravel\Mcp\Server\Attributes\Version;
     Structure:
     - get-categories lists the categories (brands, colours, shapes); create-categories adds one, also in WooCommerce. add-attribute-options adds a select option such as a new maatgroep.
     - Cross-sells (values.associations.cross_sells, parents only) are written with upsert-products. search-products with cross_sell_problems: true finds broken lists; get-products reports cross_sell_problems per parent.
+    - Other shapes (values.associations.andere_vormen, parents only): the same rug as another parent per shape (rechthoek, rond, organic, ...). Written with upsert-products and kept mutual; the shop links the round and rectangular versions to each other.
     - A variant's axis values (onderkleed, maatgroep) can be changed with upsert-products. delete-products removes products and variants, also from the site; prefer status false when a product may come back.
 
     Photos:

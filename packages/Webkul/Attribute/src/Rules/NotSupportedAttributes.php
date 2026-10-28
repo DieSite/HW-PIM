@@ -19,6 +19,7 @@ class NotSupportedAttributes implements ValidationRule
         'up_sells',
         'cross_sells',
         'related_products',
+        'andere_vormen',
         'status',
     ];
 

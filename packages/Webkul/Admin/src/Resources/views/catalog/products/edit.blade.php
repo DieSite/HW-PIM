@@ -473,6 +473,8 @@
                         'upSellAssociations'    => $product->values['associations']['up_sells'] ?? [],
                         'crossSellAssociations' => $product->values['associations']['cross_sells'] ?? [],
                         'relatedAssociations'   => $product->values['associations']['related_products'] ?? [],
+                        // The stored group includes the product itself; it is not listed.
+                        'andereVormenAssociations' => array_values(array_diff($product->values['associations']['andere_vormen'] ?? [], [$product->sku])),
                     ])
                 @endif
 

@@ -206,6 +206,7 @@ class Importer extends AbstractImporter
         'related_products',
         'cross_sells',
         'up_sells',
+        'andere_vormen',
         'configurable_attributes',
         'associated_skus',
     ];

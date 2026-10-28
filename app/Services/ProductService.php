@@ -7,9 +7,11 @@ use App\Jobs\SyncProductWithBolComJob;
 use App\Models\BolComCredential;
 use App\Services\Bol\BolProductValidator;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
+use Webkul\Product\Type\AbstractType;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 class ProductService
@@ -198,6 +200,26 @@ class ProductService
         }
 
         return is_array($values) ? $values : [];
+    }
+
+    /**
+     * Replaces one association list (cross_sells, andere_vormen) on a product.
+     * The shop always follows: a link that only exists in the PIM does nothing
+     * in the store.
+     *
+     * @param  list<string>  $skus
+     */
+    public function setAssociation(Product $product, string $association, array $skus): void
+    {
+        $values = $this->productValues($product);
+        $values[AbstractType::ASSOCIATION_VALUES_KEY][$association] = array_values($skus);
+
+        $product->values = $values;
+        $product->save();
+
+        // Inside a transaction (an MCP dry run) only once it commits, so a
+        // rolled back change never reaches the shop.
+        DB::afterCommit(fn () => Event::dispatch('catalog.product.update.after', $product));
     }
 
     public function triggerWCSyncForParent(Product $product): void

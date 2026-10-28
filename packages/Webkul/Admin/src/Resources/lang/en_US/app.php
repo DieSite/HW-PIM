@@ -183,6 +183,12 @@ return [
                         'title'      => 'Cross-Sell Products',
                     ],
 
+                    'andere-vormen' => [
+                        'empty-info' => 'Add the same rug in another shape.',
+                        'info'       => 'The same rug in another shape (round, organic, ...). Stored on both sides; the web shop links the shapes to each other.',
+                        'title'      => 'Other shapes',
+                    ],
+
                     'add-btn'           => 'Add',
                     'delete'            => 'Delete',
                     'empty-info'        => 'To add :type products on a go.',

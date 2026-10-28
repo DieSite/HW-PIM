@@ -12,6 +12,7 @@ class ProductAssociationsValidator extends ValuesValidator
         AbstractType::UP_SELLS_ASSOCIATION_KEY,
         AbstractType::CROSS_SELLS_ASSOCIATION_KEY,
         AbstractType::RELATED_ASSOCIATION_KEY,
+        AbstractType::ANDERE_VORMEN_ASSOCIATION_KEY,
     ];
 
     /**

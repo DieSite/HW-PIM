@@ -2,6 +2,7 @@
     'upSellAssociations'    => [],
     'crossSellAssociations' => [],
     'relatedAssociations'   => [],
+    'andereVormenAssociations' => [],
 ])
 
 {!! view_render_event('unopim.admin.catalog.product.edit.form.links.before', ['product' => $product]) !!}
@@ -45,6 +46,14 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Sent even when the list is empty, so removing the last product sticks -->
+                    <input
+                        type="hidden"
+                        v-if="type.clearable"
+                        :name="type.key + '[]'"
+                        value=""
+                    />
 
                     <!-- Product Listing -->
                     <div
@@ -162,6 +171,13 @@
                             title: `@lang('admin::app.catalog.products.edit.links.cross-sells.title')`,
                             info: `@lang('admin::app.catalog.products.edit.links.cross-sells.info')`,
                             empty_info: `@lang('admin::app.catalog.products.edit.links.cross-sells.empty-info')`,
+                        },
+                        {
+                            key: 'andere_vormen',
+                            title: `@lang('admin::app.catalog.products.edit.links.andere-vormen.title')`,
+                            info: `@lang('admin::app.catalog.products.edit.links.andere-vormen.info')`,
+                            empty_info: `@lang('admin::app.catalog.products.edit.links.andere-vormen.empty-info')`,
+                            clearable: true,
                         }
                     ],
 
@@ -170,7 +186,9 @@
 
                         'cross_sells': @json($product->whereIn('sku', $crossSellAssociations)->get()->map(fn ($item) => $item->normalizeWithImage())),
 
-                        'related_products': @json($product->whereIn('sku', $relatedAssociations)->get()->map(fn ($item) => $item->normalizeWithImage()))
+                        'related_products': @json($product->whereIn('sku', $relatedAssociations)->get()->map(fn ($item) => $item->normalizeWithImage())),
+
+                        'andere_vormen': @json($product->whereIn('sku', $andereVormenAssociations)->get()->map(fn ($item) => $item->normalizeWithImage()))
                     },
 
                     queryParams: {

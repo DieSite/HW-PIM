@@ -94,7 +94,7 @@ class ProductUpsertService
 
             foreach ($items as $index => $item) {
                 if (isset($item['values'][AbstractType::ASSOCIATION_VALUES_KEY]) && $results[$index]['action'] !== 'error') {
-                    $results[$index] = $this->applyCrossSells($results[$index], $item, $touched);
+                    $results[$index] = $this->applyAssociations($results[$index], $item, $touched);
                 }
             }
         } finally {
@@ -188,7 +188,7 @@ class ProductUpsertService
     private function applyToProduct(string $sku, array $item, Admin $admin, array $batchParentSkus = []): array
     {
         $patch = $this->normalisePatch($sku, $item['values'] ?? []);
-        $crossSells = $patch[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] ?? null;
+        $associations = $patch[AbstractType::ASSOCIATION_VALUES_KEY] ?? [];
         unset($patch[AbstractType::ASSOCIATION_VALUES_KEY]);
 
         $product = Product::query()->where('sku', $sku)->first();
@@ -208,8 +208,8 @@ class ProductUpsertService
 
         $this->assertWritable($product, $patch, $action === 'created');
 
-        if ($crossSells !== null) {
-            $this->assertCrossSells($product, $crossSells, $batchParentSkus);
+        foreach ($associations as $association => $list) {
+            $this->assertAssociation($product, $association, $list, $batchParentSkus);
         }
 
         $this->valuesValidator->validate(data: $this->withoutNulls($patch), productId: $product->id);
@@ -440,22 +440,22 @@ class ProductUpsertService
     }
 
     /**
-     * Cross-sells point at other parent (or standalone) products: WooCommerce
-     * shows products, not variations, as cross-sells.
+     * Cross-sells and other shapes point at other parent (or standalone)
+     * products: the shop links products, not variations.
      *
-     * @param  list<string>  $crossSells
+     * @param  list<string>  $list
      * @param  list<string>  $batchParentSkus
      */
-    private function assertCrossSells(Product $product, array $crossSells, array $batchParentSkus): void
+    private function assertAssociation(Product $product, string $association, array $list, array $batchParentSkus): void
     {
         if ($product->parent_id) {
-            throw new ProductUpsertException("Cross-sells belong on the parent {$product->parent->sku}, not on a variant.");
+            throw new ProductUpsertException("associations.{$association}: these belong on the parent {$product->parent->sku}, not on a variant.");
         }
 
-        $found = Product::query()->with('parent:id,sku')->whereIn('sku', $crossSells)->get(['id', 'sku', 'parent_id'])->keyBy('sku');
+        $found = Product::query()->with('parent:id,sku')->whereIn('sku', $list)->get(['id', 'sku', 'parent_id'])->keyBy('sku');
         $errors = [];
 
-        foreach ($crossSells as $sku) {
+        foreach ($list as $sku) {
             $target = $found->get($sku);
 
             if ($target?->parent_id) {
@@ -466,36 +466,47 @@ class ProductUpsertService
         }
 
         if ($errors) {
-            throw new ProductUpsertException('associations.cross_sells: '.implode(' ', $errors));
+            throw new ProductUpsertException("associations.{$association}: ".implode(' ', $errors));
         }
     }
 
     /**
-     * Second pass: writes the cross-sells of an item whose values were
+     * Second pass: writes the association lists of an item whose values were
      * applied. A reference to a batch product that failed is left out and
-     * reported.
+     * reported. andere_vormen is made mutual on saving (AndereVormenMirror);
+     * the other members are synced by the mirror, not reported here.
      *
      * @param  array<string, mixed>  $result
      * @param  array<string, mixed>  $item
      * @param  array<int, array{product: Product, action: string, changed: list<string>}>  $touched
      * @return array<string, mixed>
      */
-    private function applyCrossSells(array $result, array $item, array &$touched): array
+    private function applyAssociations(array $result, array $item, array &$touched): array
     {
-        $sku = $result['sku'];
-        $wanted = $this->normalisePatch($sku, $item['values'])[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] ?? null;
-
-        if ($wanted === null) {
-            return $result;
+        foreach ($this->normalisePatch($result['sku'], $item['values'])[AbstractType::ASSOCIATION_VALUES_KEY] ?? [] as $association => $wanted) {
+            $result = $this->applyAssociation($result, $association, $wanted, $touched);
         }
 
-        $outcome = DB::transaction(function () use ($sku, $wanted): array {
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     * @param  list<string>  $wanted
+     * @param  array<int, array{product: Product, action: string, changed: list<string>}>  $touched
+     * @return array<string, mixed>
+     */
+    private function applyAssociation(array $result, string $association, array $wanted, array &$touched): array
+    {
+        $sku = $result['sku'];
+
+        $outcome = DB::transaction(function () use ($sku, $association, $wanted): array {
             $product = Product::query()->where('sku', $sku)->firstOrFail();
             $existing = Product::query()->whereIn('sku', $wanted)->whereNull('parent_id')->pluck('sku')->all();
 
             $before = DeliveryTimeService::decodeValues($product->values);
             $after = $before;
-            $after[AbstractType::ASSOCIATION_VALUES_KEY]['cross_sells'] = array_values(array_intersect($wanted, $existing));
+            $after[AbstractType::ASSOCIATION_VALUES_KEY][$association] = array_values(array_intersect($wanted, $existing));
 
             $changes = $this->diff($before, $after);
 
@@ -508,7 +519,7 @@ class ProductUpsertService
         });
 
         if ($outcome['skipped'] !== []) {
-            $result['warnings'][] = 'associations.cross_sells: left out '.implode(', ', $outcome['skipped']).' because '.(count($outcome['skipped']) === 1 ? 'it was' : 'they were').' not created in this batch.';
+            $result['warnings'][] = "associations.{$association}: left out ".implode(', ', $outcome['skipped']).' because '.(count($outcome['skipped']) === 1 ? 'it was' : 'they were').' not created in this batch.';
         }
 
         if ($outcome['changes'] === []) {
@@ -619,30 +630,40 @@ class ProductUpsertService
     }
 
     /**
-     * Only cross_sells reach the shop, so only they can be written. The list
-     * replaces the current one; the product itself and duplicates are dropped.
+     * The lists that reach the shop: cross_sells (the other colours) and
+     * andere_vormen (the other shapes). A sent list replaces the current one;
+     * the product itself and duplicates are dropped (andere_vormen gets the
+     * product back on saving, see AndereVormenMirror).
      *
-     * @return array{cross_sells?: list<string>}
+     * @return array{cross_sells?: list<string>, andere_vormen?: list<string>}
      */
     private function normaliseAssociations(string $sku, mixed $associations): array
     {
-        if (! is_array($associations) || array_diff(array_keys($associations), [AbstractType::CROSS_SELLS_ASSOCIATION_KEY])) {
-            throw new ProductUpsertException('values.associations only takes "cross_sells" (up_sells and related_products are not shown on the site).');
+        $writable = [AbstractType::CROSS_SELLS_ASSOCIATION_KEY, AbstractType::ANDERE_VORMEN_ASSOCIATION_KEY];
+
+        if (! is_array($associations) || array_diff(array_keys($associations), $writable)) {
+            throw new ProductUpsertException('values.associations only takes "cross_sells" and "andere_vormen" (up_sells and related_products are not shown on the site).');
         }
 
-        if (! array_key_exists(AbstractType::CROSS_SELLS_ASSOCIATION_KEY, $associations)) {
-            return [];
+        $normalised = [];
+
+        foreach ($writable as $key) {
+            if (! array_key_exists($key, $associations)) {
+                continue;
+            }
+
+            $list = $associations[$key] ?? [];
+
+            if (! is_array($list) || ! array_is_list($list) || array_filter($list, fn (mixed $value): bool => ! is_string($value))) {
+                throw new ProductUpsertException("values.associations.{$key} must be a list of SKUs.");
+            }
+
+            $list = array_filter(array_map('trim', $list), fn (string $value): bool => $value !== '' && $value !== $sku);
+
+            $normalised[$key] = array_values(array_unique($list));
         }
 
-        $list = $associations[AbstractType::CROSS_SELLS_ASSOCIATION_KEY] ?? [];
-
-        if (! is_array($list) || ! array_is_list($list) || array_filter($list, fn (mixed $value): bool => ! is_string($value))) {
-            throw new ProductUpsertException('values.associations.cross_sells must be a list of SKUs.');
-        }
-
-        $list = array_filter(array_map('trim', $list), fn (string $value): bool => $value !== '' && $value !== $sku);
-
-        return [AbstractType::CROSS_SELLS_ASSOCIATION_KEY => array_values(array_unique($list))];
+        return $normalised;
     }
 
     /**

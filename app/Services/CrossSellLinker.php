@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Product;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Event;
 use RuntimeException;
 use Webkul\Product\Type\AbstractType;
 
@@ -158,13 +157,7 @@ class CrossSellLinker
         }
 
         foreach ($products as $product) {
-            $values = $this->products->productValues($product);
-            $values[AbstractType::ASSOCIATION_VALUES_KEY][AbstractType::CROSS_SELLS_ASSOCIATION_KEY] = $skus->all();
-
-            $product->values = $values;
-            $product->save();
-
-            Event::dispatch('catalog.product.update.after', $product);
+            $this->products->setAssociation($product, AbstractType::CROSS_SELLS_ASSOCIATION_KEY, $skus->all());
         }
 
         return $products;

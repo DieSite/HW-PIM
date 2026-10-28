@@ -104,6 +104,7 @@ class Exporter extends AbstractExporter
                         'sku'                     => $rowData['sku'],
                         'categories'              => $this->getCategories($rowData),
                         'cross_sells'             => $this->getAssociations($rowData, 'cross_sells'),
+                        'andere_vormen'           => $this->getAssociations($rowData, 'andere_vormen'),
                     ], $values);
 
                     $products[] = $data;

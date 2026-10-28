@@ -33,10 +33,18 @@ abstract class AbstractType
 
     const CROSS_SELLS_ASSOCIATION_KEY = 'cross_sells';
 
+    /**
+     * The same rug in its other shapes (round, organic, ...): the SKUs of the
+     * whole group, the product itself included, on every member alike. Kept
+     * mutual by AndereVormenMirror.
+     */
+    const ANDERE_VORMEN_ASSOCIATION_KEY = 'andere_vormen';
+
     const ASSOCIATION_SECTIONS = [
         self::RELATED_ASSOCIATION_KEY,
         self::UP_SELLS_ASSOCIATION_KEY,
         self::CROSS_SELLS_ASSOCIATION_KEY,
+        self::ANDERE_VORMEN_ASSOCIATION_KEY,
     ];
 
     /**
@@ -176,6 +184,15 @@ abstract class AbstractType
 
         if (! empty($data[self::RELATED_ASSOCIATION_KEY])) {
             $productValues[self::ASSOCIATION_VALUES_KEY][self::RELATED_ASSOCIATION_KEY] = $data[self::RELATED_ASSOCIATION_KEY];
+        }
+
+        // Unlike the lists above, this one can be emptied: the edit form always
+        // sends the key, with an empty marker when no product is left.
+        if (array_key_exists(self::ANDERE_VORMEN_ASSOCIATION_KEY, $data)) {
+            $productValues[self::ASSOCIATION_VALUES_KEY][self::ANDERE_VORMEN_ASSOCIATION_KEY] = array_values(array_unique(array_filter(
+                array_map('trim', (array) $data[self::ANDERE_VORMEN_ASSOCIATION_KEY]),
+                fn (string $sku): bool => $sku !== ''
+            )));
         }
 
         if (! isset($productValues[self::COMMON_VALUES_KEY]['sku'])) {
