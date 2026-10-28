@@ -75,6 +75,38 @@ it('resolves the uploaded default image to a url', function () {
         ->and(app(DefaultProductImage::class)->url())->toBe(Storage::disk(config('filesystems.default'))->url($path));
 });
 
+it('refuses an upload PHP dropped for being too large instead of reporting success', function () {
+    $this->actingAs(Admin::factory()->create(['password' => Hash::make('password')]), 'admin');
+
+    $configItem = collect(config('core'))->firstWhere('key', 'product_images.settings.general');
+
+    /**
+     * What PHP hands over when the file exceeds upload_max_filesize: an
+     * upload with an error code and no stored file.
+     */
+    $tooLarge = new UploadedFile(
+        UploadedFile::fake()->image('geen-afbeelding.png')->getPathname(),
+        'geen-afbeelding.png',
+        'image/png',
+        UPLOAD_ERR_INI_SIZE,
+        true
+    );
+
+    $this->from(route('admin.configuration.edit', ['product_images', 'settings']))
+        ->post(route('admin.configuration.store'), [
+            'product_images' => ['settings' => ['general' => ['default_image' => $tooLarge]]],
+            'keys'           => [json_encode($configItem)],
+        ])
+        ->assertRedirect(route('admin.configuration.edit', ['product_images', 'settings']))
+        ->assertSessionHasErrors(['product_images.settings.general.default_image' => '"Geen afbeelding beschikbaar" kon niet worden geüpload. Het bestand mag maximaal '.ini_get('upload_max_filesize').' groot zijn.'])
+        ->assertSessionMissing('success');
+
+    $this->get(route('admin.configuration.edit', ['product_images', 'settings']))
+        ->assertSeeText('"Geen afbeelding beschikbaar" kon niet worden geüpload.');
+
+    expect(core()->getConfigData('product_images.settings.general.default_image'))->toBeNull();
+});
+
 it('has no default image until one is uploaded', function () {
     expect(app(DefaultProductImage::class)->url())->toBeNull();
 });

@@ -294,6 +294,11 @@
             :control-name="$name"
         >
         </x-admin::form.control-group.error>
+
+        <!-- Server-side errors are keyed by the dotted path, which the Vue error component (bracket name) never matches -->
+        @error($nameKey)
+            <p class="mt-1 text-red-600 text-xs italic">{{ $message }}</p>
+        @enderror
     @endif
 </x-admin::form.control-group>
  
