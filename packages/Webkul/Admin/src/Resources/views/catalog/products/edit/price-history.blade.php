@@ -29,6 +29,12 @@
                         </span>
 
                         <span class="text-sm font-medium">
+                            @if($entry->keepsPrice())
+                                <span class="text-xs font-normal text-gray-500 dark:text-gray-400">Prijs ongewijzigd ·</span>
+                                <span class="text-gray-800 dark:text-white">
+                                    €{{ number_format((float) $entry->new_price, 2, ',', '.') }}
+                                </span>
+                            @else
                             @if($entry->old_price !== null)
                                 <span class="text-gray-500 dark:text-gray-400 line-through">
                                     €{{ number_format((float) $entry->old_price, 2, ',', '.') }}
@@ -37,6 +43,7 @@
                             <span class="{{ $entry->old_price !== null && (float) $entry->new_price < (float) $entry->old_price ? 'text-green-600 dark:text-green-400' : 'text-gray-800 dark:text-white' }}">
                                 €{{ number_format((float) $entry->new_price, 2, ',', '.') }}
                             </span>
+                            @endif
                         </span>
                     </div>
 

@@ -14,7 +14,13 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { normBrand, normModel, parseSize, detectShape, GENERIC_MODEL_WORDS } = require('./normalize');
+const { normBrand, normModel, parseSize, detectShape, designNumbers, GENERIC_MODEL_WORDS } = require('./normalize');
+
+/**
+ * Merken die kleurnummers over collecties heen hergebruiken, zodat het nummer
+ * alleen niet zegt welk kleed het is (zie de naamgenoten in loadCatalog).
+ */
+const TWIN_BRANDS = new Set(['brinker']);
 
 function loadCatalog(csvPath) {
   const text = fs.readFileSync(csvPath, 'utf8');
@@ -133,10 +139,61 @@ function loadCatalog(csvPath) {
     }
     for (const entry of keyEntries) {
       entry.mustNotHaveWithoutNumber = [...forbidden];
-      entry.nameWords = telling(own);
-      entry.distinctWords = telling(own).filter(t => !shared.has(t));
+      // Brinker: zonder nummer moeten ALLE woorden er staan, ook "new". De
+      // lijnen delen hun collectienaam ("New Berbero" / "Berbero Lungo",
+      // "Arezzo ST" / "Arezzo"), dus "brinker-berbero-gold" (zonder nummer)
+      // prijsde anders onze New Berbero 611 op 1,9× de adviesprijs. Pallio-
+      // pagina's voor alle kleuren ("Herme Black Warp") noemen wél elk woord.
+      if (TWIN_BRANDS.has(brand)) {
+        entry.nameWords = own;
+        entry.distinctWords = [];
+      } else {
+        entry.nameWords = telling(own);
+        entry.distinctWords = telling(own).filter(t => !shared.has(t));
+      }
     }
   }
+
+  // Naamgenoten met hetzelfde dessinnummer. Brinker hergebruikt kleurnummers
+  // over collecties: "Berbero Lungo 101" naast "New Berbero 101", "Arezzo ST
+  // 803" naast "Arezzo 803". Delen twee modellen van één merk het nummer én een
+  // woord, dan onderscheidt alleen het andere woord ze. Over ALLE regels, ook
+  // Maatwerk: "Arezzo 803" bestaat bij ons alleen als maatwerk, maar zijn
+  // pagina (de CS-lijn) mag de vaste maten van Arezzo ST 803 niet prijzen.
+  // Zie twinsDistinguished in normalize.js.
+  //
+  // Alleen voor merken in TWIN_BRANDS. Bij De Munk en Mart Visser keurde de
+  // regel op de productievoorraad (04-11-2026) vooral goede koppelingen af:
+  // ons PIM spelt "Tafraout HOL1" naast "Safi HOL 1", en een vormversie heet
+  // genormaliseerd kaal "vernon 68" naast "vernon 68 copper glow gold". Daar
+  // doen mustHave/mustNotHave het werk al.
+  const byNumber = new Map();
+  for (const entry of entries) {
+    if (!TWIN_BRANDS.has(entry.normBrand)) continue;
+    const nr = designNumbers(entry.normModel)[0];
+    if (nr === undefined) continue;
+    const key = `${entry.normBrand}|${nr}`;
+    if (!byNumber.has(key)) byNumber.set(key, new Set());
+    byNumber.get(key).add(entry.normModel);
+  }
+  const twinRulesFor = new Map();
+  for (const names of byNumber.values()) {
+    if (names.size < 2) continue;
+    for (const own of names) {
+      const ownWords = words(own);
+      const rules = [];
+      for (const other of names) {
+        if (other === own) continue;
+        const otherWords = words(other);
+        if (!ownWords.some(t => otherWords.includes(t))) continue;
+        const need = ownWords.filter(t => !otherWords.includes(t));
+        const forbid = otherWords.filter(t => !ownWords.includes(t));
+        if (need.length || forbid.length) rules.push({ need, forbid });
+      }
+      twinRulesFor.set(own, rules);
+    }
+  }
+  for (const entry of entries) entry.twinRules = twinRulesFor.get(entry.normModel) ?? [];
 
   return { entries, bySku, models, fixedEntries };
 }

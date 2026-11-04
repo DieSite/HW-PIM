@@ -66,7 +66,7 @@ const SHOPIFY_SHOPS = [
   {
     key:    'vloerkledenloods.nl',
     base:   'https://vloerkledenloods.nl',
-    brands: ['De Munk', 'Karpi', 'Mart Visser'],
+    brands: ['De Munk', 'Karpi', 'Mart Visser', 'Brinker'],
     // Zij labelen de XS-band van Karpi als "80 x 150 cm" waar ons PIM
     // "80 x 160 cm" zegt. Dat het hetzelfde kleed is, blijkt uit het product
     // zelf: de vier andere maten matchen exact én de XS kost aan beide kanten
@@ -77,7 +77,9 @@ const SHOPIFY_SHOPS = [
   {
     key:    'hetdesignhuys.nl',
     base:   'https://hetdesignhuys.nl',
-    brands: ['Eurogros', 'Karpi', 'Mart Visser'],
+    // Brinker: ~300 Feelgood-kleden (vendor "Brinker Carpets"), meestal één
+    // product per maat ("Bolsena Grey 200x300").
+    brands: ['Eurogros', 'Karpi', 'Mart Visser', 'Brinker'],
     // Zelfde XS-band als vloerkledenloods: 21 varianten op "80 x 150 cm" en
     // geen enkele op 80 x 160.
     sizeAliases: [{ from: [80, 160], to: [80, 150] }],
@@ -130,6 +132,25 @@ const SHOPIFY_SHOPS = [
     vendorAliases: { Eurogros: ['Louis De Poortere'] },
     collection:    'vloerkleden',
     pageDelayMs:   2000,
+  },
+  {
+    // Belgische winkel (toegevoegd 04-11-2026), ~40 Brinker Feelgood-kleden
+    // (Verona, Bolsena, Monza, New Berbero) met een prijs per maat. Groot
+    // assortiment daarbuiten, dus alleen de merkcollectie.
+    key:         'onlinetapijten.be',
+    base:        'https://onlinetapijten.be',
+    brands:      ['Brinker'],
+    collection:  'brinker-carpets',
+    pageDelayMs: 5000,
+  },
+  {
+    // ~280 Brinker-kleden (vendor "Brinker Carpets"), één product per maat
+    // met de maat in de titel ("Vloerkleed 200x300 cm New Berbero Grey Wol").
+    // Toegevoegd 04-11-2026; geeft 429's bij snel bladeren.
+    key:         'creatinghome.nl',
+    base:        'https://creatinghome.nl',
+    brands:      ['Brinker'],
+    pageDelayMs: 5000,
   },
 ];
 
@@ -202,6 +223,15 @@ const WOOCOMMERCE_SHOPS = [
     // 429 na ~120 snelle productpagina's
     pageDelayMs: 1500,
   },
+  {
+    // ~800 Brinker-kleden (toegevoegd 04-11-2026), bijna onze eigen namen:
+    // "Brinker Carpets Rustica Black Warp 261", maten als variaties. Het
+    // merk staat alleen in de titel (de merktaxonomie is leeg).
+    key:    'vmusvloerkleden.nl',
+    base:   'https://vmusvloerkleden.nl',
+    brands: ['Brinker'],
+    pageDelayMs: 500,
+  },
 ];
 
 // ── Custom shops (sitemap + regex) ────────────────────────────────────────────
@@ -211,9 +241,9 @@ const CUSTOM_SHOPS = [
   {
     key:        'karpettenkelder.nl',
     base:       'https://www.karpettenkelder.nl',
-    brands:     ['Eurogros', 'De Munk', 'Karpi'],
+    brands:     ['Eurogros', 'De Munk', 'Karpi', 'Brinker'],
     sitemapUrl: 'https://www.karpettenkelder.nl/sitemap.xml',
-    brandKeys:  ['eurogros', 'de-munk-carpets', 'core-by-dersimo', 'desso', 'de-poortere'],
+    brandKeys:  ['eurogros', 'de-munk-carpets', 'core-by-dersimo', 'desso', 'de-poortere', 'brinker'],
     // Prijs zit in data-prijs attribuut bij de maat-radio; de data-title
     // benoemt de vorm ("200 x 290 rechthoek" / "… ovaal"), dus match die mee.
     // De vorm ONTBREEKT alleen bij rechthoeken (data-title="250 x 300"): die
@@ -233,6 +263,8 @@ const CUSTOM_SHOPS = [
       if (/core-by-dersimo/i.test(url)) return 'Karpi';
       if (/desso/i.test(url))           return 'Desso';
       if (/poortere/i.test(url))        return 'Louis De Poortere';
+      // "/brinker-carpets/", "/pallio-by-brinker/", "/ensuite-by-brinker/"
+      if (/brinker/i.test(url))         return 'Brinker';
       return null;
     },
   },
@@ -283,9 +315,9 @@ const CUSTOM_SHOPS = [
   {
     key:        'kleed.nl',
     base:       'https://www.kleed.nl',
-    brands:     ['De Munk', 'Mart Visser'],
+    brands:     ['De Munk', 'Mart Visser', 'Brinker'],
     sitemapUrl: 'https://www.kleed.nl/sitemap.xml',
-    brandKeys:  ['de-munk', 'mart-visser', 'karpi'],
+    brandKeys:  ['de-munk', 'mart-visser', 'karpi', 'brinker'],
     getPrijs(html, w, h) {
       const maat = `${w} x ${h}`;
       // Lightspeed variant JSON: "price_incl":1299,...,"title":"Formaat: 200 x 300cm"
@@ -300,6 +332,7 @@ const CUSTOM_SHOPS = [
       if (/de-munk|munk/i.test(url)) return 'De Munk';
       if (/mart-visser/i.test(url))  return 'Mart Visser';
       if (/karpi/i.test(url))        return 'Karpi';
+      if (/brinker/i.test(url))      return 'Brinker';
       return null;
     },
   },
@@ -329,7 +362,7 @@ const CUSTOM_SHOPS = [
   {
     key:        'vloerkledenvoordelig.nl',
     base:       'https://www.vloerkledenvoordelig.nl',
-    brands:     ['Karpi', 'Mart Visser', 'Louis De Poortere'],
+    brands:     ['Karpi', 'Mart Visser', 'Louis De Poortere', 'Brinker'],
     // Géén sitemap: `sitemap.xml?type=products` is verouderd. Hij mist hun
     // hele Louis De Poortere-assortiment (228 kleden, o.a. Fading World
     // Babylon 8545), en de LDP-URL's die er wél in staan geven een 404
@@ -338,7 +371,7 @@ const CUSTOM_SHOPS = [
     listUrl:    'https://www.vloerkledenvoordelig.nl/vloerkleden/alle-soorten.html?showall=true',
     listPages:  1,
     linkRe:     /\/vloerkleden\/alle-soorten\/[a-z0-9-]+_\d+\.html/,
-    brandKeys:  ['karpi', 'mart-visser', 'louis-de-poortere'],
+    brandKeys:  ['karpi', 'mart-visser', 'louis-de-poortere', 'brinker'],
     // Elke productpagina heeft een keuzelijst met álle maten van het kleed:
     // <option value="615924">140 x 200 (€ 395,10)</option>. De maat in de URL
     // is alleen de voorgeselecteerde. Alleen rechthoeken: ronde of ovale
@@ -352,6 +385,7 @@ const CUSTOM_SHOPS = [
       if (/louis-de-poortere/i.test(url)) return 'Louis De Poortere';
       if (/karpi/i.test(url))             return 'Karpi';
       if (/mart-visser/i.test(url))       return 'Mart Visser';
+      if (/brinker/i.test(url))           return 'Brinker';
       return null;
     },
     // "fading-world-medaillon-pink-flash-8261" = Fading World Medallion 8261

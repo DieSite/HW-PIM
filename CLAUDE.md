@@ -54,6 +54,20 @@ dev npm run dev       # development (Vite with hot reload)
 dev npm run build     # production
 ```
 
+### Pulling production data
+
+```bash
+scripts/pull-products-from-prod.sh --dry-run            # row counts prod vs local
+scripts/pull-products-from-prod.sh                      # mirror the catalogue (asks first)
+scripts/pull-products-from-prod.sh --with-competitor-data   # also competitor prices + price history
+```
+
+Runs on the host (needs the production SSH key). Mirrors products, relations, categories,
+attributes and DAM tables by ID (local IDs equal production's) via a read-only `mysqldump`
+on production; local tables are backed up to `storage/app/prod-sync-backups/` first and the
+load is one transaction. Bol.com product credentials are deliberately not pulled.
+`scripts/sync-product-from-prod.sh <id>` still syncs a single product by SKU.
+
 ### Testing
 
 ```bash

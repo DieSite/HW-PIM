@@ -2,7 +2,7 @@
  * excel.js – bouwt concurrenten-volledig.xlsx vanuit de DB.
  *
  * Formaat (zelfde stijl als karpettenExcel.js):
- *   - Per merk één sheet: "De Munk", "Eurogros", "Karpi", "Louis De Poortere", "Desso"
+ *   - Per merk één sheet: "De Munk", "Eurogros", "Karpi", "Louis De Poortere", "Desso", daarna elk ander merk (Brinker)
  *   - Rijen: (model, maat) met vaste afmeting
  *   - Kolommen: Merk | Model | Maat | Eigen prijs | <alle shops>
  *   - Kleuring t.o.v. eigen prijs: rood = concurrent goedkoper, groen = duurder
@@ -152,8 +152,14 @@ async function buildExcel() {
   wb.creator = 'Concurrentieanalyse Karpetten – Volledig';
   wb.created = new Date();
 
-  // Per merk een sheet
-  const MERKEN = ['De Munk', 'Eurogros', 'Karpi', 'Mart Visser', 'Louis De Poortere', 'Desso'];
+  // Per merk een sheet: de vaste volgorde, daarna elk ander merk uit de
+  // catalogus. Een hardgecodeerde lijst liet een nieuw merk (Brinker, november
+  // 2026: de helft van de catalogus) stilletjes zonder tabblad.
+  const VASTE_MERKEN = ['De Munk', 'Eurogros', 'Karpi', 'Mart Visser', 'Louis De Poortere', 'Desso'];
+  const MERKEN = [...new Set([
+    ...VASTE_MERKEN,
+    ...catalog.fixedEntries.map(e => e.brand).filter(b => b && b !== 'Mart Visser|Karpi').sort(),
+  ])];
 
   for (const merk of MERKEN) {
     const rows = catalog.fixedEntries.filter(e => {

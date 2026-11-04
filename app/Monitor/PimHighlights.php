@@ -53,7 +53,7 @@ class PimHighlights
                 ->where('status', WooCommerceSyncEventStatus::Failed->value)
                 ->where('created_at', '>=', today())
                 ->count()),
-            $this->tile('Prijswijzigingen vandaag', ProductPriceHistory::query()->where('changed_at', '>=', today())->count()),
+            $this->tile('Prijswijzigingen vandaag', ProductPriceHistory::query()->priceChanges()->where('changed_at', '>=', today())->count()),
             $this->tile('AI-concepten te beoordelen', AiDescriptionDraft::query()->where('status', AiDescriptionDraft::STATUS_PENDING)->count()),
         ];
     }

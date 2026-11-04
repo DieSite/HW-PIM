@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\Log;
 
 class CompetitorPricingService
 {
+    public const BASIS_COMPETITOR = 'concurrent';
+
+    public const BASIS_ADVIES = 'advies';
+
+    public const BASIS_FLOOR = 'bodem';
+
     public function __construct(private ProductService $productService) {}
 
     /**
@@ -88,7 +94,12 @@ class CompetitorPricingService
             ->counting()
             ->get();
 
-        $lowest = $competitors->sortBy('price')->first();
+        $previous = ProductPriceHistory::query()
+            ->where('product_id', $variant->id)
+            ->latest('id')
+            ->first();
+
+        $lowest = $this->lowestCompetitor($competitors, $previous?->competitor_shop);
 
         $lowestPrice = $lowest?->price !== null ? (float) $lowest->price : null;
         $newPrice = $this->computePrice($advies, $lowestPrice, $pct);
@@ -107,7 +118,11 @@ class CompetitorPricingService
 
         $currentPrice = $this->readPrice($variant, 'prijs');
 
+        $basis = $this->basisOf($competitors, $lowest, $advies, $floor);
+
         if ($currentPrice !== null && abs($newPrice - $currentPrice) < 0.005) {
+            $this->logUnchangedPrice($variant, $currentPrice, $advies, $floor, $previous, $lowest, $basis);
+
             return null;
         }
 
@@ -137,7 +152,7 @@ class CompetitorPricingService
             'competitor_price' => $lowestPrice,
             'competitor_url'   => $lowest?->url,
             'changed_at'       => now(),
-        ]);
+        ] + $basis);
     }
 
     /**
@@ -446,6 +461,166 @@ class CompetitorPricingService
                 );
             }
         }
+    }
+
+    /**
+     * The cheapest counting competitor. On a tie the shop that already set
+     * our price keeps that role: a second shop matching the price changes
+     * nothing, and only when the first shop leaves that price does the
+     * basis move (and get logged).
+     *
+     * @param  Collection<int, CompetitorPrice>  $competitors
+     */
+    private function lowestCompetitor(Collection $competitors, ?string $currentBasis): ?CompetitorPrice
+    {
+        $lowest = $competitors->sortBy('price')->first();
+
+        if ($lowest === null || $currentBasis === null) {
+            return $lowest;
+        }
+
+        return $competitors->first(fn (CompetitorPrice $price): bool => $price->shop === $currentBasis
+            && abs((float) $price->price - (float) $lowest->price) < 0.005) ?? $lowest;
+    }
+
+    /**
+     * What sets the price: a competitor (with every shop at that lowest
+     * price), the adviesprijs or the discount floor ("bodem").
+     *
+     * @param  Collection<int, CompetitorPrice>  $competitors
+     * @return array{basis: string, basis_shops: list<string>}
+     */
+    private function basisOf(Collection $competitors, ?CompetitorPrice $lowest, float $advies, float $floor): array
+    {
+        $lowestPrice = $lowest === null ? null : (float) $lowest->price;
+
+        if ($lowestPrice === null || $lowestPrice >= $advies - 0.005) {
+            return ['basis' => self::BASIS_ADVIES, 'basis_shops' => []];
+        }
+
+        if ($lowestPrice < $floor - 0.005) {
+            return ['basis' => self::BASIS_FLOOR, 'basis_shops' => []];
+        }
+
+        return [
+            'basis'       => self::BASIS_COMPETITOR,
+            'basis_shops' => $competitors
+                ->filter(fn (CompetitorPrice $price): bool => abs((float) $price->price - $lowestPrice) < 0.005)
+                ->pluck('shop')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * The basis recorded on a history row. Rows from before the basis was
+     * stored only know the cheapest shop; that shop is then taken as the
+     * only one at the lowest price.
+     *
+     * @return array{basis: string, basis_shops: list<string>}
+     */
+    private function recordedBasis(ProductPriceHistory $row, float $advies, float $floor): array
+    {
+        if ($row->basis !== null) {
+            return ['basis' => $row->basis, 'basis_shops' => array_values($row->basis_shops ?? [])];
+        }
+
+        $price = $row->competitor_price === null ? null : (float) $row->competitor_price;
+
+        return match (true) {
+            $row->competitor_shop === null || $price === null || $price >= $advies - 0.005 => ['basis' => self::BASIS_ADVIES, 'basis_shops' => []],
+            $price < $floor - 0.005                                                        => ['basis' => self::BASIS_FLOOR, 'basis_shops' => []],
+            default                                                                        => ['basis' => self::BASIS_COMPETITOR, 'basis_shops' => [$row->competitor_shop]],
+        };
+    }
+
+    /**
+     * Log a history row when our price stays the same but what sets it
+     * changes: another competitor takes over (the previous one raised its
+     * price, dropped out or was excluded), a shop joins or leaves the
+     * lowest price, or the price now rests on the adviesprijs or the floor
+     * instead of a competitor.
+     *
+     * Needs an earlier history row as reference; without one the basis was
+     * never recorded and there is nothing to compare against.
+     *
+     * @param  array{basis: string, basis_shops: list<string>}  $basis
+     */
+    private function logUnchangedPrice(
+        Product $variant,
+        float $price,
+        float $advies,
+        float $floor,
+        ?ProductPriceHistory $previous,
+        ?CompetitorPrice $lowest,
+        array $basis,
+    ): void {
+        if ($previous === null) {
+            return;
+        }
+
+        $before = $this->recordedBasis($previous, $advies, $floor);
+
+        if ($before === $basis) {
+            return;
+        }
+
+        $lowestPrice = $lowest === null ? null : (float) $lowest->price;
+        $leader = $before['basis'] === self::BASIS_COMPETITOR ? $previous->competitor_shop : null;
+        $stays = 'Prijs blijft '.$this->euro($price);
+
+        if ($basis['basis'] === self::BASIS_ADVIES) {
+            $reason = $stays.'; geen concurrent meer onder de adviesprijs'
+                .($leader !== null ? ' ('.$this->shopNote($leader, $variant->sku).')' : '').'.';
+        } elseif ($basis['basis'] === self::BASIS_FLOOR) {
+            $reason = $stays.', nu begrensd op de maximale korting; '.$lowest->shop.' biedt '.$this->euro($lowestPrice).'.';
+        } elseif ($leader === null || ! in_array($leader, $basis['basis_shops'], true)) {
+            $others = array_values(array_diff($basis['basis_shops'], [$lowest->shop]));
+
+            $reason = $stays.', nu gebaseerd op '.$lowest->shop.' ('.$this->euro($lowestPrice).')'
+                .($leader !== null ? '; '.$this->shopNote($leader, $variant->sku) : '')
+                .($others !== [] ? '; ook '.implode(', ', $others).' '.(count($others) === 1 ? 'biedt' : 'bieden').' '.$this->euro($lowestPrice) : '')
+                .'.';
+        } else {
+            $joined = array_values(array_diff($basis['basis_shops'], $before['basis_shops']));
+            $left = array_values(array_diff($before['basis_shops'], $basis['basis_shops']));
+
+            $changes = array_merge(
+                array_map(fn (string $shop): string => $shop.' biedt nu ook '.$this->euro($lowestPrice), $joined),
+                array_map(fn (string $shop): string => $this->shopNote($shop, $variant->sku), $left),
+            );
+
+            $reason = $stays.', gebaseerd op '.$leader.' ('.$this->euro($lowestPrice).'); '.implode('; ', $changes).'.';
+        }
+
+        ProductPriceHistory::create([
+            'product_id'       => $variant->id,
+            'sku'              => $variant->sku,
+            'old_price'        => $price,
+            'new_price'        => $price,
+            'reason'           => $reason,
+            'competitor_shop'  => $lowest?->shop,
+            'competitor_price' => $lowestPrice,
+            'competitor_url'   => $lowest?->url,
+            'changed_at'       => now(),
+        ] + $basis);
+    }
+
+    /**
+     * What happened to a shop that was at the lowest price until now.
+     */
+    private function shopNote(string $shop, string $sku): string
+    {
+        $now = CompetitorPrice::query()->where('sku', $sku)->where('shop', $shop)->first();
+
+        return match (true) {
+            $now === null                                                      => $shop.' biedt deze maat niet meer aan',
+            CompetitorPrice::query()->whereKey($now->id)->excluded()->exists() => 'de prijs van '.$shop.' is uitgesloten',
+            $now->isStale() || (float) $now->price <= 0                        => 'de prijs van '.$shop.' is verouderd',
+            default                                                            => $shop.' verhoogde naar '.$this->euro((float) $now->price),
+        };
     }
 
     /**

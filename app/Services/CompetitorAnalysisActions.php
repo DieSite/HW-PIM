@@ -132,6 +132,7 @@ class CompetitorAnalysisActions
 
         $products = $this->productPrices($shown);
         $changed = ProductPriceHistory::query()
+            ->priceChanges()
             ->whereIn('sku', $shown)
             ->whereBetween('changed_at', [$since, $until])
             ->pluck('new_price', 'sku');

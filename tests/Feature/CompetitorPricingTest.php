@@ -1,12 +1,15 @@
 <?php
 
 use App\Models\CompetitorPrice;
+use App\Models\CompetitorPriceExclusion;
 use App\Models\CompetitorPriceRemoval;
 use App\Models\Product;
 use App\Models\ProductPriceHistory;
+use App\Services\CompetitorCatalogExporter;
 use App\Services\CompetitorPricingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Webkul\User\Models\Admin;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 /**
@@ -115,7 +118,7 @@ it('imports and parses competitor prices from a scraper SQLite database', functi
     ]);
 
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $insert = $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)');
     $insert->execute([$variant->sku, 'shopa.nl', '€ 1.234,50', 'https://shopa.nl/x', '2026-06-17 13:07:30']);
@@ -145,7 +148,7 @@ it('prunes competitor prices that are no longer in the scraper database', functi
     ]);
 
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
         ->execute([$variant->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/x', '2026-06-17 13:07:30']);
@@ -175,7 +178,7 @@ it('prunes via the full pipeline wrapper', function () {
     CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'stale.nl', 'price' => 700]);
 
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
         ->execute([$variant->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/x', '2026-06-17 13:07:30']);
@@ -282,7 +285,7 @@ it('exports the catalog from the database to a scraper CSV', function () {
     $variant->parent->save();
 
     $path = tempnam(sys_get_temp_dir(), 'cat_');
-    $rows = app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    $rows = app(CompetitorCatalogExporter::class)->export($path);
     $csv = file_get_contents($path);
     @unlink($path);
 
@@ -298,7 +301,7 @@ it('strips commas so the scraper cannot mis-split a catalog row', function () {
     ], 'CPTEST-COMMA');
 
     $path = tempnam(sys_get_temp_dir(), 'cat_');
-    app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    app(CompetitorCatalogExporter::class)->export($path);
     $csv = file_get_contents($path);
     @unlink($path);
 
@@ -354,7 +357,7 @@ it('leaves met-onderkleed variants out of the scraper catalog', function () {
     makeOnderkleedPair('170 cm x 240 cm', 1299, 1329);
 
     $path = tempnam(sys_get_temp_dir(), 'cat_');
-    app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    app(CompetitorCatalogExporter::class)->export($path);
     $csv = file_get_contents($path);
     @unlink($path);
 
@@ -497,7 +500,7 @@ it('keeps met-onderkleed variants out of the catalog even with double-encoded va
         ->update(['values' => json_encode(json_encode($met->values))]);
 
     $path = tempnam(sys_get_temp_dir(), 'cat_');
-    app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    app(CompetitorCatalogExporter::class)->export($path);
     $csv = file_get_contents($path);
     @unlink($path);
 
@@ -519,7 +522,7 @@ it('exports the parent colour so the matcher can decide colour variants', functi
     $parent->saveQuietly();
 
     $path = tempnam(sys_get_temp_dir(), 'cat_');
-    app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    app(CompetitorCatalogExporter::class)->export($path);
     $csv = file_get_contents($path);
     @unlink($path);
 
@@ -568,7 +571,7 @@ it('exports a multi-value colour attribute without mangling it', function () {
     $parent->saveQuietly();
 
     $path = tempnam(sys_get_temp_dir(), 'cat_');
-    app(App\Services\CompetitorCatalogExporter::class)->export($path);
+    app(CompetitorCatalogExporter::class)->export($path);
     $csv = file_get_contents($path);
     @unlink($path);
 
@@ -795,7 +798,7 @@ it('reprices and syncs straight away when the extra discount is saved in the edi
         'onderkleed'         => 'Zonder onderkleed',
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::first(), 'admin')
+    $this->actingAs(Admin::first(), 'admin')
         ->post(route('admin.tools.product-stock-editor.post'), [
             'product' => [
                 $variant->id => [
@@ -824,7 +827,7 @@ it('does not repeatedly reprice when the editor is saved without touching the di
         'onderkleed'         => 'Zonder onderkleed',
     ]);
 
-    $this->actingAs(Webkul\User\Models\Admin::first(), 'admin')
+    $this->actingAs(Admin::first(), 'admin')
         ->post(route('admin.tools.product-stock-editor.post'), [
             'product' => [
                 $variant->id => [
@@ -865,7 +868,7 @@ it('never stores a competitor price for a met-onderkleed variant', function () {
     ]);
 
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $insert = $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)');
     $insert->execute([$bare->sku, 'shopa.nl', '€ 900,00', 'https://shopa.nl/kleed', '2026-09-09 00:02:52']);
@@ -894,7 +897,7 @@ it('logs what pruning removes so the report can name it', function () {
     ]);
 
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
         ->execute([$variant->sku, 'blijft.nl', '€ 950,00', 'https://blijft.nl/kleed', now()->toDateTimeString()]);
@@ -932,7 +935,7 @@ it('does not log the met-onderkleed cleanup as lost coverage', function () {
     CompetitorPrice::create(['sku' => $bare->sku, 'shop' => 'weg.nl', 'price' => 950, 'scraped_at' => '2026-09-04 00:00:00']);
 
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)')
         ->execute([$bare->sku, 'blijft.nl', '€ 950,00', null, now()->toDateTimeString()]);
@@ -957,7 +960,7 @@ it('does not log the met-onderkleed cleanup as lost coverage', function () {
 function makeScraperDb(array $rows): string
 {
     $dbPath = tempnam(sys_get_temp_dir(), 'compdb').'.sqlite';
-    $pdo = new \PDO('sqlite:'.$dbPath);
+    $pdo = new PDO('sqlite:'.$dbPath);
     $pdo->exec('CREATE TABLE prices (sku TEXT, shop TEXT, price_str TEXT, url TEXT, scraped_at TEXT)');
     $insert = $pdo->prepare('INSERT INTO prices VALUES (?, ?, ?, ?, ?)');
 
@@ -1063,4 +1066,181 @@ it('hands the configured database path to the scraper', function () {
 
     @unlink($dbPath);
     exec('rm -rf '.escapeshellarg($dir));
+});
+
+it('logs a change of basis when the price stays the same but another competitor now sets it', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+    $pricing = app(CompetitorPricingService::class);
+
+    $first = CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 850]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'tweede.nl', 'price' => 850, 'url' => 'https://tweede.nl/kleed']);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $joined = ProductPriceHistory::where('sku', $variant->sku)->latest('id')->first();
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(2)
+        ->and($joined->keepsPrice())->toBeTrue()
+        ->and($joined->competitor_shop)->toBe('eerste.nl')
+        ->and($joined->basis_shops)->toBe(['eerste.nl', 'tweede.nl'])
+        ->and($joined->reason)->toContain('gebaseerd op eerste.nl')->toContain('tweede.nl biedt nu ook');
+
+    $first->update(['price' => 950]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $variant->refresh();
+    $rows = ProductPriceHistory::where('sku', $variant->sku)->orderBy('id')->get();
+    $basis = $rows->last();
+
+    expect($variant->values['common']['prijs']['EUR'])->toBe('850')
+        ->and($rows)->toHaveCount(3)
+        ->and($rows->first()->competitor_shop)->toBe('eerste.nl')
+        ->and($rows->first()->basis)->toBe('concurrent')
+        ->and($rows->first()->basis_shops)->toBe(['eerste.nl'])
+        ->and($basis->keepsPrice())->toBeTrue()
+        ->and((float) $basis->old_price)->toBe(850.0)
+        ->and((float) $basis->new_price)->toBe(850.0)
+        ->and($basis->competitor_shop)->toBe('tweede.nl')
+        ->and($basis->competitor_url)->toBe('https://tweede.nl/kleed')
+        ->and($basis->reason)->toContain('nu gebaseerd op tweede.nl')->toContain('eerste.nl verhoogde naar');
+
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(3)
+        ->and(ProductPriceHistory::where('sku', $variant->sku)->priceChanges()->count())->toBe(1);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 1);
+});
+
+it('names an exclusion as the reason the basis moved', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+    $pricing = app(CompetitorPricingService::class);
+
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 850]);
+    $pricing->recomputeForSkus([$variant->sku]);
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'tweede.nl', 'price' => 850]);
+
+    CompetitorPriceExclusion::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 850]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->latest('id')->first()->reason)
+        ->toContain('de prijs van eerste.nl is uitgesloten');
+
+    CompetitorPriceExclusion::where('sku', $variant->sku)->delete();
+});
+
+it('logs when an unchanged price no longer rests on any competitor', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+    $pricing = app(CompetitorPricingService::class);
+
+    $only = CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 900]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $variant->refresh();
+    $values = $variant->values;
+    $values['common']['adviesverkoopprijs']['EUR'] = '900';
+    $variant->values = $values;
+    $variant->saveQuietly();
+
+    $only->update(['price' => 990]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $basis = ProductPriceHistory::where('sku', $variant->sku)->latest('id')->first();
+
+    expect($basis->keepsPrice())->toBeTrue()
+        ->and($basis->reason)->toContain('geen concurrent meer onder de adviesprijs');
+});
+
+it('does not log the cheapest shop changing while the floor sets the price', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+    $pricing = app(CompetitorPricingService::class);
+
+    $first = CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 500]);
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'tweede.nl', 'price' => 600]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $first->update(['price' => 650]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(1);
+});
+
+it('leaves a product without earlier history alone when nothing changes', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '850'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 850]);
+    app(CompetitorPricingService::class)->recomputeForSkus([$variant->sku]);
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(0);
+});
+
+it('logs a shop leaving the lowest price while the same competitor keeps setting it', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+    $pricing = app(CompetitorPricingService::class);
+
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 850]);
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'tweede.nl', 'price' => 850]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $leader = ProductPriceHistory::where('sku', $variant->sku)->first()->competitor_shop;
+    $other = $leader === 'eerste.nl' ? 'tweede.nl' : 'eerste.nl';
+
+    CompetitorPrice::where('sku', $variant->sku)->where('shop', $other)->update(['price' => 900]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    $row = ProductPriceHistory::where('sku', $variant->sku)->latest('id')->first();
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(2)
+        ->and($row->keepsPrice())->toBeTrue()
+        ->and($row->competitor_shop)->toBe($leader)
+        ->and($row->basis_shops)->toBe([$leader])
+        ->and($row->reason)->toContain($other.' verhoogde naar');
+});
+
+it('keeps the price-change report free of rows where only the basis changed', function () {
+    Queue::fake();
+
+    $variant = makePricedVariant([
+        'prijs'              => ['EUR' => '1000'],
+        'adviesverkoopprijs' => ['EUR' => '1000'],
+    ]);
+    $pricing = app(CompetitorPricingService::class);
+
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'eerste.nl', 'price' => 850]);
+    $pricing->recomputeForSkus([$variant->sku]);
+    CompetitorPrice::create(['sku' => $variant->sku, 'shop' => 'tweede.nl', 'price' => 850]);
+    $pricing->recomputeForSkus([$variant->sku]);
+
+    expect(ProductPriceHistory::where('sku', $variant->sku)->count())->toBe(2)
+        ->and(ProductPriceHistory::where('sku', $variant->sku)->priceChanges()->pluck('new_price')->map(fn ($p) => (float) $p)->all())->toBe([850.0]);
 });

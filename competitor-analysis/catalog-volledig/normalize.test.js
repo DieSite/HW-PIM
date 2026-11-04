@@ -830,7 +830,9 @@ test('vloerkledenvoordelig: actuele catalogus, LDP en prijs uit de maatkeuzelijs
 
   assert.equal(shop.detectBrand(link), 'Louis De Poortere');
   assert.equal(shop.detectBrand('/vloerkleden/alle-soorten/karpi-babylon-12-120x180_724852.html'), 'Karpi');
-  assert.equal(shop.detectBrand('/vloerkleden/alle-soorten/brinker-carpets-feel-good-200x290_1.html'), null);
+  // Sinds november 2026 voeren wij Brinker zelf (was: null, merk niet van ons)
+  assert.equal(shop.detectBrand('/vloerkleden/alle-soorten/brinker-carpets-feel-good-200x290_1.html'), 'Brinker');
+  assert.equal(shop.detectBrand('/vloerkleden/alle-soorten/desso-x-200x290_1.html'), null);
 
   // Alle maten staan op elke pagina; de maat in de URL is alleen de voorselectie
   const html = `<select name="ctl00$Layout$ddlFormats">
@@ -888,4 +890,99 @@ test('fetch-prices kiest bij twee kandidaten het kleed zonder onverklaard naamwo
   // Merk en maat tellen niet mee
   assert.equal(extraNameWords({ title: 'louis-de-poortere-fading-world-babylon-8545-80x150_615923' },
     { normBrand: 'louis de poortere', normModel: 'fading world babylon 8545' }), 0);
+});
+
+test('Brinker: "Brinker Carpets" is hetzelfde merk als ons "Brinker"', () => {
+  const { normBrand } = require('./normalize');
+  assert.equal(normBrand('Brinker Carpets'), 'brinker');
+  assert.equal(normBrand('Brinker'), 'brinker');
+});
+
+test('Brinker: "Vierkant" is een rechthoek, de 200x200 hoort bij het basismodel', () => {
+  assert.equal(normModel('Atrium White Warp 1001 Vierkant'), normModel('Atrium White Warp 1001'));
+  assert.equal(detectShape('Atrium White Warp 1001 Vierkant', '200 cm x 200 cm'), null);
+  // "Square" is bij Brinker een dessinnaam, geen vorm
+  assert.equal(normModel('Lumora Square 600'), 'lumora square 600');
+});
+
+test('Brinker: Black/White/Sisal Warp zijn verschillende kleden', () => {
+  const { warpCompatible, modelIdentityMatches } = require('./normalize');
+  assert.equal(warpCompatible('rustica white warp 125', 'brinker rustica sisal warp 125'), false);
+  assert.equal(warpCompatible('rustica sisal warp 125', 'rustica-sisal-warp-125-200x290'), true);
+  assert.equal(warpCompatible('atrium black warp 1001', 'Atrium Zwart Warp 1001'), true);
+  // Noemt de concurrent geen ketting, dan geen oordeel
+  assert.equal(warpCompatible('atrium white warp 1001', 'brinker atrium 1001'), true);
+  assert.equal(modelIdentityMatches('rustica white warp 125', 'brinker carpets rustica sisal warp 125', []), false);
+  assert.equal(modelIdentityMatches('rustica white warp 125', 'brinker carpets rustica white warp 125', []), true);
+});
+
+test('Brinker: de Vierkant-parent valt samen met het basismodel in de catalogus', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brinker-'));
+  const csv = path.join(dir, 'catalog.csv');
+  fs.writeFileSync(csv, [
+    'BRK1041.1,Brinker,Atrium White Warp 1001,140 cm x 200 cm,1055,Creme',
+    'BRK1041.Vierkant.1,Brinker,Atrium White Warp 1001 Vierkant,200 cm x 200 cm,1796,Creme',
+    'BRK1001.1,Brinker,Atrium Black Warp 1001,140 cm x 200 cm,1055,Creme',
+  ].join('\n'));
+  const { models, bySku } = loadCatalog(csv);
+  assert.equal(models.get('brinker|atrium white warp 1001').length, 2);
+  assert.equal(bySku.get('BRK1041.Vierkant.1').shape, 'rechthoek');
+  // Geen "vierkant" als verplicht woord: de shops noemen de maat, niet de vorm
+  assert.deepEqual(bySku.get('BRK1041.Vierkant.1').mustHave, []);
+});
+
+test('Brinker: naamgenoten met hetzelfde kleurnummer worden op hun lijnwoord gescheiden', () => {
+  const { modelIdentityMatches, identityOptionsFor } = require('./normalize');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brinker-twins-'));
+  const csv = path.join(dir, 'catalog.csv');
+  fs.writeFileSync(csv, [
+    'BRK2017.1,Brinker,Berbero Lungo 101,170 cm x 230 cm,979,Beige',
+    'BRK2035.1,Brinker,New Berbero 101,170 cm x 230 cm,629,Beige',
+    'BRK2036.1,Brinker,New Berbero 815,170 cm x 230 cm,629,Grijs',
+    'BRK2009.1,Brinker,Arezzo ST 803,170 cm x 230 cm,639,Taupe',
+    'BRK2100.0,Brinker,Arezzo 803,Maatwerk,99,Taupe',
+    // Zelfde patroon bij De Munk blijft buiten de regel (alleen TWIN_BRANDS)
+    'DMC1.1,De Munk,Safi Q1,200 cm x 300 cm,999,Beige',
+    'DMC2.1,De Munk,Safi HOL 1,200 cm x 300 cm,999,Beige',
+  ].join('\n'));
+  const { bySku } = loadCatalog(csv);
+  const matches = (sku, text) => {
+    const e = bySku.get(sku);
+    return modelIdentityMatches(e.normModel, text, e.mustHave, identityOptionsFor(e));
+  };
+
+  // vloerkledenloods.nl, 04-11-2026: New Berbero (€ 503) op Berbero Lungo (€ 979)
+  assert.equal(matches('BRK2017.1', 'feelgood by brinker wollen vloerkleed new berbero beige 101'), false);
+  assert.equal(matches('BRK2035.1', 'feelgood by brinker wollen vloerkleed new berbero beige 101'), true);
+  assert.equal(matches('BRK2017.1', 'brinker carpets berbero lungo beige 101'), true);
+  // "New Loop" is een andere collectie; "new" alleen is geen modelnaam
+  assert.equal(matches('BRK2036.1', 'feelgood by brinker wollen vloerkleed new loop wit 815'), false);
+  // De CS-lijn (bij ons alleen als maatwerk "Arezzo 803") prijst Arezzo ST niet
+  assert.equal(matches('BRK2009.1', 'feelgood by brinker vloerkleed arezzo cs 803 lichtgrijs'), false);
+  assert.equal(matches('BRK2009.1', 'feelgood by brinker vloerkleed arezzo st 803 taupe'), true);
+
+  assert.deepEqual(bySku.get('DMC1.1').twinRules, []);
+});
+
+test('Brinker: zonder kleurnummer moet de concurrent elk woord van ons model noemen', () => {
+  const { modelIdentityMatches, identityOptionsFor } = require('./normalize');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brinker-nonumber-'));
+  const csv = path.join(dir, 'catalog.csv');
+  fs.writeFileSync(csv, [
+    'BRK2037.1,Brinker,New Berbero 611,170 cm x 230 cm,629,Bruin',
+    'BRK2019.1,Brinker,Berbero Lungo 611,170 cm x 230 cm,979,Bruin',
+    'BRK1201.1,Brinker,Herme Black Warp 1001,140 cm x 200 cm,866,Creme',
+    'BRK1213.1,Brinker,Herme White Warp 1001,140 cm x 200 cm,866,Creme',
+  ].join('\n'));
+  const { bySku } = loadCatalog(csv);
+  const matches = (sku, text) => {
+    const e = bySku.get(sku);
+    return modelIdentityMatches(e.normModel, text, e.mustHave, identityOptionsFor(e));
+  };
+  // vloerkledenvoordelig.nl, 04-11-2026: € 1.188 tegen onze € 629
+  assert.equal(matches('BRK2037.1', 'brinker berbero gold https://www.vloerkledenvoordelig.nl/brinker-berbero-gold-170x230_725856.html'), false);
+  assert.equal(matches('BRK2019.1', 'brinker berbero gold https://www.vloerkledenvoordelig.nl/brinker-berbero-gold-170x230_725856.html'), false);
+  // Pallio: één pagina voor alle kleuren van een lijn, prijs per maat gelijk
+  assert.equal(matches('BRK1201.1', 'brinker carpets herme black warp https://vmusvloerkleden.nl/product/brinker-carpets-herme-black-warp/'), true);
+  assert.equal(matches('BRK1213.1', 'brinker carpets herme black warp https://vmusvloerkleden.nl/product/brinker-carpets-herme-black-warp/'), false);
 });

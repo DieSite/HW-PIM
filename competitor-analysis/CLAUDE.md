@@ -516,6 +516,61 @@ sleutels beginnen bewust met "medallion", want "stone", "jade" en "scarlet"
 zijn ook gewone kleurwoorden. caltabellotta: 19 → 34 kleden, 80 → 156 prijzen;
 alle 76 Medallionprijzen tegen de Store API nagelopen, alle 76 exact.
 
+**Brinker (november 2026).** Nieuw merk, en meteen de helft van de catalogus:
+12.937 van 27.870 regels, 6.819 met vaste maat (Pallio Basic: Rustica,
+Basilicaal, Ajour, Tempel; Pallio High: Atrium, Chevet, Herme, Travee, Vide,
+Trullo, Trifora, Cella; Feelgood/Ensuite: Bolsena, New Berbero, Verona,
+Organix, …). Tot 04-11-2026 had productie nul echte Brinker-prijzen: alleen
+`n.v.t.` van de custom shops. Nu:
+
+- **Winkels.** Erbij: **vmusvloerkleden.nl** (WooCommerce, ~800 kleden, bijna
+  onze namen: "Brinker Carpets Rustica Black Warp 261"), **onlinetapijten.be**
+  (Shopify, alleen de collectie `brinker-carpets`), **creatinghome.nl**
+  (Shopify, één product per maat). Merk Brinker toegevoegd bij vloerkledenloods,
+  hetdesignhuys, karpettenkelder, kleed.nl en vloerkledenvoordelig. Eerste run
+  (na audit): vmus 4.770, vloerkledenloods 921, hetdesignhuys 112,
+  vloerkledenvoordelig 66, onlinetapijten 44, creatinghome 33, kleed 28 →
+  **4.878 van de 6.819 Brinker-SKU's (72%)** met minstens één prijs. Mediaan
+  concurrent/advies 0,95–1,00. Afgewezen: luxevloerkleden.nl en woonexpress.nl
+  (Cloudflare/403, niet omzeilen), mobielinterieur/deruijtermeubel (alleen
+  "vanaf"), eijerkamp (maatprijs alleen via JS). zwartensanitair.com (Woo,
+  ~300 Ensuite) bewust nog niet: outlet-prijzen van € 78 op € 391.
+- **Labels als vendor.** vloerkledenloods zet "Pallio By Brinker", "Ensuite By
+  Brinker" en "Brinker Feelgood" als vendor; die staan als alias in
+  `BRAND_ALIASES` (→ `brinker`), waardoor hun woorden ook merkwoord zijn.
+- **"Vierkant" is een rechthoek.** Brinker voert de 200x200 als aparte parent
+  ("Atrium White Warp 1001 Vierkant"); de shops verkopen hem als maatoptie van
+  het basismodel. `normModel` stript het woord, de vorm blijft rechthoek. Niet
+  "square": dat is een dessinnaam (Lumora Square).
+- **Warp.** Black/White/Sisal Warp zijn drie kleden (wel dezelfde prijs per
+  maat). `warpCompatible`: noemen beide kanten een ketting, dan dezelfde.
+- **Naamgenoten met hetzelfde nummer** (`twinRules`, alleen merken in
+  `TWIN_BRANDS` in catalog.js = Brinker). Brinker hergebruikt kleurnummers over
+  collecties: "Berbero Lungo 101" kreeg bij vloerkledenloods de prijs van "New
+  Berbero 101" (€ 503 tegen € 979), "Arezzo ST 803" die van de CS-lijn ("Arezzo
+  803", bij ons alleen maatwerk — de naamgenoten tellen óók maatwerk). Delen
+  twee modellen merk, nummer en een woord, dan moet een woord dat alleen het
+  onze heeft in de tekst staan en geen woord van de naamgenoot. **Bewust niet
+  voor de andere merken:** op de productievoorraad keurde de regel daar vooral
+  goede koppelingen af (ons PIM spelt "Tafraout HOL1" naast "Safi HOL 1";
+  vormversies heten genormaliseerd kaal "vernon 68"). Met de huidige scope is
+  de audit op de productievoorraad (22.887 echte prijzen) byte-gelijk.
+- **Zonder nummer alle woorden.** Voor Brinker moet een pagina zonder
+  kleurnummer elk woord van ons model noemen, ook "new" (dat sinds deze
+  wijziging generiek is, anders koppelde "New Berbero 815" op "New Loop 815").
+  "brinker-berbero-gold" prijsde anders New Berbero 611 op 1,9×. Pallio
+  verkopen vmus/karpettenkelder als één pagina voor alle kleuren ("Herme
+  Black Warp", "Pallio High Atrium in 40 kleuren"); die noemen elk woord en
+  koppelen terecht aan alle kleuren (de prijs per maat is per kleur gelijk).
+  karpettenkelder levert toch 0: zijn Pallio-pagina noemt "40" als getal, en
+  dat botst met ons dessinnummer.
+- **Echte datafouten bij vmus**: Herme 200x300 € 1.405 terwijl hun 200x250
+  € 1.756 kost; Basilicaal White Warp 200x290 € 1.471 tegen € 1.287 advies.
+  Live nagelopen (`data-product_variations`): het zijn de echte paginaprijzen.
+  De −25%-vloer en het rapport vangen ze op.
+- `excel.js` maakt nu een tabblad voor élk merk in de catalogus (vaste
+  volgorde, daarna de rest); de hardgecodeerde lijst liet Brinker stil weg.
+
 **Cloudflare-shops** (`browser: true` → bommelwonen.nl, lowikmeubelen.nl) worden
 in de node-pipeline overgeslagen en via een **Playwright-spec**
 (`catalog-volledig/specs/browser-shops.spec.js`, config

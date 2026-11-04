@@ -17,6 +17,16 @@ const BRAND_ALIASES = {
   'headlam':         'karpi',       // homecompanyshop label
   'louis de poortere': 'louis de poortere',
   'de poortere':     'louis de poortere',
+  // Brinker verkoopt zijn lijnen onder eigen labels; vloerkledenloods.nl zet
+  // die als Shopify-vendor ("Pallio By Brinker", "Ensuite By Brinker",
+  // "Brinker Feelgood"). Als alias tellen hun woorden ook als merkwoord en
+  // niet als onverklaard modelwoord ("Basilicaal Black Warp nr.83 Basic Pallio
+  // by Brinker").
+  'brinker carpets': 'brinker',
+  'pallio by brinker': 'brinker',
+  'ensuite by brinker': 'brinker',
+  'brinker feelgood': 'brinker',
+  'feelgood by brinker': 'brinker',
 };
 
 /** Normalize brand name to canonical form. */
@@ -56,7 +66,15 @@ function sizeMatches(entry, size, beschikbaar = new Set(), aliases = []) {
     a.to[0] === size.widthCm && a.to[1] === size.heightCm);
 }
 
-const SHAPE_WORDS_RE = /\b(ovaal|ovale|oval|ellipse?|rond|ronde|round|loper|lopers|runner|organic|organische?)\b/g;
+/**
+ * "Vierkant" wordt gestript maar is geen eigen vorm: een vierkant kleed is een
+ * rechthoek met gelijke zijden en de maat (200 x 200) zegt dat al. Brinker
+ * voert de 200x200 van een dessin als aparte parent ("Atrium White Warp 1001
+ * Vierkant") naast de andere maten, terwijl de shops hem gewoon als maatoptie
+ * van "Atrium … 1001" verkopen. Bewust níét "square": dat is bij Brinker een
+ * dessinnaam ("Lumora Square 600").
+ */
+const SHAPE_WORDS_RE = /\b(ovaal|ovale|oval|ellipse?|rond|ronde|round|loper|lopers|runner|organic|organische?|vierkant|vierkante)\b/g;
 
 /**
  * Een vormwoord staat niet altijd los. WooCommerce-varianten heten
@@ -227,6 +245,9 @@ const GENERIC_MODEL_WORDS = new Set([
   'sisal', 'wollen', 'wol', 'hoogpolig', 'laagpolig', 'kortpolig', 'vloerkleed',
   'vloerkleden', 'karpet', 'karpetten', 'tapijt', 'carpet', 'carpets', 'rug',
   'berber', 'shaggy', 'katoen', 'buitenkleed', 'kleed', 'jute', 'vintage',
+  // "New" zegt niets over het model: bij Brinker koppelde "New Berbero 815"
+  // anders op de "New Loop 815"-pagina, puur omdat beide met "new" beginnen.
+  'new',
 ]);
 
 /**
@@ -286,6 +307,45 @@ function colorsCompatible(a, b) {
 }
 
 /**
+ * Brinker voert elk dessin van een collectie in tot drie kettingdraden: "Black
+ * Warp", "White Warp" en "Sisal Warp" ("Rustica White Warp 125" naast "Rustica
+ * Sisal Warp 125"). Zwart tegen wit vangt colorsCompatible al, maar "sisal" is
+ * een generiek woord en geen kleur, dus "White Warp" tegen "Sisal Warp" glipte
+ * erdoor. Noemen beide kanten een ketting, dan moet het dezelfde zijn; noemt
+ * één kant er geen, dan geen oordeel (dezelfde regel als bij kleuren).
+ */
+function warpKinds(str) {
+  const out = new Set();
+  for (const m of String(str ?? '').toLowerCase().matchAll(/\b([a-z]+)[\s_-]+warp\b/g)) {
+    out.add(COLOR_ALIASES[m[1]] ?? m[1]);
+  }
+  return [...out];
+}
+
+function warpCompatible(a, b) {
+  const wa = warpKinds(a), wb = warpKinds(b);
+  return !wa.length || !wb.length || wa.some(w => wb.includes(w));
+}
+
+/**
+ * Naamgenoten met hetzelfde dessinnummer (zie twinRules in catalog.js). Brinker
+ * hergebruikt kleurnummers over collecties heen: "Berbero Lungo 101" en "New
+ * Berbero 101", "Arezzo ST 803" en "Arezzo 803" (de CS-lijn). Het nummer klopt
+ * dan altijd, dus moet een woord dat alleen óns model heeft in de tekst staan,
+ * en geen woord dat alleen de naamgenoot heeft. Zonder dat kreeg Berbero Lungo
+ * (€ 979) bij vloerkledenloods.nl de prijs van New Berbero (€ 503).
+ *
+ * @param {Array<{need: string[], forbid: string[]}>} rules
+ */
+function twinsDistinguished(text, rules = []) {
+  if (!rules.length) return true;
+  const tokens = new Set(String(text ?? '').toLowerCase().split(/[^a-z0-9]+/));
+  const colours = colorWords(text);
+  const present = w => tokens.has(w) || sameColour(w, colours);
+  return rules.every(({ need, forbid }) => (!need.length || need.some(present)) && !forbid.some(present));
+}
+
+/**
  * Is er POSITIEF bewijs dat dit dezelfde kleurvariant is — een gedeeld
  * dessinnummer of een gedeelde kleurnaam?
  *
@@ -312,7 +372,7 @@ function hasDiscriminator(catModel, text, colour = '') {
  * `requireDiscriminator` (per shop ingesteld in shops.js) maakt de koppeling
  * bewijs-gedreven in plaats van tegenspraak-gedreven.
  */
-function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator = false, colour = '', mustNotHave = [], nameWords, distinctWords, mustNotHaveWithoutNumber = [], competitorModel } = {}) {
+function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator = false, colour = '', mustNotHave = [], nameWords, distinctWords, mustNotHaveWithoutNumber = [], competitorModel, twinRules = [] } = {}) {
   return hasModelNameToken(text, catModel)
     && numbersCompatible(catModel, text)
     // LET OP: de PIM-kleur (`Kleuren` op de parent) gaat NIET in deze
@@ -322,6 +382,8 @@ function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator =
     // koppelingen af (Craft/Cavaro/Oasis/Suède Shades, dessinnummer gelijk).
     // Als POSITIEF bewijs is hij wél bruikbaar — zie hasDiscriminator.
     && colorsCompatible(catModel, text)
+    && warpCompatible(catModel, text)
+    && twinsDistinguished(text, twinRules)
     && containsAllTokens(text, mustHave)
     && containsNoWords(text, mustNotHave)
     && wordsCarryIdentity(catModel, text, { nameWords, distinctWords, forbidden: mustNotHaveWithoutNumber, competitorModel })
@@ -334,6 +396,7 @@ function modelIdentityMatches(catModel, text, mustHave, { requireDiscriminator =
  */
 function identityOptionsFor(entry) {
   return {
+    twinRules: entry?.twinRules ?? [],
     colour: entry?.colour ?? '',
     mustNotHave: entry?.mustNotHave ?? [],
     mustNotHaveWithoutNumber: entry?.mustNotHaveWithoutNumber ?? [],
@@ -519,5 +582,5 @@ module.exports = {
   normBrand, normModel, parseSize, sizeKey, fmtEuro, euroNum,
   isRealPrice, isVanaf, matchScore, extractModel, slugMatchScore, BRAND_ALIASES,
   detectShape, productShape, designNumbers, numbersCompatible, hasModelNameToken, containsAllTokens, containsNoWords, applyWordAliases, identityOptionsFor, wordsCarryIdentity,
-  pageMatchesEntry, colorWords, colorsCompatible, modelIdentityMatches, hasDiscriminator, GENERIC_MODEL_WORDS,
+  pageMatchesEntry, colorWords, colorsCompatible, warpCompatible, twinsDistinguished, modelIdentityMatches, hasDiscriminator, GENERIC_MODEL_WORDS,
 };

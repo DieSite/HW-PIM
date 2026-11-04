@@ -327,6 +327,7 @@ class CompetitorAnalysisReporter
     private function changeRows(CarbonInterface $since, CarbonInterface $until): Collection
     {
         return ProductPriceHistory::query()
+            ->priceChanges()
             ->where('changed_at', '>=', $since)
             ->where('changed_at', '<=', $until)
             ->orderBy('id')
@@ -789,6 +790,7 @@ class CompetitorAnalysisReporter
         );
 
         $flapping = ProductPriceHistory::query()
+            ->priceChanges()
             ->where('changed_at', '>=', now()->subDays(7))
             ->selectRaw('sku, COUNT(DISTINCT DATE(changed_at)) as dagen')
             ->groupBy('sku')
