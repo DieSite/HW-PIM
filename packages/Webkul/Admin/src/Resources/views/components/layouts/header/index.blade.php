@@ -31,6 +31,16 @@
     </div>
 
     <div class="flex gap-2.5 items-center">
+        @if (bouncer()->hasPermission('simple-stock'))
+            <a
+                href="{{ route('admin.simple-stock.index') }}"
+                class="secondary-button"
+                title="Eenvoudige modus: voorraad opzoeken"
+            >
+                Voorraad zoeken
+            </a>
+        @endif
+
         <!-- Dark mode Switcher -->
         <v-dark>
             <div class="flex">
@@ -131,6 +141,8 @@
     <!-- Drawer Content -->
     <x-slot:content class="p-4">
         <div class="h-[calc(100vh-100px)] overflow-auto journal-scroll">
+            @include('admin::components.layouts.menu-switch')
+
             <nav class="grid gap-2 w-full">
                 <!-- Navigation Menu -->
                 @foreach ($menu->items as $menuItem)

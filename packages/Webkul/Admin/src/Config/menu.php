@@ -239,6 +239,12 @@ return [
         'sort'       => 14,
         'icon'       => 'icon-product',
     ], [
+        'key'        => 'tools.competitor-prices',
+        'name'       => 'Concurrentieprijzen',
+        'route'      => 'admin.tools.competitor-prices.index',
+        'sort'       => 14,
+        'icon'       => 'icon-product',
+    ], [
         'key'        => 'tools.delivery-times',
         'name'       => 'Levertijden',
         'route'      => 'admin.tools.delivery-times.index',

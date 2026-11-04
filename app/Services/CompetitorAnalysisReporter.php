@@ -515,7 +515,7 @@ class CompetitorAnalysisReporter
     }
 
     /**
-     * Every live competitor price, loaded once and reused by the coverage,
+     * Every live competitor price nobody excluded by hand, loaded once and reused by the coverage,
      * per-shop and check sections, which each need a different cut of it.
      *
      * @return Collection<int, CompetitorPrice>
@@ -524,6 +524,7 @@ class CompetitorAnalysisReporter
     {
         return CompetitorPrice::query()
             ->where('price', '>', 0)
+            ->notExcluded()
             ->orderBy('sku')
             ->orderBy('price')
             ->get(['id', 'sku', 'shop', 'price', 'url', 'scraped_at']);

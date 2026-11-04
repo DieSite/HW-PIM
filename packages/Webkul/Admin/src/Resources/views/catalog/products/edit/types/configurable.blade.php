@@ -4,6 +4,39 @@
 
 {!! view_render_event('unopim.admin.catalog.product.edit.form.types.configurable.after', ['product' => $product]) !!}
 
+@pushOnce('styles')
+    {{-- Eigen CSS: Tailwind compileert alleen klassen die bij de laatste build in de bron stonden. --}}
+    <style>
+        .pv-table { overflow-x: auto; border-top: 1px solid #e5e7eb; }
+        .dark .pv-table { border-color: #374151; }
+        .pv-row { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) 110px 150px minmax(110px, 1fr) 120px 70px; gap: 12px; align-items: center; min-width: 900px; padding: 10px 16px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #374151; }
+        .dark .pv-row { border-color: #374151; color: #d1d5db; }
+        .pv-row.pv-twin { background: #fafafa; }
+        .dark .pv-row.pv-twin { background: rgba(255, 255, 255, .03); }
+        .pv-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; padding-top: 8px; padding-bottom: 8px; background: #f9fafb; }
+        .dark .pv-header { background: rgba(255, 255, 255, .04); color: #9ca3af; }
+        .pv-contents { display: contents; }
+        .pv-cell { min-width: 0; }
+        .pv-size { display: flex; gap: 10px; align-items: center; }
+        .pv-thumb { width: 40px; height: 40px; flex: none; border-radius: 4px; overflow: hidden; background: #f3f4f6; }
+        .dark .pv-thumb { background: #374151; }
+        .pv-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .pv-strong { font-weight: 600; color: #111827; }
+        .dark .pv-strong { color: #f9fafb; }
+        .pv-muted { font-size: 12px; color: #6b7280; font-weight: 400; text-transform: none; letter-spacing: 0; }
+        .pv-strike { text-decoration: line-through; }
+        .pv-sku { font-size: 13px; overflow-wrap: anywhere; }
+        .pv-error { display: inline-block; font-size: 12px; font-style: italic; color: #b91c1c; background: #fee2e2; border-radius: 4px; padding: 2px 6px; }
+        .pv-stock { display: flex; gap: 4px; }
+        .pv-chip { min-width: 30px; text-align: center; padding: 1px 6px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #f3f4f6; color: #9ca3af; }
+        .dark .pv-chip { background: #374151; }
+        .pv-chip-on { background: #dcfce7; color: #15803d; }
+        .pv-chip-sale { background: #fef3c7; color: #92400e; }
+        .pv-link { color: #ff6700; font-weight: 600; }
+        .pv-actions { justify-self: end; }
+    </style>
+@endPushOnce
+
 @pushOnce('scripts')
     <!-- Variations Template -->
     <script
@@ -37,7 +70,16 @@
 
             <template v-if="variants.length">
                 <!-- Panel Content -->
-                <div class="grid">
+                <div class="pv-table">
+                    <div class="pv-row pv-header" aria-hidden="true">
+                        <div>Maat</div>
+                        <div>SKU</div>
+                        <div>Prijs</div>
+                        <div>Voorraad <span class="pv-muted">(S / L / U)</span></div>
+                        <div>Levertijd</div>
+                        <div>Concurrentie</div>
+                        <div></div>
+                    </div>
                     <v-product-variation-item
                         v-for='(variant, index) in variants'
                         :key="index"
@@ -546,10 +588,10 @@
 
     <!-- Variation Item Template -->
     <script type="text/x-template" id="v-product-variation-item-template">
-        <div class="flex gap-2.5 justify-between px-4 py-6 border-b border-slate-300 dark:border-gray-800">
+        <div class="pv-row" :class="{'pv-twin': isTwin}">
 
             <!-- Information -->
-            <div class="flex gap-2.5">
+            <div class="pv-contents">
                 <!-- Form Hidden Fields -->
                 <input
                     type="hidden"
@@ -585,44 +627,26 @@
                 </template>
                 <!-- //Ends Form Hidden Fields -->
 
-                <!-- Image -->
-                <div
-                    class="w-full h-[60px] max-w-[60px] max-h-[60px] relative rounded-sm overflow-hidden"
-                    :class="{'border border-dashed border-gray-300 dark:border-cherry-800 dark:invert dark:mix-blend-exclusion': ! variant?.image, 'w-[60px]': variant?.image}"
-                >
-                    <template v-if="! variant?.image">
-                        <img src="{{ unopim_asset('images/product-placeholders/front.svg') }}">
+                <!-- Maat -->
+                <div class="pv-cell pv-size">
+                    <div class="pv-thumb">
+                        <img v-if="variant?.image" :src="variant?.image" alt="">
+                    </div>
 
-                        <p class="w-full absolute bottom-1.5 text-[6px] text-gray-400 text-center font-semibold">
-                            @lang('admin::app.catalog.products.edit.types.configurable.image-placeholder')
-                        </p>
-                    </template>
-
-                    <template v-else>
-                        <img :src="variant?.image" class="w-full h-full object-cover object-top">
-                    </template>
+                    <div>
+                        <div class="pv-strong">@{{ common.maatgroep || common.maat || variant.sku }}</div>
+                        <div class="pv-muted" v-if="common.maat && common.maatgroep && common.maat !== common.maatgroep">exact: @{{ common.maat }}</div>
+                        <div class="pv-muted">
+                            <template v-if="common.onderkleed">@{{ common.onderkleed.replace('_', ' ') }}</template>
+                            <template v-if="common.festoneren_banderen"> · @{{ common.festoneren_banderen }}</template>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Details -->
-                <div class="grid gap-1.5 place-content-start">
-                    <div
-                        class="mt-1 text-red-600 bg-red-200 text-xs italic border border-red-500 rounded-md p-1 text-center"
-                        v-if="!variant.values?.common?.prijs"
-                    >
-                        Heeft geen prijs
-                    </div>
-                    <p class="text-gray-600 dark:text-gray-300" v-if="variant.values?.common?.maat || variant.values?.common?.maatgroep">
-                        @{{ variant.values?.common?.maatgroep }} <br/><span class="text-xs text-gray-400" v-if="variant.values?.common?.maat">(exact: @{{ variant.values?.common?.maat }})</span>
-                    </p>
-                    <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values?.common?.onderkleed">
-                        @{{ variant.values?.common?.onderkleed.replace('_', ' ') }}
-                    </p>
-                    <p class="text-gray-600 dark:text-gray-300" style="text-transform: capitalize" v-if="variant.values?.common?.festoneren_banderen">
-                        @{{ variant.values?.common?.festoneren_banderen }}
-                    </p>
-                    <p class="text-gray-600 dark:text-gray-300">
-                        @{{ "@lang('admin::app.catalog.products.edit.types.configurable.sku')".replace(':sku', variant.sku) }}
-                    </p>
+                <!-- SKU -->
+                <div class="pv-cell pv-sku">
+                    @{{ variant.sku }}
+                    <span class="label-active" v-if="isDefault">Default</span>
 
                     <v-error-message
                         :name="'variants[' + variant.id + '].sku'"
@@ -634,29 +658,44 @@
                         >
                         </p>
                     </v-error-message>
+                </div>
 
-                    <div class="flex gap-1.5 place-items-start">
-                        <span
-                            class="label-active"
-                            v-if="isDefault"
-                        >
-                            Default
-                        </span>
+                <!-- Prijs -->
+                <div class="pv-cell">
+                    <template v-if="price !== null">
+                        <span class="pv-strong">@{{ euro(price) }}</span><span class="pv-muted" v-if="isCustom"> /m²</span>
+                        <div class="pv-muted pv-strike" v-if="advicePrice !== null && advicePrice > price" title="Adviesverkoopprijs">@{{ euro(advicePrice) }}</div>
+                    </template>
+                    <span class="pv-error" v-else>Heeft geen prijs</span>
+                </div>
 
-{{--                        <p class="text-gray-600 dark:text-gray-300">--}}
-{{--                            <span--}}
-{{--                                class="after:content-[',_'] last:after:content-['']"--}}
-{{--                                v-for='(attribute, index) in attributes'--}}
-{{--                            >--}}
-{{--                                @{{ attribute.name + ': ' + optionName(attribute, variant?.values?.common[attribute.code]) }}--}}
-{{--                            </span>--}}
-{{--                        </p>--}}
-                    </div>
+                <!-- Voorraad -->
+                <div class="pv-cell pv-stock">
+                    <template v-if="! isCustom">
+                        <span class="pv-chip" :class="{'pv-chip-on': stock('voorraad_hw_5_korting') > 0}" title="Showroom">@{{ stock('voorraad_hw_5_korting') || '–' }}</span>
+                        <span class="pv-chip" :class="{'pv-chip-on': supplierStock > 0}" title="Leverancier (Eurogros + handmatig)">@{{ supplierStock || '–' }}</span>
+                        <span class="pv-chip" :class="{'pv-chip-sale': stock('uitverkoop_15_korting') > 0}" title="Uitverkoop">@{{ stock('uitverkoop_15_korting') || '–' }}</span>
+                    </template>
+                    <span class="pv-muted" v-else>op maat</span>
+                </div>
+
+                <!-- Levertijd -->
+                <div class="pv-cell">@{{ common.levertijd || '' }}</div>
+
+                <!-- Concurrentie -->
+                <div class="pv-cell">
+                    <template v-if="competition && competition.competitors > 0">
+                        <a href="#sectie-concurrentie" class="pv-link" :title="competition.shop ? 'Goedkoopste die meetelt: ' + competition.shop : 'Geen meetellende concurrent'">
+                            @{{ competition.competitors }} @{{ competition.competitors === 1 ? 'winkel' : 'winkels' }}
+                        </a>
+                        <div class="pv-muted" v-if="competition.cheapest !== null">v.a. @{{ euro(competition.cheapest) }}</div>
+                    </template>
+                    <span class="pv-muted" v-else>–</span>
                 </div>
             </div>
 
             <!-- Actions -->
-            <div class="grid gap-1 place-content-start text-right">
+            <div class="pv-cell pv-actions">
                 <div class="flex gap-2.5">
                     <!-- Remove -->
 
@@ -788,7 +827,9 @@
                 return {
                     defaultId: parseInt('{{ $product->additional['default_variant_id'] ?? null }}'),
 
-                    variants: @json($product->variants()->with(['attribute_family'])->get()->map(fn ($item) => $item->normalizeWithImage())),
+                    variants: @json(\App\Services\VariantOrder::sort($product->variants()->with(['attribute_family'])->get())->map(fn ($item) => $item->normalizeWithImage())->values()),
+
+                    competition: @json((object) app(\App\Services\CompetitorPriceAnalysis::class)->summaries($product->variants)),
 
                     superAttributes: @json($product->super_attributes()->with(['options', 'options.attribute', 'options.translations'])->get()),
 
@@ -798,6 +839,30 @@
                         status: 1,
                     },
                 }
+            },
+
+            mounted() {
+                /*
+                 * Een uitsluiting in de concurrentie-analyse herberekent prijzen
+                 * op de server; toon ze hier meteen.
+                 */
+                window.addEventListener('competitor-prices-updated', (event) => {
+                    const prices = event.detail?.prices || {};
+
+                    this.variants.forEach((variant) => {
+                        if (prices[variant.sku] === undefined || prices[variant.sku] === null || ! variant.values?.common) {
+                            return;
+                        }
+
+                        const current = variant.values.common.prijs;
+
+                        variant.values.common.prijs = Object.assign({}, current && typeof current === 'object' ? current : {}, {EUR: String(Math.round(prices[variant.sku]))});
+                    });
+
+                    if (event.detail?.competition) {
+                        this.competition = event.detail.competition;
+                    }
+                });
             },
 
             methods: {
@@ -904,6 +969,34 @@
                 isDefault() {
                     return this.variant.id == this.$parent.defaultId;
                 },
+
+                common() {
+                    return this.variant?.values?.common || {};
+                },
+
+                price() {
+                    return this.amount(this.common.prijs);
+                },
+
+                advicePrice() {
+                    return this.amount(this.common.adviesverkoopprijs);
+                },
+
+                isCustom() {
+                    return ['Maatwerk', 'Rond Maatwerk'].includes(this.common.maat);
+                },
+
+                isTwin() {
+                    return this.common.onderkleed === 'Met onderkleed';
+                },
+
+                supplierStock() {
+                    return this.stock('voorraad_eurogros') + this.stock('voorraad_5_korting_handmatig');
+                },
+
+                competition() {
+                    return this.$parent.competition?.[this.variant.sku] || null;
+                },
             },
 
             watch: {
@@ -916,6 +1009,23 @@
             },
 
             methods: {
+                amount(value) {
+                    const raw = value && typeof value === 'object' ? value.EUR : value;
+                    const number = parseFloat(raw);
+
+                    return Number.isFinite(number) ? number : null;
+                },
+
+                stock(code) {
+                    const number = parseInt(this.common[code], 10);
+
+                    return Number.isFinite(number) && number > 0 ? number : 0;
+                },
+
+                euro(value) {
+                    return '€ ' + Math.round(value).toLocaleString('nl-NL');
+                },
+
                 optionName(attribute, optionCode) {
                     return attribute.options.find((option) => {
                         return option.code == optionCode;

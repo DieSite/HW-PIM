@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Providers;
 
+use App\Services\AdminMenu;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Event;
@@ -81,21 +82,11 @@ class AdminServiceProvider extends ServiceProvider
             'admin::components.layouts.sidebar.index',
             'admin::components.layouts.tabs',
         ], function ($view) {
-            $tree = Tree::create();
+            /* Full or simplified menu, per the user's choice (App\Services\AdminMenu). */
+            $menu = app(AdminMenu::class);
 
-            foreach (config('menu.admin') as $index => $item) {
-                if (! bouncer()->hasPermission($item['key'])) {
-                    continue;
-                }
-
-                $tree->add($item, 'menu');
-            }
-
-            $tree->items = $tree->removeUnauthorizedUrls();
-
-            $tree->items = core()->sortItems($tree->items);
-
-            $view->with('menu', $tree);
+            $view->with('menu', $menu->tree());
+            $view->with('menuMode', $menu->mode());
         });
 
         view()->composer([

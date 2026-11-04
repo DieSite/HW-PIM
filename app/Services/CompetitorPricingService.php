@@ -85,10 +85,7 @@ class CompetitorPricingService
 
         $competitors = CompetitorPrice::query()
             ->where('sku', $variant->sku)
-            ->where('price', '>', 0)
-            ->where(fn ($query) => $query
-                ->whereNull('scraped_at')
-                ->orWhere('scraped_at', '>=', now()->subDays((int) config('competitor_pricing.max_price_age_days', 14))))
+            ->counting()
             ->get();
 
         $lowest = $competitors->sortBy('price')->first();

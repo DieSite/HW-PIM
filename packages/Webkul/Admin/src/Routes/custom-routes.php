@@ -1,13 +1,16 @@
 <?php
 
+use App\Http\Controllers\AdminMenuController;
 use App\Http\Controllers\AiDescriptionController;
 use App\Http\Controllers\BolSyncController;
+use App\Http\Controllers\CompetitorAnalysisController;
 use App\Http\Controllers\CrossSellController;
 use App\Http\Controllers\CustomBolComController;
 use App\Http\Controllers\CustomImportController;
 use App\Http\Controllers\PhotoroomController;
 use App\Http\Controllers\Tools\AiDescriptionsController;
 use App\Http\Controllers\Tools\BulkEditController;
+use App\Http\Controllers\Tools\CompetitorPricesController;
 use App\Http\Controllers\Tools\DeliveryTimesController;
 use App\Http\Controllers\Tools\DropboxController;
 use App\Http\Controllers\Tools\ErroredProductsController;
@@ -15,6 +18,7 @@ use App\Http\Controllers\Tools\EurgrosController;
 use App\Http\Controllers\Tools\HordeurenAnalysisController;
 use App\Http\Controllers\Tools\ProductHWStockEditorController;
 use App\Http\Controllers\Tools\ProductStockEditorController;
+use App\Http\Controllers\Tools\StockLookupController;
 use App\Http\Controllers\WooCommerceSyncController;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +36,18 @@ Route::group(['middleware' => ['web', 'admin']], function () {
 
     Route::post('catalog/products/cross-sells', [CrossSellController::class, 'connect'])
         ->name('admin.catalog.products.cross-sells.connect');
+
+    Route::get('catalog/products/{productId}/competitor-analysis', [CompetitorAnalysisController::class, 'show'])
+        ->whereNumber('productId')
+        ->name('admin.catalog.products.competitor-analysis.show');
+
+    Route::post('catalog/products/{productId}/competitor-prices/{competitorPrice}/exclude', [CompetitorAnalysisController::class, 'exclude'])
+        ->whereNumber('productId')
+        ->name('admin.catalog.products.competitor-prices.exclude');
+
+    Route::delete('catalog/products/{productId}/competitor-prices/{competitorPrice}/exclude', [CompetitorAnalysisController::class, 'include'])
+        ->whereNumber('productId')
+        ->name('admin.catalog.products.competitor-prices.include');
 });
 
 Route::group(['middleware' => ['web', 'admin']], function () {
@@ -42,6 +58,11 @@ Route::group(['middleware' => ['web', 'admin']], function () {
 });
 
 Route::group(['middleware' => ['web', 'admin']], function () {
+    Route::post('menu-weergave', [AdminMenuController::class, 'update'])->name('admin.menu-mode.update');
+
+    Route::get('voorraad-zoeken', [StockLookupController::class, 'index'])->name('admin.simple-stock.index');
+    Route::get('voorraad-zoeken/{rug}', [StockLookupController::class, 'show'])->whereNumber('rug')->name('admin.simple-stock.show');
+
     Route::prefix('tools')->group(function () {
         Route::get('stock', [ProductStockEditorController::class, 'index'])->name('admin.tools.product-stock-editor.index');
         Route::post('stock', [ProductStockEditorController::class, 'update'])->name('admin.tools.product-stock-editor.post');
@@ -72,6 +93,9 @@ Route::group(['middleware' => ['web', 'admin']], function () {
 
         Route::get('/hordeuren-analyse', [HordeurenAnalysisController::class, 'index'])->name('admin.tools.hordeuren-analyse.index');
         Route::post('/hordeuren-analyse', [HordeurenAnalysisController::class, 'run'])->name('admin.tools.hordeuren-analyse.run');
+
+        Route::get('/concurrentieprijzen', [CompetitorPricesController::class, 'index'])->name('admin.tools.competitor-prices.index');
+        Route::post('/concurrentieprijzen', [CompetitorPricesController::class, 'update'])->name('admin.tools.competitor-prices.update');
 
         Route::get('/levertijden', [DeliveryTimesController::class, 'index'])->name('admin.tools.delivery-times.index');
         Route::post('/levertijden', [DeliveryTimesController::class, 'update'])->name('admin.tools.delivery-times.update');

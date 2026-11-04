@@ -70,7 +70,13 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    /*
+     * `admin` is the PIM's login check (Webkul Bouncer): guests go to the
+     * admin login, and the `horizon` ACL key guards the dashboard route. The
+     * viewHorizon gate (HorizonServiceProvider) checks the same permission
+     * for every Horizon request, including its API calls.
+     */
+    'middleware' => ['web', 'admin'],
 
     /*
     |--------------------------------------------------------------------------

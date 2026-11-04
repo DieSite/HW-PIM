@@ -2,6 +2,8 @@
 
 namespace Webkul\Admin\Http\Controllers\User;
 
+use Illuminate\Http\Response;
+use Illuminate\View\View;
 use Webkul\Admin\Http\Controllers\Controller;
 
 class SessionController extends Controller
@@ -9,12 +11,12 @@ class SessionController extends Controller
     /**
      * Show the form for creating a new resource.
      *
-     * @return \Illuminate\View\View
+     * @return View
      */
     public function create()
     {
         if (auth()->guard('admin')->check()) {
-            return redirect()->route('admin.dashboard.index');
+            return redirect()->to($this->homeUrl());
         }
 
         if (strpos(url()->previous(), 'admin') !== false) {
@@ -31,7 +33,7 @@ class SessionController extends Controller
     /**
      * Store a newly created resource in storage.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function store()
     {
@@ -56,6 +58,12 @@ class SessionController extends Controller
             return redirect()->route('admin.session.create');
         }
 
+        if (! bouncer()->hasPermission('dashboard')) {
+            session()->forget('url.intended');
+
+            return redirect()->to($this->homeUrl());
+        }
+
         return redirect()->intended(route('admin.dashboard.index'));
     }
 
@@ -63,12 +71,25 @@ class SessionController extends Controller
      * Remove the specified resource from storage.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function destroy()
     {
         auth()->guard('admin')->logout();
 
         return redirect()->route('admin.session.create');
+    }
+
+    /**
+     * Where a logged-in admin starts: the dashboard, or the stock lookup
+     * ("eenvoudige modus") for a role that may only look up stock.
+     */
+    private function homeUrl(): string
+    {
+        if (! bouncer()->hasPermission('dashboard') && bouncer()->hasPermission('simple-stock')) {
+            return route('admin.simple-stock.index');
+        }
+
+        return route('admin.dashboard.index');
     }
 }

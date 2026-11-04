@@ -414,4 +414,36 @@ return [
         'params' => ['product_images', 'settings'],
         'sort'   => 4,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Eenvoudige modus
+    |--------------------------------------------------------------------------
+    |
+    | Read-only stock lookup for showroom and office staff. A role with only
+    | this permission lands on the lookup after login.
+    |
+    */
+    [
+        'key'   => 'simple-stock',
+        'name'  => 'Voorraad zoeken (eenvoudige modus)',
+        'route' => 'admin.simple-stock.index',
+        'sort'  => 15,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Horizon
+    |--------------------------------------------------------------------------
+    |
+    | The queue dashboard at /horizon. Full administrators always have it; see
+    | the viewHorizon gate in App\Providers\HorizonServiceProvider.
+    |
+    */
+    [
+        'key'   => 'horizon',
+        'name'  => 'Queue-monitor (Horizon)',
+        'route' => 'horizon.index',
+        'sort'  => 16,
+    ],
 ];

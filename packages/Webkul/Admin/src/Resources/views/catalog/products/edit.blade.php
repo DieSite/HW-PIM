@@ -8,6 +8,55 @@
 
     {!! view_render_event('unopim.admin.catalog.product.edit.before', ['product' => $product]) !!}
 
+    @push('styles')
+        {{-- Eigen CSS: Tailwind compileert alleen klassen die bij de laatste build in de bron stonden. --}}
+        <style>
+            .pe-sticky { position: sticky; top: 57px; z-index: 30; margin: -16px -16px 0; padding: 12px 16px 0; background: #fff; border-bottom: 1px solid #e5e7eb; }
+            .dark .pe-sticky { background: #1f1f2e; border-color: #374151; }
+            .pe-jump { display: flex; gap: 2px; overflow-x: auto; margin: 0 -4px; }
+            .pe-jump a { flex: none; padding: 8px 10px; font-size: 13px; font-weight: 600; color: #4b5563; border-bottom: 2px solid transparent; white-space: nowrap; }
+            .pe-jump a:hover, .pe-jump a.is-active { color: #ff6700; border-bottom-color: #ff6700; }
+            .dark .pe-jump a { color: #d1d5db; }
+            .pe-section { scroll-margin-top: 150px; }
+            .pe-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+            .pe-fields-wide { grid-template-columns: minmax(0, 1fr); }
+            .pe-more > summary { list-style: revert; }
+            @media (max-width: 900px) { .pe-fields { grid-template-columns: minmax(0, 1fr); } }
+        </style>
+    @endpush
+
+    @push('scripts')
+        @include('admin::custom.keep-scroll')
+
+        <script>
+            /* Markeer in het springmenu het onderdeel dat nu in beeld is. */
+            document.addEventListener('DOMContentLoaded', function () {
+                const links = [...document.querySelectorAll('.pe-jump a')];
+                const targets = links.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+
+                if (!('IntersectionObserver' in window) || targets.length === 0) {
+                    return;
+                }
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.filter((entry) => entry.isIntersecting).forEach((entry) => {
+                        links.forEach((link) => link.classList.toggle('is-active', link.getAttribute('href') === '#' + entry.target.id));
+                    });
+                }, {rootMargin: '-160px 0px -60% 0px'});
+
+                targets.forEach((target) => observer.observe(target));
+
+                links.forEach((link) => link.addEventListener('click', () => {
+                    const target = document.querySelector(link.getAttribute('href'));
+
+                    if (target && target.tagName === 'DETAILS') {
+                        target.open = true;
+                    }
+                }));
+            });
+        </script>
+    @endpush
+
     <x-admin::form
         method="PUT"
         enctype="multipart/form-data"
@@ -16,8 +65,28 @@
 
         <input type="hidden" name="sku" value="{{ $product->sku }}">
 
+        @php
+            $editSections = app(\App\Services\ProductEditSections::class)->for($product);
+
+            $showCompetitorAnalysis = $product->type === 'configurable' || $product->parent_id !== null;
+
+            $jumpLinks = collect($editSections['sections'])->mapWithKeys(fn ($section) => ['sectie-'.$section['key'] => $section['label']]);
+
+            if ($product->type === 'configurable') {
+                $jumpLinks->put('sectie-maten', 'Maten');
+            }
+
+            if ($showCompetitorAnalysis) {
+                $jumpLinks->put('sectie-concurrentie', 'Concurrentie');
+            }
+
+            if ($editSections['collapsed']) {
+                $jumpLinks->put('sectie-meer-velden', $editSections['collapsed']['label']);
+            }
+        @endphp
+
         <!-- Page Header -->
-        <div class="grid gap-2.5">
+        <div class="pe-sticky grid gap-2.5">
             <div class="flex gap-4 justify-between items-center max-sm:flex-wrap">
                 <div class="grid gap-1.5">
                     <p class="text-xl text-gray-800 dark:text-slate-50 font-bold leading-6">
@@ -78,6 +147,12 @@
                     </button>
                 </div>
             </div>
+
+            <nav class="pe-jump" aria-label="Spring naar onderdeel">
+                @foreach ($jumpLinks as $anchor => $label)
+                    <a href="#{{ $anchor }}">{{ $label }}</a>
+                @endforeach
+            </nav>
         </div>
 
         @isset($product->additional['product_sku_already_exists'])
@@ -191,48 +266,86 @@
         {!! view_render_event('unopim.admin.catalog.product.edit.form.before', ['product' => $product]) !!}
 
         <div class="flex gap-2.5 mt-3.5 max-xl:flex-wrap">
-            <div class="left-column flex flex-col gap-2 flex-1 max-xl:flex-auto">
-                @foreach ($product->attribute_family->familyGroups()->orderBy('position')->get() as $group)
-                    {!! view_render_event('unopim.admin.catalog.product.edit.form.column_before', ['product' => $product]) !!}
+            <div class="left-column flex flex-col gap-2 flex-1 max-xl:flex-auto min-w-0">
+                {!! view_render_event('unopim.admin.catalog.product.edit.form.column_before', ['product' => $product]) !!}
 
-                    <div class="flex flex-col gap-2">
-                        @php
-                            $customAttributes = $product->getEditableAttributes($group);
+                @php
+                    $fieldProps = [
+                        'fieldValues'        => $product->values,
+                        'currentLocaleCode'  => $currentLocale->code,
+                        'currentChannelCode' => $currentChannel->code,
+                        'channelCurrencies'  => $currentChannel->currencies,
+                        'variantFields'      => $product?->parent ? $product->parent->super_attributes->pluck('code')->toArray() : [],
+                        'productId'          => $product->id,
+                    ];
+                @endphp
 
-                            $groupLabel = $group->name;
-                            $groupLabel = empty($groupLabel) ? "[{$group->code}]" : $groupLabel;
-                        @endphp
+                @foreach ($editSections['sections'] as $section)
+                    <section id="sectie-{{ $section['key'] }}" class="pe-section relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
+                        <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
+                            {{ $section['label'] }}
+                        </p>
 
-                        @if (count($customAttributes))
-                            {!! view_render_event('unopim.admin.catalog.product.edit.form.' . $group->code . '.before', ['product' => $product]) !!}
-
-                            <div class="relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
-                                <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
-                                    {{ $groupLabel }}
-                                </p>
-
-                                <x-admin::products.dynamic-attribute-fields
-                                    :fields="$customAttributes"
-                                    :fieldValues="$product->values"
-                                    :currentLocaleCode="$currentLocale->code"
-                                    :currentChannelCode="$currentChannel->code"
-                                    :channelCurrencies="$currentChannel->currencies"
-                                    :variantFields="$product?->parent ? $product->parent->super_attributes->pluck('code')->toArray() : []"
-                                    :productId="$product->id"
-                                    fieldsWrapper="values"
-                                >
-                                </x-admin::products.dynamic-attribute-fields>
-
-                            </div>
-
-                            {!! view_render_event('unopim.admin.catalog.product.edit.form.' . $group->code . '.after', ['product' => $product]) !!}
-                        @endif
-
-                        <!-- Product Type View Blade File -->
-                    </div>
-
-                    {!! view_render_event('unopim.admin.catalog.product.edit.form.column_after', ['product' => $product]) !!}
+                        <div @class(['pe-fields', 'pe-fields-wide' => in_array($section['key'], ['afbeeldingen', 'teksten'])])>
+                            <x-admin::products.dynamic-attribute-fields
+                                :fields="$section['attributes']"
+                                :fieldValues="$fieldProps['fieldValues']"
+                                :currentLocaleCode="$fieldProps['currentLocaleCode']"
+                                :currentChannelCode="$fieldProps['currentChannelCode']"
+                                :channelCurrencies="$fieldProps['channelCurrencies']"
+                                :variantFields="$fieldProps['variantFields']"
+                                :productId="$fieldProps['productId']"
+                                fieldsWrapper="values"
+                            >
+                            </x-admin::products.dynamic-attribute-fields>
+                        </div>
+                    </section>
                 @endforeach
+
+                @if ($product->type === 'configurable')
+                    <section id="sectie-maten" class="pe-section">
+                        @includeIf('admin::catalog.products.edit.types.' . $product->type)
+                    </section>
+                @endif
+
+                @if ($showCompetitorAnalysis)
+                    <section id="sectie-concurrentie" class="pe-section relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
+                        <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
+                            Concurrentie-analyse
+                        </p>
+
+                        @include('admin::catalog.products.edit.competitor-analysis.index')
+                    </section>
+                @endif
+
+                @if ($editSections['collapsed'])
+                    @php
+                        $collapsedHasErrors = $errors->hasAny($editSections['collapsed']['attributes']->map(fn ($attribute) => 'values.common.'.$attribute->code)->all());
+                    @endphp
+
+                    <details id="sectie-{{ $editSections['collapsed']['key'] }}" class="pe-section pe-more relative p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow" @if ($collapsedHasErrors) open @endif>
+                        <summary class="text-base text-gray-800 dark:text-white font-semibold cursor-pointer">
+                            {{ $editSections['collapsed']['label'] }}
+                            <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">({{ $editSections['collapsed']['attributes']->count() }} velden die je zelden nodig hebt)</span>
+                        </summary>
+
+                        <div class="pe-fields mt-4">
+                            <x-admin::products.dynamic-attribute-fields
+                                :fields="$editSections['collapsed']['attributes']"
+                                :fieldValues="$fieldProps['fieldValues']"
+                                :currentLocaleCode="$fieldProps['currentLocaleCode']"
+                                :currentChannelCode="$fieldProps['currentChannelCode']"
+                                :channelCurrencies="$fieldProps['channelCurrencies']"
+                                :variantFields="$fieldProps['variantFields']"
+                                :productId="$fieldProps['productId']"
+                                fieldsWrapper="values"
+                            >
+                            </x-admin::products.dynamic-attribute-fields>
+                        </div>
+                    </details>
+                @endif
+
+                {!! view_render_event('unopim.admin.catalog.product.edit.form.column_after', ['product' => $product]) !!}
             </div>
             <div class="right-column flex flex-col gap-2 w-[360px] max-w-full max-sm:w-full">
                 @if(is_null($product->parent))
@@ -465,8 +578,6 @@
                 @if($product->type !== 'simple')
                     @include('admin::catalog.products.edit.categories', ['currentLocaleCode' => $currentLocale?->code, 'productCategories' => $product->values['categories'] ?? []])
 
-
-                    @includeIf('admin::catalog.products.edit.types.' . $product->type)
 
                     <!-- Related, Cross Sells, Up Sells View Blade File -->
                     @include('admin::catalog.products.edit.links', [
