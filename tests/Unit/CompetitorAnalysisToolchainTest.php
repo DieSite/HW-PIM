@@ -40,7 +40,7 @@ function runScraperProcess(array $command, string $cwd): bool
 {
     $instance = app(RunCompetitorAnalysisCommand::class);
 
-    $instance->setOutput(new OutputStyle(new ArrayInput([]), new BufferedOutput));
+    $instance->setOutput(new OutputStyle(new ArrayInput([]), new BufferedOutput()));
 
     $process = new ReflectionMethod($instance, 'process');
 
@@ -76,4 +76,11 @@ it('never leaves the scheduled run without an output log', function () {
 
     expect($event)->not->toBeNull()
         ->and($event->output)->not->toBe($event->getDefaultOutput());
+});
+
+it('lets the nightly audit remove stale wrong couplings instead of only reporting them', function () {
+    $command = app(RunCompetitorAnalysisCommand::class);
+
+    expect((new ReflectionMethod($command, 'scraperArguments'))->invoke($command))
+        ->toBe(['catalog-volledig/run.js', '--audit-fix']);
 });

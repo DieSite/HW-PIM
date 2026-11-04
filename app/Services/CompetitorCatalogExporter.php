@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\Product;
+use App\Services\Concerns\SplitsMultiValueAttributes;
 use Illuminate\Support\Collection;
 
 class CompetitorCatalogExporter
 {
-    use \App\Services\Concerns\SplitsMultiValueAttributes;
+    use SplitsMultiValueAttributes;
+
+    public function __construct(private CompetitorBrandFilter $brandFilter) {}
 
     /**
      * Write the competitor-scraper catalog CSV straight from the product
@@ -54,6 +57,12 @@ class CompetitorCatalogExporter
                         // path NULL op, en dan glipt de met-onderkleed-variant
                         // er alsnog doorheen. `common()` verdraagt beide vormen.
                         if (($this->common($variant)['onderkleed'] ?? null) === 'Met onderkleed') {
+                            continue;
+                        }
+
+                        // Merken die we niet meer verkopen (De Munk) hoeven niet
+                        // gescrapet te worden; zie CompetitorBrandFilter.
+                        if ($this->brandFilter->isExcluded($variant)) {
                             continue;
                         }
 

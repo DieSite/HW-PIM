@@ -13,6 +13,23 @@ return [
     */
     'enabled' => true,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Brands we no longer sell
+    |--------------------------------------------------------------------------
+    |
+    | Their products stay in the PIM but leave the competitor analysis: they
+    | are not exported to the scraper, their competitor prices are removed on
+    | the next import, and CompetitorPricingService leaves their selling price
+    | untouched (no fall-back to the adviesverkoopprijs, no shop sync). The
+    | parent's `merk` is matched as a whole value, so "Karpi" here would not
+    | catch "Mart Visser|Karpi". See App\Services\CompetitorBrandFilter.
+    |
+    | De Munk: no longer sold since November 2026.
+    |
+    */
+    'excluded_brands' => ['De Munk'],
+
     'db_path' => env(
         'COMPETITOR_PRICING_DB_PATH',
         base_path('competitor-analysis/catalog-volledig/data/catalog-volledig.db')

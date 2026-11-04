@@ -16,7 +16,7 @@ class CompetitorPricingService
 
     public const BASIS_FLOOR = 'bodem';
 
-    public function __construct(private ProductService $productService) {}
+    public function __construct(private ProductService $productService, private CompetitorBrandFilter $brandFilter) {}
 
     /**
      * Recompute the selling price for every product matching the given SKUs and
@@ -38,6 +38,12 @@ class CompetitorPricingService
             ->with('parent')
             ->chunkById(200, function (Collection $variants) use (&$changedVariants, $previousSnapshot): void {
                 foreach ($variants as $variant) {
+                    // Een merk dat we niet meer verkopen houdt zijn prijs, ook
+                    // die van de onderkleed-broer.
+                    if ($this->brandFilter->isExcluded($variant)) {
+                        continue;
+                    }
+
                     $history = $this->recompute($variant, $previousSnapshot[$variant->sku] ?? []);
 
                     if ($history !== null) {
@@ -77,6 +83,13 @@ class CompetitorPricingService
         // en zolang de oude `.O`-rijen nog in `competitor_prices` staan, wint
         // in de natuurlijke volgorde de verkeerde.
         if ($this->onderkleed($variant) === 'Met onderkleed') {
+            return null;
+        }
+
+        // Merken die we niet meer verkopen (config excluded_brands) doen niet
+        // mee: zonder concurrentprijzen zou hun prijs anders terugvallen op de
+        // adviesprijs en naar de winkel gesynct worden.
+        if ($this->brandFilter->isExcluded($variant)) {
             return null;
         }
 

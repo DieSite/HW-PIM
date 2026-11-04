@@ -498,8 +498,10 @@ test('listPageUrl hangt het paginanummer correct aan een overzichts-URL', () => 
 });
 
 test('vloerkledenspecialist leest ook de diameter-prijs van een rond kleed', () => {
-  const { CUSTOM_SHOPS } = require('./shops.js');
-  const shop = CUSTOM_SHOPS.find((s) => s.key === 'vloerkledenspecialist.nl');
+  // Sinds november 2026 retired (alleen De Munk); de prijsuitlezing blijft
+  // bewaard voor als het merk terugkomt.
+  const { RETIRED_SHOPS } = require('./shops.js');
+  const shop = RETIRED_SHOPS.find((s) => s.key === 'vloerkledenspecialist.nl' && s.getPrijs);
 
   // Hun size-select schrijft rechthoeken als "2.00 x 3.00|1439" en ronde
   // kleden als diameter met een Ø. Alleen de eerste vorm kennen betekende dat
@@ -985,4 +987,89 @@ test('Brinker: zonder kleurnummer moet de concurrent elk woord van ons model noe
   // Pallio: één pagina voor alle kleuren van een lijn, prijs per maat gelijk
   assert.equal(matches('BRK1201.1', 'brinker carpets herme black warp https://vmusvloerkleden.nl/product/brinker-carpets-herme-black-warp/'), true);
   assert.equal(matches('BRK1213.1', 'brinker carpets herme black warp https://vmusvloerkleden.nl/product/brinker-carpets-herme-black-warp/'), false);
+});
+
+test('audit-prices oordeelt met dezelfde winkelkennis als de scrapers', () => {
+  const { judge } = require('./audit-prices');
+  const { CUSTOM_SHOPS } = require('./shops');
+  const cfg = key => CUSTOM_SHOPS.find(s => s.key === key);
+  const entry = (m, shape = 'rechthoek', widthCm = 200, heightCm = 280) => ({ normModel: normModel(m), mustHave: [], shape, widthCm, heightCm });
+
+  // onlineslaapcomfort.nl machinevertaalt de collectie; de indexer past de
+  // vertaaltabel toe, de audit vroeger niet (274 onterechte afkeuringen).
+  const osc = cfg('onlineslaapcomfort.nl');
+  const url = 'https://www.onlineslaapcomfort.nl/vervagende-wereld-8254-200x280-5420073305379';
+  const row = { sku: 'X.1', shop: osc.key, price_str: '€ 100,00', url };
+  assert.equal(judge(row, entry('Fading World Medallion 8254'), { title: 'vervagende-wereld-8254-200x280-5420073305379', platform: 'custom' }, osc), null);
+  const knutsel = { ...row, url: 'https://www.onlineslaapcomfort.nl/knutsel-papierknip-9364-80x150-5420073378052' };
+  assert.equal(judge(knutsel, entry('Craft Papercut 9364', 'rechthoek', 80, 150), { title: 'knutsel-papierknip-9364-80x150-5420073378052', platform: 'custom' }, osc), null);
+  // De vertaling maakt een ander dessin niet goed
+  assert.equal(judge(row, entry('Fading World Medallion 8255'), { title: 'vervagende-wereld-8254-200x280-5420073305379', platform: 'custom' }, osc), 'identity');
+
+  // woonwebwinkel.com: één pagina voor alle vormen (mixedShapes) — de
+  // paginatitel zegt dan niets over de vorm van de gekoppelde maat.
+  const wwk = cfg('woonwebwinkel.com');
+  const wrow = { sku: 'X.1', shop: wwk.key, price_str: '€ 100,00', url: 'https://woonwebwinkel.com/amado-2626-modern-vloerkleed-met-honingraatpatroon.html' };
+  assert.equal(judge(wrow, entry('Amado 2626 Rond', 'rond'), { title: 'amado-2626-modern-vloerkleed-met-honingraatpatroon', platform: 'custom' }, wwk), null);
+  assert.equal(judge(wrow, entry('Amado 2626 Rond', 'rond'), { title: 'amado-2626-modern-vloerkleed-met-honingraatpatroon', platform: 'custom' }), 'shape');
+});
+
+test('audit-prices --fix ruimt alleen rijen op die niemand meer bevestigt', () => {
+  const { isStale } = require('./audit-prices');
+  const now = Date.parse('2026-11-04T05:00:00Z');
+  // Vannacht nog door de indexer bevestigd: laten staan, wat de audit ook vindt
+  assert.equal(isStale('2026-11-04 03:06:24', 2, now), false);
+  assert.equal(isStale('2026-11-02 05:00:01', 2, now), false);
+  // Sinds september stil (Ulva ← Ulva Black bij hetdesignhuys): opruimen
+  assert.equal(isStale('2026-09-23 03:01:00', 2, now), true);
+  assert.equal(isStale('2026-11-02 04:59:59', 2, now), true);
+  assert.equal(isStale(null, 2, now), true);
+});
+
+test('audit-prices --fix: echte rijen van een kale database, oud weg en vers blijft', () => {
+  const { execFileSync } = require('node:child_process');
+  const Database = require('better-sqlite3');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-fix-'));
+  const csv = path.join(dir, 'catalog.csv');
+  const dbPath = path.join(dir, 'cv.db');
+  fs.writeFileSync(csv, [
+    'ERG0434.2,Eurogros,Ulva 172,200 cm x 290 cm,989,Grijs',
+    // Pas naast de Black-lijn is de Black-pagina fout voor gewoon Ulva 172
+    'ERG0440.2,Eurogros,Ulva Black 172,200 cm x 290 cm,1059,Zwart',
+    'ERG0212.4,Eurogros,Love Shaggy Antraciet,200 cm x 290 cm,989,Grijs',
+  ].join('\n'));
+  // Schema via storage.js in een eigen proces: storage.js leest CATALOG_DB
+  // één keer bij het laden, dus hier in het testproces zou openDb() de échte
+  // database openen.
+  execFileSync('node', ['-e', "require('./storage').openDb()"], { cwd: __dirname, env: { ...process.env, CATALOG_DB: dbPath } });
+  const db = new Database(dbPath);
+  db.prepare("INSERT INTO competitor_index (shop, norm_brand, norm_model, title, url, platform) VALUES (?, ?, ?, ?, ?, 'shopify')")
+    .run('hetdesignhuys.nl', 'eurogros', 'ulva black 172', 'Karpet Ulva Black 172', 'https://hetdesignhuys.nl/products/karpet-ulva-black-172');
+  db.prepare("INSERT INTO competitor_index (shop, norm_brand, norm_model, title, url, platform) VALUES (?, ?, ?, ?, ?, 'shopify')")
+    .run('hetdesignhuys.nl', 'eurogros', 'love shaggy beige', 'Karpet Love Shaggy beige', 'https://hetdesignhuys.nl/products/karpet-love-shaggy-beige');
+  db.prepare('INSERT INTO prices (sku, shop, price_str, url, scraped_at) VALUES (?, ?, ?, ?, ?)')
+    .run('ERG0434.2', 'hetdesignhuys.nl', '€ 1.059,00', 'https://hetdesignhuys.nl/products/karpet-ulva-black-172', '2026-09-23 03:00:00');
+  db.prepare("INSERT INTO prices (sku, shop, price_str, url, scraped_at) VALUES (?, ?, ?, ?, datetime('now'))")
+    .run('ERG0212.4', 'hetdesignhuys.nl', '€ 1.220,00', 'https://hetdesignhuys.nl/products/karpet-love-shaggy-beige');
+  db.close();
+
+  execFileSync('node', [path.join(__dirname, 'audit-prices.js'), '--fix'], { env: { ...process.env, CATALOG_CSV: csv, CATALOG_DB: dbPath } });
+
+  const left = new Database(dbPath, { readonly: true }).prepare('SELECT sku FROM prices ORDER BY sku').all().map(r => r.sku);
+  assert.deepEqual(left, ['ERG0212.4']);
+});
+
+test('winkels die alleen De Munk voerden worden niet meer gecrawld', () => {
+  const { SHOPIFY_SHOPS, WOOCOMMERCE_SHOPS, CUSTOM_SHOPS, RETIRED_SHOPS, ALL_SHOP_KEYS } = require('./shops.js');
+  const active = [...SHOPIFY_SHOPS, ...WOOCOMMERCE_SHOPS, ...CUSTOM_SHOPS];
+  const retiredKeys = ['karpettenshop.nl', 'plaisierinterieur.nl', 'vloerkledenspecialist.nl'];
+
+  for (const key of retiredKeys) {
+    assert.ok(RETIRED_SHOPS.some(s => s.key === key), key);
+    assert.ok(!active.some(s => s.key === key), key);
+    assert.ok(!ALL_SHOP_KEYS.includes(key), key);
+  }
+  // Geen actieve winkel zoekt nog naar De Munk
+  assert.ok(active.every(s => !s.brands.includes('De Munk')));
+  assert.ok(active.every(s => !(s.brandKeys ?? []).some(k => /munk/.test(k))));
 });

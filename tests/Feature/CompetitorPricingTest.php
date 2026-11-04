@@ -274,6 +274,10 @@ it('disables the nightly analysis with --disable-analysis', function () {
 });
 
 it('exports the catalog from the database to a scraper CSV', function () {
+    // Over het CSV-formaat; De Munk is sinds november 2026 uitgesloten (zie
+    // CompetitorBrandExclusionTest), dus hier geen uitsluitingen.
+    config(['competitor_pricing.excluded_brands' => []]);
+
     $variant = makePricedVariant([
         'productnaam' => 'Diamante 01',
         'maat'        => '170 cm x 240 cm',

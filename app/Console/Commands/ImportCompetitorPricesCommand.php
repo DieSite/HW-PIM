@@ -5,8 +5,10 @@ namespace App\Console\Commands;
 use App\Models\CompetitorPrice;
 use App\Models\CompetitorPriceRemoval;
 use App\Models\Product;
+use App\Services\CompetitorBrandFilter;
 use App\Services\CompetitorPricingService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 
 class ImportCompetitorPricesCommand extends Command
 {
@@ -31,7 +33,7 @@ class ImportCompetitorPricesCommand extends Command
      */
     private array $underlay = [];
 
-    public function handle(CompetitorPricingService $pricing): int
+    public function handle(CompetitorPricingService $pricing, CompetitorBrandFilter $brandFilter): int
     {
         $dbPath = $this->option('db') ?: config('competitor_pricing.db_path');
 
@@ -41,7 +43,10 @@ class ImportCompetitorPricesCommand extends Command
             return self::FAILURE;
         }
 
-        $rows = $this->withoutUnderlayVariants($this->readScrapedPrices($dbPath));
+        $rows = $this->withoutExcludedBrands(
+            $this->withoutUnderlayVariants($this->readScrapedPrices($dbPath)),
+            $brandFilter,
+        );
 
         if ($rows === []) {
             $this->warn('No usable competitor prices found in the database.');
@@ -182,6 +187,52 @@ class ImportCompetitorPricesCommand extends Command
     }
 
     /**
+     * Drop the scraped rows of brands we no longer sell, and delete their
+     * stored competitor prices.
+     *
+     * Deliberately not via `--prune`: their rows are not "no longer found at
+     * the competitor", so they stay out of the removal log (and thus out of
+     * the report), they do not trigger the per-shop prune brake (shops that
+     * only sold De Munk would lose everything and be braked forever), and
+     * their SKUs are not recomputed — CompetitorPricingService leaves their
+     * selling price as it is.
+     *
+     * @param  array<int, array{sku: string, shop: string, price: float, url: ?string, scraped_at: ?string}>  $rows
+     * @return array<int, array{sku: string, shop: string, price: float, url: ?string, scraped_at: ?string}>
+     */
+    private function withoutExcludedBrands(array $rows, CompetitorBrandFilter $brandFilter): array
+    {
+        if ($brandFilter->excludedBrands() === []) {
+            return $rows;
+        }
+
+        $excluded = $brandFilter->excludedSkus(array_merge(
+            array_column($rows, 'sku'),
+            CompetitorPrice::query()->distinct()->pluck('sku')->all(),
+        ));
+
+        if ($excluded === []) {
+            return $rows;
+        }
+
+        $deleted = 0;
+
+        foreach (array_chunk(array_keys($excluded), 500) as $chunk) {
+            $deleted += CompetitorPrice::whereIn('sku', $chunk)->delete();
+        }
+
+        $kept = array_values(array_filter($rows, fn (array $row): bool => ! isset($excluded[$row['sku']])));
+
+        $this->info(sprintf(
+            '%d prijzen van merken die we niet meer verkopen overgeslagen, %d opgeslagen prijzen verwijderd.',
+            count($rows) - count($kept),
+            $deleted,
+        ));
+
+        return $kept;
+    }
+
+    /**
      * Drop every scraped row that belongs to a "Met onderkleed" variant.
      *
      * No competitor sells the rug bundled with an underlay, so such a price is
@@ -259,9 +310,9 @@ class ImportCompetitorPricesCommand extends Command
      * real price in the scraper database.
      *
      * @param  array<int, array{sku: string, shop: string}>  $rows
-     * @return \Illuminate\Support\Collection<int, int>
+     * @return Collection<int, int>
      */
-    private function stalePriceIds(array $rows): \Illuminate\Support\Collection
+    private function stalePriceIds(array $rows): Collection
     {
         $scraped = [];
 

@@ -60,13 +60,23 @@ const MEDALLION_COLOUR_NUMBERS = Object.fromEntries(Object.entries({
   'stone':           9148,
 }).map(([colour, number]) => [`medallion ${colour}`, `fading world medallion ${number}`]));
 
+/**
+ * Wij verkopen De Munk niet meer (november 2026); het merk staat in
+ * `competitor_pricing.excluded_brands` en komt niet meer in de catalogus-CSV.
+ * Winkels die alleen De Munk voerden zijn `retired`: ze worden niet meer
+ * gecrawld, maar hun config (en wat we over hun pagina's uitzochten) blijft
+ * staan, via RETIRED_SHOPS, voor als het merk terugkomt. De andere winkels
+ * verloren alleen De Munk uit `brands`/`brandKeys`.
+ */
+const DE_MUNK_RETIRED = '2026-11-04: voerde alleen De Munk, dat we niet meer verkopen';
+
 // ── Shopify ──────────────────────────────────────────────────────────────────
 
 const SHOPIFY_SHOPS = [
   {
     key:    'vloerkledenloods.nl',
     base:   'https://vloerkledenloods.nl',
-    brands: ['De Munk', 'Karpi', 'Mart Visser', 'Brinker'],
+    brands: ['Karpi', 'Mart Visser', 'Brinker'],
     // Zij labelen de XS-band van Karpi als "80 x 150 cm" waar ons PIM
     // "80 x 160 cm" zegt. Dat het hetzelfde kleed is, blijkt uit het product
     // zelf: de vier andere maten matchen exact én de XS kost aan beide kanten
@@ -160,17 +170,19 @@ const WOOCOMMERCE_SHOPS = [
   {
     key:    'karpetwereld.nl',
     base:   'https://karpetwereld.nl',
-    brands: ['De Munk', 'Mart Visser'],
+    brands: ['Mart Visser'],
   },
   {
     key:    'plaisierinterieur.nl',
     base:   'https://www.plaisierinterieur.nl',
     brands: ['De Munk'],
+    retired: DE_MUNK_RETIRED,
   },
   {
     key:    'vloerkledenspecialist.nl',
     base:   'https://vloerkledenspecialist.nl',
     brands: ['De Munk'],
+    retired: DE_MUNK_RETIRED,
   },
   {
     key:    'meubelcity.nl',
@@ -241,9 +253,9 @@ const CUSTOM_SHOPS = [
   {
     key:        'karpettenkelder.nl',
     base:       'https://www.karpettenkelder.nl',
-    brands:     ['Eurogros', 'De Munk', 'Karpi', 'Brinker'],
+    brands:     ['Eurogros', 'Karpi', 'Brinker'],
     sitemapUrl: 'https://www.karpettenkelder.nl/sitemap.xml',
-    brandKeys:  ['eurogros', 'de-munk-carpets', 'core-by-dersimo', 'desso', 'de-poortere', 'brinker'],
+    brandKeys:  ['eurogros', 'core-by-dersimo', 'desso', 'de-poortere', 'brinker'],
     // Prijs zit in data-prijs attribuut bij de maat-radio; de data-title
     // benoemt de vorm ("200 x 290 rechthoek" / "… ovaal"), dus match die mee.
     // De vorm ONTBREEKT alleen bij rechthoeken (data-title="250 x 300"): die
@@ -294,6 +306,7 @@ const CUSTOM_SHOPS = [
     key:        'karpettenshop.nl',
     base:       'https://www.karpettenshop.nl',
     brands:     ['De Munk'],
+    retired: DE_MUNK_RETIRED,
     // Deze winkel heeft geen sitemap: /sitemap.xml geeft een 404-pagina en
     // robots.txt noemt er geen. Het overzicht zet de productlinks wél gewoon
     // in de HTML, 35 pagina's van ~39 producten.
@@ -315,9 +328,9 @@ const CUSTOM_SHOPS = [
   {
     key:        'kleed.nl',
     base:       'https://www.kleed.nl',
-    brands:     ['De Munk', 'Mart Visser', 'Brinker'],
+    brands:     ['Mart Visser', 'Brinker'],
     sitemapUrl: 'https://www.kleed.nl/sitemap.xml',
-    brandKeys:  ['de-munk', 'mart-visser', 'karpi', 'brinker'],
+    brandKeys:  ['mart-visser', 'karpi', 'brinker'],
     getPrijs(html, w, h) {
       const maat = `${w} x ${h}`;
       // Lightspeed variant JSON: "price_incl":1299,...,"title":"Formaat: 200 x 300cm"
@@ -341,9 +354,9 @@ const CUSTOM_SHOPS = [
   {
     key:        'homedeco.nl',
     base:       'https://homedeco.nl',
-    brands:     ['De Munk', 'Mart Visser'],
+    brands:     ['Mart Visser'],
     sitemapUrl: 'https://homedeco.nl/sitemap.xml',
-    brandKeys:  ['de-munk', 'munk', 'mart-visser'],
+    brandKeys:  ['mart-visser'],
     fromUrl:    true,   // prijs via JSON-LD, maat al in de URL
     getPrijs:   null,   // wordnull: fetch-prices.js gebruikt extractJsonLdPrice
     sizeFromUrl(url) {
@@ -396,9 +409,9 @@ const CUSTOM_SHOPS = [
   {
     key:        'woonboulevardpoortvliet.nl',
     base:       'https://www.woonboulevardpoortvliet.nl',
-    brands:     ['Eurogros', 'De Munk', 'Mart Visser'],
+    brands:     ['Eurogros', 'Mart Visser'],
     sitemapUrl: 'https://www.woonboulevardpoortvliet.nl/sitemap.xml',
-    brandKeys:  ['eurogros', 'love-shaggy', 'twilight', 'mart-visser', 'firenze', 'de-munk'],
+    brandKeys:  ['eurogros', 'love-shaggy', 'twilight', 'mart-visser'],
     fromUrl:    true,
     getPrijs:   null,
     sizeFromUrl(url) {
@@ -565,6 +578,7 @@ const CUSTOM_SHOPS = [
     key:        'vloerkledenspecialist.nl',
     base:       'https://vloerkledenspecialist.nl',
     brands:     ['De Munk'],
+    retired: DE_MUNK_RETIRED,
     sitemapUrl: 'https://vloerkledenspecialist.nl/sitemap.xml',
     // Bewust géén brandKeys: hun slugs zijn inconsistent. 168 De Munk-producten
     // dragen "de-munk" in de URL, maar 59 andere niet ("nuovo-arbitro-vloerkleed"
@@ -673,6 +687,14 @@ const CUSTOM_SHOPS = [
       schaak: 'chess',
       papierknip: 'papercut',
       fresco: 'fresque',
+      // De collectienaam vertalen ze per pagina anders: "knutsel-", "hobby-"
+      // en "creatief-papierknip" zijn allemaal Craft Papercut. Zonder deze
+      // woorden ontbrak "craft" (de modelnaam) en stonden 18 terechte
+      // prijzen sinds oktober stil (audit 04-11-2026).
+      knutsel: 'craft',
+      hobby: 'craft',
+      creatief: 'craft',
+      galerij: 'gallery',
       kreeft: 'lobster',
       tijger: 'tiger',
     },
@@ -750,13 +772,17 @@ const finalWoo = WOOCOMMERCE_SHOPS.filter(s =>
   !CUSTOM_SHOPS.some(c => c.key === s.key && c.overridesWoocommerce)
 );
 
+const active = s => !s.retired;
+
 module.exports = {
-  SHOPIFY_SHOPS,
-  WOOCOMMERCE_SHOPS: finalWoo,
-  CUSTOM_SHOPS,
-  ALL_SHOP_KEYS: [
-    ...SHOPIFY_SHOPS.map(s => s.key),
-    ...finalWoo.map(s => s.key),
-    ...CUSTOM_SHOPS.map(s => s.key),
-  ],
+  SHOPIFY_SHOPS: SHOPIFY_SHOPS.filter(active),
+  WOOCOMMERCE_SHOPS: finalWoo.filter(active),
+  CUSTOM_SHOPS: CUSTOM_SHOPS.filter(active),
+  // Niet meer gecrawld; zie DE_MUNK_RETIRED.
+  RETIRED_SHOPS: [...SHOPIFY_SHOPS, ...finalWoo, ...CUSTOM_SHOPS].filter(s => s.retired),
+  ALL_SHOP_KEYS: [...new Set([
+    ...SHOPIFY_SHOPS.filter(active).map(s => s.key),
+    ...finalWoo.filter(active).map(s => s.key),
+    ...CUSTOM_SHOPS.filter(active).map(s => s.key),
+  ])],
 };

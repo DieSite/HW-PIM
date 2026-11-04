@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\Concerns\HordeurenScraperEnvironment;
 use App\Models\ProductPriceHistory;
 use App\Services\CompetitorCatalogExporter;
 use Diesite\Monitor\Monitor;
@@ -63,6 +64,21 @@ class RunCompetitorAnalysisCommand extends Command
 
             throw $e;
         }
+    }
+
+    /**
+     * `--audit-fix` lets the nightly audit delete rejected couplings that no
+     * scraper has re-confirmed for two days. Without it the audit only
+     * reported, and wrong couplings from June (Ulva priced from the Ulva Black
+     * page, Ace 7299 from the 6979 page) stayed in the store and in every
+     * report. The import that follows (`--prune`) removes them from
+     * competitor_prices. See competitor-analysis/catalog-volledig/audit-prices.js.
+     *
+     * @return list<string>
+     */
+    protected function scraperArguments(): array
+    {
+        return ['catalog-volledig/run.js', '--audit-fix'];
     }
 
     /**
@@ -165,7 +181,7 @@ class RunCompetitorAnalysisCommand extends Command
             $this->info('Running competitor scraper (this can take several minutes)…');
 
             $success = $this->process(
-                [$this->nodeBin().'/node', 'catalog-volledig/run.js'],
+                [$this->nodeBin().'/node', ...$this->scraperArguments()],
                 $dir,
                 (int) config('competitor_pricing.scraper_timeout'),
                 [
@@ -220,7 +236,7 @@ class RunCompetitorAnalysisCommand extends Command
      * and `npm` against that PATH is what silently broke the nightly run, so
      * the toolchain is pinned here exactly as the hordeuren jobs pin it.
      *
-     * @see \App\Jobs\Concerns\HordeurenScraperEnvironment
+     * @see HordeurenScraperEnvironment
      */
     private function nodeBin(): string
     {

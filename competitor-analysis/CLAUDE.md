@@ -353,6 +353,32 @@ exitcode 0, zodat `run.js` (die `execSync` gebruikt) de nachtelijke pipeline
 niet afbreekt. Let op: `unknown-sku` is net zo betrouwbaar als de CSV die je
 meegeeft.
 
+**De nachtelijke run ruimt nu echt op (04-11-2026).** Tot dan startte
+`pricing:run-competitor-analysis` `run.js` zónder `--audit-fix`: de audit
+rapporteerde alleen, en op productie stonden 534 afgekeurde rijen, deels sinds
+juni (Ulva ← Ulva Black, Ace 7299 ← 6979, Love Shaggy Antraciet ← beige). Blind
+aanzetten had ~500 goede prijzen per nacht gewist, want de audit zag minder
+dan de scrapers. Drie fixes:
+
+- `judge()` past de `slugAliases` van de winkel toe (onlineslaapcomfort
+  "vervagende-wereld" — 274 onterechte afkeuringen) en slaat de vormcheck over
+  bij `mixedShapes` (woonwebwinkel, één pagina voor alle vormen — 135). Hij
+  krijgt de config van álle winkels, niet alleen de custom shops.
+- **`--fix` verwijdert alleen rijen die minstens `AUDIT_FIX_MIN_AGE_DAYS` (2)
+  dagen door geen scraper bevestigd zijn.** De audit kent alleen de indexrij
+  (vaak de slug), niet de paginatitel van fetch-prices of de kleurkeuze per
+  Woo-variatie. De echte fouten stonden maanden stil, de onterechte afkeuringen
+  (kledenwereld "Mart Visser Prosper" met kleurkeuze: 65) waren die nacht nog
+  bevestigd — leeftijd scheidde de twee groepen volledig.
+- onlineslaapcomfort vertaalt "Craft" als knutsel/hobby/creatief en "Gallery"
+  als galerij; die staan nu in de vertaaltabel (18 terechte prijzen stonden
+  daardoor sinds oktober stil).
+
+Uitkomst op de productievoorraad: 534 → 125 afkeuringen, `--fix` verwijdert
+er 60 (25 echte fouten + 35 vloerkledenvoordelig Craft/Gallery-rijen die de
+winkel zonder collectienaam noemt en die de fetcher sinds 27-10 zelf niet meer
+bevestigde), 65 kledenwereld-rijen blijven staan.
+
 **Per-shop config staat in `catalog-volledig/shops.js`** (platform, merkfilter,
 `getPrijs`, `detectBrand`, `sizeFromUrl`). Een nieuwe concurrent = één entry
 toevoegen. De recipes zijn dezelfde als in de karpetten-suite, hergebruikt en
@@ -570,6 +596,20 @@ Organix, …). Tot 04-11-2026 had productie nul echte Brinker-prijzen: alleen
   De −25%-vloer en het rapport vangen ze op.
 - `excel.js` maakt nu een tabblad voor élk merk in de catalogus (vaste
   volgorde, daarna de rest); de hardgecodeerde lijst liet Brinker stil weg.
+
+**De Munk doet niet meer mee (november 2026)** — we verkopen het merk niet
+meer. `competitor_pricing.excluded_brands` (PHP-config, hele merkwaarde van de
+parent, hoofdletterongevoelig) regelt het op drie plekken via
+`App\Services\CompetitorBrandFilter`: de export laat ze weg (catalogus 27.870
+→ 21.635 regels), de import verwijdert hun opgeslagen concurrentprijzen
+bewust buiten `--prune` om (geen removal-log, geen prune-rem, geen recompute),
+en `CompetitorPricingService` laat hun verkoopprijs ongemoeid — anders viel
+elke De Munk-prijs zonder concurrent terug op de adviesprijs en ging die naar
+de winkel. In `shops.js` zijn karpettenshop, plaisierinterieur en
+vloerkledenspecialist (alleen De Munk) `retired`: niet meer gecrawld, config
+bewaard in `RETIRED_SHOPS`. Bij de andere winkels is De Munk uit
+`brands`/`brandKeys` gehaald. Komt een merk terug: uit `excluded_brands` halen
+en de `retired`-vlag weg.
 
 **Cloudflare-shops** (`browser: true` → bommelwonen.nl, lowikmeubelen.nl) worden
 in de node-pipeline overgeslagen en via een **Playwright-spec**

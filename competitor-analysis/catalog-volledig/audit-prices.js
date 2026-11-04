@@ -20,8 +20,26 @@
 const path = require('path');
 const { openDb, deletePrice } = require('./storage');
 const { loadCatalog } = require('./catalog');
-const { CUSTOM_SHOPS } = require('./shops');
-const { isRealPrice, detectShape, modelIdentityMatches, normModel, identityOptionsFor } = require('./normalize');
+const { SHOPIFY_SHOPS, WOOCOMMERCE_SHOPS, CUSTOM_SHOPS } = require('./shops');
+const { isRealPrice, detectShape, modelIdentityMatches, normModel, identityOptionsFor, applyWordAliases } = require('./normalize');
+
+/**
+ * `--fix` verwijdert alleen afgekeurde rijen die al minstens zoveel dagen door
+ * geen enkele scraper meer bevestigd zijn (scraped_at).
+ *
+ * De audit ziet minder dan de scrapers: de indexrij (vaak alleen de slug), niet
+ * de paginatitel die fetch-prices leest en niet de kleurkeuze per
+ * WooCommerce-variatie. Op de productievoorraad van 04-11-2026 keurde hij 534
+ * rijen af, en de twee groepen waren aan hun leeftijd te herkennen: de échte
+ * fouten (Ulva ← Ulva Black, Ace 7299 ← 6979) stonden sinds juni/september
+ * stil, terwijl de onterechte afkeuringen (kledenwereld "Mart Visser Prosper"
+ * met kleurkeuze, woonwebwinkel één pagina voor alle vormen) die nacht nog door
+ * een beter geïnformeerde guard waren bevestigd. Een rij die vannacht is
+ * bevestigd laten we dus staan; de audit is er voor plakkende restanten die
+ * niemand meer bevestigt. Twee dagen, zodat één mislukte nacht van een winkel
+ * niet meteen zijn hele voorraad aan het oordeel van de audit overlevert.
+ */
+const FIX_MIN_AGE_DAYS = Number(process.env.AUDIT_FIX_MIN_AGE_DAYS ?? 2);
 
 const CSV_PATH = process.env.CATALOG_CSV || path.join(__dirname, '..', '..', 'HW-PIM', 'Result_6.csv');
 
@@ -38,13 +56,19 @@ function judge(row, entry, indexRow, shopCfg = null) {
   if (!entry) return 'unknown-sku';
   if (!indexRow) return 'no-index-row';
 
-  const clean = String(indexRow.title ?? '').replace(/&#\d+;/g, ' ').replace(/&[a-z]+;/gi, ' ');
-  const text = normModel(clean) + ' ' + String(row.url ?? '').toLowerCase();
+  // Dezelfde vertaaltabel als de indexers/fetch-prices: onlineslaapcomfort
+  // noemt Fading World "vervagende-wereld", caltabellotta de Medallions bij
+  // kleurnaam. Zonder deze tabel keurde de audit al die rijen af.
+  const aliases = shopCfg?.slugAliases;
+  const clean = applyWordAliases(String(indexRow.title ?? '').replace(/&#\d+;/g, ' ').replace(/&[a-z]+;/gi, ' '), aliases);
+  const text = normModel(clean) + ' ' + applyWordAliases(String(row.url ?? '').toLowerCase(), aliases);
 
   if (!modelIdentityMatches(entry.normModel, text, entry.mustHave,
       { requireDiscriminator: shopCfg?.requireDiscriminator, ...identityOptionsFor(entry) })) return 'identity';
 
-  if ((indexRow.platform ?? 'custom') === 'custom') {
+  // `mixedShapes` (woonwebwinkel.com): één pagina voor alle vormen, getPrijs
+  // kiest de vorm per maatoptie — dan zegt de paginatitel niets over de vorm.
+  if ((indexRow.platform ?? 'custom') === 'custom' && !shopCfg?.mixedShapes) {
     const pageShape = detectShape(clean, row.url) ?? 'rechthoek';
     if (pageShape !== (entry.shape ?? 'rechthoek')) return 'shape';
   }
@@ -112,6 +136,16 @@ function structuralBrake(bad, checked, perShopChecked = new Map(),
   return { refuse: pct > limit, pct, limit, skipShops };
 }
 
+/**
+ * Is deze prijs al minstens `days` dagen niet meer bevestigd? `scraped_at` is
+ * SQLite-UTC ("2026-11-04 03:17:52"). Zonder datum: stil (oud schema).
+ */
+function isStale(scrapedAt, days, now = Date.now()) {
+  if (!scrapedAt) return true;
+  const at = Date.parse(String(scrapedAt).replace(' ', 'T') + 'Z');
+  return !Number.isFinite(at) || now - at >= days * 86_400_000;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const fix = args.includes('--fix');
@@ -122,7 +156,7 @@ function main() {
   const catalog = loadCatalog(CSV_PATH);
 
   const rows = db.prepare(
-    `SELECT sku, shop, price_str, url FROM prices${shopFilter ? ' WHERE shop = ?' : ''}`
+    `SELECT sku, shop, price_str, url, scraped_at FROM prices${shopFilter ? ' WHERE shop = ?' : ''}`
   ).all(...(shopFilter ? [shopFilter] : []));
 
   const index = new Map();
@@ -130,7 +164,9 @@ function main() {
     index.set(r.shop + '|' + r.url, r);
   }
 
-  const shopCfgs = new Map(CUSTOM_SHOPS.map(c => [c.key, c]));
+  // Alle winkels, niet alleen de custom shops: ook Shopify/Woo-winkels kennen
+  // slugAliases en requireDiscriminator.
+  const shopCfgs = new Map([...SHOPIFY_SHOPS, ...WOOCOMMERCE_SHOPS, ...CUSTOM_SHOPS].map(c => [c.key, c]));
   const perShop = new Map();
   const perShopChecked = new Map();
   const bad = [];
@@ -175,9 +211,14 @@ function main() {
       console.error(`   ⏭  ${shop} overgeslagen: te veel ontbrekende catalogus-/indexgegevens ` +
                     `(limiet ${brake.limit}%). De andere shops worden wél opgeruimd.`);
     }
-    const doomed = bad.filter(b => !brake.skipShops.has(b.shop));
+    const candidates = bad.filter(b => !brake.skipShops.has(b.shop));
+    const doomed = candidates.filter(b => isStale(b.scraped_at, FIX_MIN_AGE_DAYS));
     const tx = db.transaction(list => { for (const b of list) deletePrice(db, b.sku, b.shop); });
     tx(doomed);
+    const kept = candidates.length - doomed.length;
+    if (kept) {
+      console.log(`\n${kept} afgekeurde rijen blijven staan: in de laatste ${FIX_MIN_AGE_DAYS} dagen nog door een scraper bevestigd.`);
+    }
     console.log(`\n${doomed.length} rijen verwijderd. Draai daarna:`);
     console.log('  php artisan pricing:import-competitor-prices --prune');
   } else if (bad.length) {
@@ -189,4 +230,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { judge, structuralBrake, STRUCTURAL_REASONS };
+module.exports = { judge, structuralBrake, isStale, STRUCTURAL_REASONS };
