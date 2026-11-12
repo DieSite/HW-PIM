@@ -5,6 +5,7 @@ use App\Models\Product;
 use App\Models\WooCommerceSyncEvent;
 use App\Services\ProductService;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use App\Services\WooCommerce\WooCommerceSyncQueue;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -202,7 +203,7 @@ it('queues the next variant only after the current product has synced, skipping 
     $deletedId = $deleted->id;
     $deleted->delete();
 
-    (new SerializedProcessProductsToWooCommerce($variant, [$deletedId, $last->id]))->handle();
+    (new SerializedProcessProductsToWooCommerce($variant, [$deletedId, $last->id]))->handle(app(WooCommerceSyncQueue::class));
 
     Bus::assertDispatchedSync(ProcessProductsToWooCommerce::class);
     Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 1);

@@ -2,6 +2,8 @@
 
 namespace App\Monitor;
 
+use App\Services\WooCommerce\WooCommerceSyncQueue;
+use App\Services\WooCommerce\WooCommerceSyncQueueJobRepository;
 use Diesite\Monitor\Metrics\QueueStats;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -33,6 +35,7 @@ class HorizonQueueStats extends QueueStats
                 'failed'          => $failed[$queue] ?? 0,
                 'rate_per_minute' => $rates[$queue] ?? null,
             ])
+            ->push($this->wooCommerceWaitingRoom())
             ->values()
             ->all();
     }
@@ -55,6 +58,28 @@ class HorizonQueueStats extends QueueStats
         }
 
         return $map;
+    }
+
+    /**
+     * Products waiting for a WooCommerce sync wait in MySQL, not on a Redis
+     * queue, so they get a row of their own, named as in Horizon.
+     *
+     * @return array{queue: string, pending: int, failed: int, rate_per_minute: int|null}
+     */
+    private function wooCommerceWaitingRoom(): array
+    {
+        try {
+            $pending = app(WooCommerceSyncQueue::class)->waitingCount();
+        } catch (\Throwable) {
+            $pending = 0;
+        }
+
+        return [
+            'queue'           => WooCommerceSyncQueueJobRepository::QUEUE,
+            'pending'         => $pending,
+            'failed'          => 0,
+            'rate_per_minute' => null,
+        ];
     }
 
     private function pending(string $connection, string $queue): int

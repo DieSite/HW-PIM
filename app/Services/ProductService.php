@@ -7,16 +7,19 @@ use App\Jobs\SyncProductWithBolComJob;
 use App\Models\BolComCredential;
 use App\Services\Bol\BolProductValidator;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use App\Services\WooCommerce\WooCommerceSyncQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
 use Webkul\Product\Type\AbstractType;
-use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 class ProductService
 {
-    public function __construct(private WooCommerceSyncEventRecorder $syncEventRecorder) {}
+    public function __construct(
+        private WooCommerceSyncEventRecorder $syncEventRecorder,
+        private WooCommerceSyncQueue $wooCommerceSyncQueue,
+    ) {}
 
     public function copyStockValuesOnderkleed(Product $product, bool $withUpdatedEvent = true): void
     {
@@ -249,7 +252,7 @@ class ProductService
             $this->syncEventRecorder->queued($variant);
         }
 
-        SerializedProcessProductsToWooCommerce::dispatch($product, $product->variants->pluck('id')->all());
+        $this->wooCommerceSyncQueue->enqueue($product, $product->variants->pluck('id')->all());
     }
 
     public function triggerFullExternalSync(Product $product, ?array $bolCredentials = null): void

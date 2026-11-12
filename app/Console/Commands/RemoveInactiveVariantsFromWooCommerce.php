@@ -3,11 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use App\Services\WooCommerce\WooCommerceSyncQueue;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Webkul\Product\Models\Product;
-use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 
 /**
  * Removes disabled variants from WooCommerce. Until 2026-10-21 the sync
@@ -23,7 +23,7 @@ class RemoveInactiveVariantsFromWooCommerce extends Command
 
     protected $description = 'Delete disabled variants from WooCommerce';
 
-    public function handle(WooCommerceSyncEventRecorder $syncEventRecorder): int
+    public function handle(WooCommerceSyncEventRecorder $syncEventRecorder, WooCommerceSyncQueue $syncQueue): int
     {
         $variantsByParent = $this->inactiveVariantsByParent();
 
@@ -56,7 +56,7 @@ class RemoveInactiveVariantsFromWooCommerce extends Command
              * variants deleted after it. One chain per parent, the way
              * triggerWCSyncForParent() queues variants.
              */
-            SerializedProcessProductsToWooCommerce::dispatch($parent, $variants->pluck('id')->all());
+            $syncQueue->enqueue($parent, $variants->pluck('id')->all());
         }
 
         $this->info("Queued {$variantCount} disabled variant(s) of {$variantsByParent->count()} parent(s) for removal from WooCommerce.");

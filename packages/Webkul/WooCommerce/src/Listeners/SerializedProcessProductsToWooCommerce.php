@@ -6,6 +6,7 @@ use App\Enums\WooCommerceSyncEventStatus;
 use App\Jobs\Middleware\DisconnectsIdleRedis;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Services\WooCommerce\WooCommerceSyncEventRecorder;
+use App\Services\WooCommerce\WooCommerceSyncQueue;
 use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -55,10 +56,13 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
      *                                           succeeded. Replaces Bus::chain(), whose payload carries
      *                                           every remaining serialized job and so grows quadratically
      *                                           in Redis for a parent with many variants.
+     * @param  int|null  $syncQueueEntryId  The woocommerce_sync_queue entry this chain was claimed from;
+     *                                      null for a job dispatched before the waiting room existed.
      */
     public function __construct(
         private Product $product,
         private array $nextProductIds = [],
+        private ?int $syncQueueEntryId = null,
     ) {
         $this->product = $product->withoutRelations();
     }
@@ -105,8 +109,10 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
         return config('woocommerce_sync.backoff_seconds');
     }
 
-    public function handle(): void
+    public function handle(WooCommerceSyncQueue $syncQueue): void
     {
+        $syncQueue->started($this->syncQueueEntryId);
+
         $this->product = Product::find($this->product->id);
 
         if (is_null($this->product->parent)) {
@@ -116,11 +122,15 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
         }
         ProcessProductsToWooCommerce::dispatchSync(ProductBatch::fromProductArray($this->product->toArray()));
 
-        $this->dispatchNext();
+        if (! $this->dispatchNext()) {
+            $syncQueue->finished($this->syncQueueEntryId);
+        }
     }
 
     public function failed(Throwable $exception): void
     {
+        app(WooCommerceSyncQueue::class)->finished($this->syncQueueEntryId);
+
         if ($exception instanceof ModelNotFoundException) {
             Log::info('Product no longer exists for WooCommerce sync', [
                 'product_id' => $this->product->id,
@@ -154,7 +164,10 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
         Sentry::captureException($exception);
     }
 
-    private function dispatchNext(): void
+    /**
+     * Queue the next product of the chain, if any is left.
+     */
+    private function dispatchNext(): bool
     {
         $remainingIds = $this->nextProductIds;
 
@@ -162,10 +175,12 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
             $next = Product::find($nextId);
 
             if ($next) {
-                static::dispatch($next, $remainingIds);
+                static::dispatch($next, $remainingIds, $this->syncQueueEntryId);
 
-                return;
+                return true;
             }
         }
+
+        return false;
     }
 }

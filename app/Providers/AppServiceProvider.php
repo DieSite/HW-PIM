@@ -11,6 +11,9 @@ use App\Monitor\HorizonQueueStats;
 use App\Observers\AndereVormenMirror;
 use App\Services\AI\AiSettings;
 use App\Services\DeliveryTimeService;
+use App\Services\WooCommerce\WooCommerceSyncQueue;
+use App\Services\WooCommerce\WooCommerceSyncQueueJobRepository;
+use App\Services\WooCommerce\WooCommerceSyncQueueWorkloadRepository;
 use Diesite\Monitor\Metrics\QueueStats;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -25,6 +28,9 @@ use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\DriverInterface;
+use Laravel\Horizon\Contracts\JobRepository;
+use Laravel\Horizon\Contracts\WorkloadRepository;
+use Laravel\Horizon\Repositories\RedisWorkloadRepository;
 use Laravel\Passport\Passport;
 use Webkul\Product\Models\Product as WebkulProduct;
 use Webkul\Theme\ViewRenderEventManager;
@@ -205,5 +211,16 @@ class AppServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(base_path('config/ai_settings.php'), 'core');
 
         $this->app->bind(QueueStats::class, HorizonQueueStats::class);
+
+        /*
+         * Products waiting for a WooCommerce sync wait in MySQL, not as Redis
+         * jobs; these show them in Horizon's pending list and workload anyway.
+         * Registered after Horizon's own bindings, so they replace them.
+         */
+        $this->app->singleton(JobRepository::class, WooCommerceSyncQueueJobRepository::class);
+        $this->app->singleton(WorkloadRepository::class, fn ($app): WorkloadRepository => new WooCommerceSyncQueueWorkloadRepository(
+            $app->make(RedisWorkloadRepository::class),
+            $app->make(WooCommerceSyncQueue::class),
+        ));
     }
 }

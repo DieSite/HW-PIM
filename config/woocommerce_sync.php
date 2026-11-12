@@ -55,6 +55,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Waiting room
+    |--------------------------------------------------------------------------
+    |
+    | Products waiting for a sync wait in the woocommerce_sync_queue table,
+    | not as queued jobs in Redis: a bulk resync of thousands of products
+    | used to fill Redis to its memory cap and stop every queue. Only
+    | max_in_flight syncs are on the Redis queue at a time; one slot more
+    | than the concurrency ceiling keeps the next sync ready.
+    |
+    | A claimed entry whose sync has not started a product for
+    | stale_after_minutes is assumed lost (worker killed, job dropped) and
+    | goes back to waiting. It must outlast the longest gap between two
+    | products of one chain: a timeout plus the longest backoff.
+    |
+    | App\Services\WooCommerce\WooCommerceSyncQueue
+    |
+    */
+
+    'queue' => [
+        'max_in_flight'       => (int) env('WOOCOMMERCE_SYNC_MAX_IN_FLIGHT', 3),
+        'stale_after_minutes' => (int) env('WOOCOMMERCE_SYNC_STALE_AFTER_MINUTES', 45),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Retry deadline
     |--------------------------------------------------------------------------
     |

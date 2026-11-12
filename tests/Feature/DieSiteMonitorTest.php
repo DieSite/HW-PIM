@@ -78,7 +78,7 @@ it('serves the PIM status payload with the configured queues', function () {
     $this->getJson('/api/diesite-monitor', ['X-DieSite-Monitor-Key' => MONITOR_TEST_KEY])
         ->assertOk()
         ->assertJsonStructure([
-            'app' => ['name', 'env', 'laravel', 'php'],
+            'app'    => ['name', 'env', 'laravel', 'php'],
             'queues' => [['queue', 'pending', 'failed', 'rate_per_minute']],
             'visitors_now',
             'highlights' => [['label', 'value', 'format']],
@@ -86,7 +86,7 @@ it('serves the PIM status payload with the configured queues', function () {
         ])
         ->assertJsonPath('orders', null)
         ->assertJsonPath('revenue', null)
-        ->assertJsonPath('queues.*.queue', ['default', 'bolcom', 'hordeuren', 'long', 'ai']);
+        ->assertJsonPath('queues.*.queue', ['default', 'bolcom', 'hordeuren', 'long', 'ai', 'woocommerce-wachtrij']);
 });
 
 it('reads pending counts from the queue connection and failures from failed_jobs', function () {
@@ -204,9 +204,9 @@ it('pushes a positive event when a bulk edit finishes', function () {
 
     $run = BulkEditRun::create([
         'target_attribute' => 'merk',
-        'filters'   => ['sku_prefix' => 'NO-MATCH-'],
-        'operation' => ['target' => 'merk', 'type' => 'set', 'value' => 'x'],
-        'status'    => 'queued',
+        'filters'          => ['sku_prefix' => 'NO-MATCH-'],
+        'operation'        => ['target' => 'merk', 'type' => 'set', 'value' => 'x'],
+        'status'           => 'queued',
     ]);
 
     $job = new BulkEditProductsJob(['sku_prefix' => 'NO-MATCH-'], ['target' => 'merk', 'type' => 'set', 'value' => 'x'], false, $run->id);

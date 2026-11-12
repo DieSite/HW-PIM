@@ -6,6 +6,7 @@ use App\Jobs\GenerateProductDescriptionJob;
 use App\Models\AiDescriptionDraft;
 use App\Models\AiDescriptionRun;
 use App\Models\Product;
+use App\Models\WooCommerceSyncQueueEntry;
 use App\Services\AI\AiClientManager;
 use App\Services\AI\AiDescriptionService;
 use App\Services\AI\AiRequest;
@@ -434,7 +435,8 @@ it('syncs a published draft to WooCommerce once, for the parent only', function 
 
     $service->revert($draft->fresh());
 
-    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 2);
+    Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, 1);
+    expect(WooCommerceSyncQueueEntry::query()->where('product_id', $parent->id)->value('rerun_requested'))->toBeTrue();
 });
 
 it('queues nothing for WooCommerce when publishing without a sync', function () {

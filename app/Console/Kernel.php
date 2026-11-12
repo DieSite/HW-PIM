@@ -35,6 +35,7 @@ class Kernel extends ConsoleKernel
                 report(new \RuntimeException('Scheduled pricing:run-competitor-analysis exited with a failure.'));
             });
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
+        $schedule->command('wc:pump-sync-queue')->everyMinute()->withoutOverlapping(5);
         $schedule->command('app:import-eurogros-ean')->weeklyOn('2', '03:00')->timezone('Europe/Amsterdam');
     }
 
