@@ -1124,8 +1124,18 @@ class Exporter extends AbstractExporter
         return is_null($first) ? '' : $this->generateImageUrl($first);
     }
 
+    /**
+     * Public URL of a DAM asset id or storage path, or '' for a blank one:
+     * S3 rejects an empty object key, so it must never reach the disk.
+     */
     protected function generateImageUrl(string $image): string
     {
+        $image = trim($image);
+
+        if ($image === '') {
+            return '';
+        }
+
         $damAsset = \DB::table('dam_assets')->where('id', $image)->first();
 
         if ($damAsset && ! empty($damAsset->path)) {

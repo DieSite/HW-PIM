@@ -31,3 +31,22 @@ it('uses the first image of the parent', function () {
     expect(firstImageUrl(' ,product/ERG0411/vloerkleed.jpg,product/ERG0411/detail.jpg'))
         ->toBe(Storage::disk('private')->url('product/ERG0411/vloerkleed.jpg'));
 });
+
+it('never hands an empty object key to an S3 disk', function (string $image) {
+    config()->set('filesystems.disks.private', [
+        'driver'   => 's3',
+        'key'      => 'test',
+        'secret'   => 'test',
+        'region'   => 'ams3',
+        'bucket'   => 'test-bucket',
+        'endpoint' => 'https://ams3.digitaloceanspaces.com',
+    ]);
+    Storage::forgetDisk('private');
+
+    $exporter = (new ReflectionClass(Exporter::class))->newInstanceWithoutConstructor();
+
+    expect((new ReflectionMethod($exporter, 'generateImageUrl'))->invoke($exporter, $image))->toBe('');
+})->with([
+    'empty string' => [''],
+    'whitespace'   => ['  '],
+]);
