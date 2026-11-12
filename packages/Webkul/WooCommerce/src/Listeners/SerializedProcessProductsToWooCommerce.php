@@ -50,21 +50,29 @@ class SerializedProcessProductsToWooCommerce implements ShouldQueue
     public $maxExceptions = 3;
 
     /**
+     * The woocommerce_sync_queue entry this chain was claimed from. Not a
+     * promoted property: a job queued before this property existed is
+     * unserialized without running the constructor, and only a declared
+     * default leaves it null instead of uninitialized.
+     */
+    private ?int $syncQueueEntryId = null;
+
+    /**
      * Create a new job instance.
      *
      * @param  array<int, int>  $nextProductIds  Products to sync one after another once this one has
      *                                           succeeded. Replaces Bus::chain(), whose payload carries
      *                                           every remaining serialized job and so grows quadratically
      *                                           in Redis for a parent with many variants.
-     * @param  int|null  $syncQueueEntryId  The woocommerce_sync_queue entry this chain was claimed from;
-     *                                      null for a job dispatched before the waiting room existed.
+     * @param  int|null  $syncQueueEntryId  The woocommerce_sync_queue entry this chain was claimed from
      */
     public function __construct(
         private Product $product,
         private array $nextProductIds = [],
-        private ?int $syncQueueEntryId = null,
+        ?int $syncQueueEntryId = null,
     ) {
         $this->product = $product->withoutRelations();
+        $this->syncQueueEntryId = $syncQueueEntryId;
     }
 
     /**

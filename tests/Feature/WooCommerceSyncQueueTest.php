@@ -157,3 +157,23 @@ it('adds the waiting room to Horizon\'s workload', function () {
         ->and($row['length'])->toBe(3)
         ->and($row['wait'])->toBe(9);
 });
+
+it('still runs a sync job that was queued before the waiting room existed', function () {
+    Bus::fake([ProcessProductsToWooCommerce::class]);
+    $product = Product::factory()->simple()->create();
+
+    $class = SerializedProcessProductsToWooCommerce::class;
+    $legacy = sprintf(
+        'O:%d:"%s":2:{s:%d:"%s";O:45:"Illuminate\Contracts\Database\ModelIdentifier":5:{s:5:"class";s:29:"Webkul\Product\Models\Product";s:2:"id";i:%d;s:9:"relations";a:0:{}s:10:"connection";s:5:"mysql";s:15:"collectionClass";N;}s:%d:"%s";a:0:{}}',
+        strlen($class), $class,
+        strlen("\0{$class}\0product"), "\0{$class}\0product",
+        $product->id,
+        strlen("\0{$class}\0nextProductIds"), "\0{$class}\0nextProductIds",
+    );
+
+    $job = unserialize($legacy);
+    $job->handle(app(WooCommerceSyncQueue::class));
+    $job->failed(new RuntimeException('shop down'));
+
+    Bus::assertDispatchedSync(ProcessProductsToWooCommerce::class);
+});
