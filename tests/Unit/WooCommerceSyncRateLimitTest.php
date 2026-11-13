@@ -62,8 +62,8 @@ afterEach(function () {
     forgetWooCommerceSyncWindow();
 });
 
-it('caps outgoing WooCommerce product syncs at twenty per minute by default', function () {
-    expect((int) config('woocommerce_sync.rate_limit.per_minute'))->toBe(20);
+it('caps outgoing WooCommerce product syncs at forty per minute by default', function () {
+    expect((int) config('woocommerce_sync.rate_limit.per_minute'))->toBe(40);
 });
 
 it('lets the configured number of products through per minute', function () {
@@ -274,9 +274,16 @@ it('waits at least two minutes before retrying a failed sync', function () {
     }
 });
 
-it('lets two syncs talk to WooCommerce at the same time by default and retries a waiting one after fifteen seconds', function () {
-    expect((int) config('woocommerce_sync.concurrency.max_concurrent'))->toBe(2)
+it('lets three syncs talk to WooCommerce at the same time by default and retries a waiting one after fifteen seconds', function () {
+    expect((int) config('woocommerce_sync.concurrency.max_concurrent'))->toBe(3)
         ->and((int) config('woocommerce_sync.concurrency.release_after_seconds'))->toBe(15);
+});
+
+it('leaves production default-queue workers free for other jobs while every sync slot is taken', function () {
+    $syncsOnRedis = (int) config('woocommerce_sync.queue.max_in_flight');
+
+    expect($syncsOnRedis)->toBeGreaterThan((int) config('woocommerce_sync.concurrency.max_concurrent'))
+        ->and((int) config('horizon.environments.production.supervisor-1.maxProcesses'))->toBeGreaterThan($syncsOnRedis);
 });
 
 it('lets as many syncs run side by side as configured', function () {

@@ -18,7 +18,7 @@ return [
     */
 
     'rate_limit' => [
-        'per_minute' => (int) env('WOOCOMMERCE_SYNC_PER_MINUTE', 20),
+        'per_minute' => (int) env('WOOCOMMERCE_SYNC_PER_MINUTE', 40),
     ],
 
     /*
@@ -35,7 +35,7 @@ return [
     */
 
     'concurrency' => [
-        'max_concurrent'        => (int) env('WOOCOMMERCE_SYNC_MAX_CONCURRENT', 2),
+        'max_concurrent'        => (int) env('WOOCOMMERCE_SYNC_MAX_CONCURRENT', 3),
         'release_after_seconds' => (int) env('WOOCOMMERCE_SYNC_CONCURRENCY_RELEASE_AFTER', 15),
     ],
 
@@ -74,7 +74,7 @@ return [
     */
 
     'queue' => [
-        'max_in_flight'       => (int) env('WOOCOMMERCE_SYNC_MAX_IN_FLIGHT', 3),
+        'max_in_flight'       => (int) env('WOOCOMMERCE_SYNC_MAX_IN_FLIGHT', 4),
         'stale_after_minutes' => (int) env('WOOCOMMERCE_SYNC_STALE_AFTER_MINUTES', 45),
     ],
 
@@ -89,8 +89,8 @@ return [
     | limiter increments the attempt counter and an attempt cap would fail a
     | job that is merely waiting its turn.
     |
-    | The default has to cover the worst realistic backlog: at 20 per minute,
-    | 24 hours drains 28.800 products.
+    | The default has to cover the worst realistic backlog: at 40 per minute,
+    | 24 hours drains 57.600 products.
     |
     */
 
