@@ -35,7 +35,7 @@ return [
     */
 
     'concurrency' => [
-        'max_concurrent'        => (int) env('WOOCOMMERCE_SYNC_MAX_CONCURRENT', 3),
+        'max_concurrent'        => (int) env('WOOCOMMERCE_SYNC_MAX_CONCURRENT', 2),
         'release_after_seconds' => (int) env('WOOCOMMERCE_SYNC_CONCURRENCY_RELEASE_AFTER', 15),
     ],
 
@@ -74,7 +74,7 @@ return [
     */
 
     'queue' => [
-        'max_in_flight'       => (int) env('WOOCOMMERCE_SYNC_MAX_IN_FLIGHT', 4),
+        'max_in_flight'       => (int) env('WOOCOMMERCE_SYNC_MAX_IN_FLIGHT', 3),
         'stale_after_minutes' => (int) env('WOOCOMMERCE_SYNC_STALE_AFTER_MINUTES', 45),
     ],
 

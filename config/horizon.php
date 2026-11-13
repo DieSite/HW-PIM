@@ -280,13 +280,8 @@ return [
 
     'environments' => [
         'production' => [
-            /*
-             * Up to woocommerce_sync.concurrency.max_concurrent (3) workers
-             * are busy with WooCommerce syncs, plus one picking up the next
-             * sync; the rest keep the other default-queue jobs moving.
-             */
             'supervisor-1' => [
-                'maxProcesses'    => 5,
+                'maxProcesses'    => 3,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 1,
             ],
