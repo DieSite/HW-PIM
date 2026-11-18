@@ -21,7 +21,8 @@ use App\Models\Product;
  * Organic, Hexagon, …) staan er helemaal niet in: die vinden we nooit bij een
  * externe partij, dus ze zouden de lijst alleen maar vullen met regels waar
  * niemand iets mee kan. De met-onderkleed-prijs volgt de variant zonder
- * onderkleed.
+ * onderkleed. Merken die we niet meer verkopen (`excluded_brands`) vallen er
+ * bewust buiten en staan er dus ook niet in.
  *
  * @see CompetitorCatalogExporter  bouwt de catalogus-CSV
  * @see CompetitorPricingService   rekent de prijs door
@@ -59,6 +60,8 @@ class CompetitorCoverageAnalyzer
         self::REASON_ADVIES   => 'Zonder adviesverkoopprijs is er geen plafond en geen bodem, dus de prijs wordt nooit herberekend.',
         self::REASON_NO_MATCH => 'Wel meegenomen in de scrape, maar geen enkele concurrent voert dit kleed in deze maat (of niet herkenbaar genoeg om te koppelen).',
     ];
+
+    public function __construct(private readonly CompetitorBrandFilter $brandFilter) {}
 
     /**
      * Elk kleed dat niet in de analyse zit, als platte rij.
@@ -110,6 +113,10 @@ class CompetitorCoverageAnalyzer
         }
 
         if ($this->hasSpecialShape($common['vorm'] ?? $parentCommon['vorm'] ?? null)) {
+            return null;
+        }
+
+        if ($this->brandFilter->isExcluded($variant)) {
             return null;
         }
 

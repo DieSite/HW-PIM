@@ -1,9 +1,11 @@
 <?php
 
+use App\Mail\CompetitorAnalysisReport;
 use App\Models\CompetitorPrice;
 use App\Models\CompetitorPriceRemoval;
 use App\Models\Product;
 use App\Models\ProductPriceHistory;
+use App\Services\CompetitorAnalysisReporter;
 use App\Services\CompetitorBrandFilter;
 use App\Services\CompetitorCatalogExporter;
 use App\Services\CompetitorPricingService;
@@ -133,4 +135,27 @@ it('removes stored prices of excluded brands on import without logging, braking 
         ->and($deMunk->fresh()->values['common']['prijs']['EUR'])->toBe('800')
         // The Brinker variant is priced as usual
         ->and($brinker->fresh()->values['common']['prijs']['EUR'])->toBe('950');
+});
+
+it('leaves excluded brands out of every list in the report mail', function () {
+    $deMunk = makeBrandedVariant('De Munk', 'CBXTEST-DM4', prijs: '5000', advies: '5000');
+    $brinker = makeBrandedVariant('Brinker', 'CBXTEST-BR4', prijs: '900', advies: '900');
+
+    // Stale rows the import has not cleaned up yet must not leak into the mail.
+    CompetitorPrice::create(['sku' => $deMunk->sku, 'shop' => 'shopa.nl', 'price' => 4000, 'url' => 'https://shopa.nl/rug']);
+    CompetitorPriceRemoval::create(['sku' => $deMunk->sku, 'shop' => 'shopb.nl', 'price' => 4100, 'removed_at' => now()]);
+    ProductPriceHistory::create([
+        'product_id' => $deMunk->id, 'sku' => $deMunk->sku, 'old_price' => 5000, 'new_price' => 4000,
+        'reason'     => 'test', 'changed_at' => now(),
+    ]);
+
+    $report = app(CompetitorAnalysisReporter::class)->build(now()->subHour(), now()->addMinute());
+    $skusIn = fn (array $block): array => array_column($block['items'], 'sku');
+
+    expect($skusIn($report['actions']['no_coverage']))->toContain($brinker->sku)->not->toContain($deMunk->sku)
+        ->and($skusIn($report['actions']['new_products']))->toContain($brinker->sku)->not->toContain($deMunk->sku)
+        ->and($skusIn($report['actions']['new_prices']))->not->toContain($deMunk->sku)
+        ->and($skusIn($report['actions']['lost_prices']))->not->toContain($deMunk->sku)
+        ->and(array_column($report['rows'], 'sku'))->not->toContain($deMunk->sku)
+        ->and((new CompetitorAnalysisReport($report))->render())->not->toContain($deMunk->sku);
 });

@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\URL;
  */
 class CompetitorAnalysisActions
 {
+    public function __construct(private readonly CompetitorBrandFilter $brandFilter) {}
+
     /**
      * @return array<string, array{title: string, action: string, total: int, items: list<array<string, mixed>>}>
      */
@@ -50,9 +52,12 @@ class CompetitorAnalysisActions
      */
     private function newProducts(CarbonInterface $since, CarbonInterface $until, int $maxRows): array
     {
-        $query = Product::query()
-            ->whereNotNull('parent_id')
-            ->whereBetween('created_at', [$since, $until]);
+        $query = $this->brandFilter->withoutExcludedSkus(
+            Product::query()
+                ->whereNotNull('parent_id')
+                ->whereBetween('created_at', [$since, $until]),
+            'products.sku',
+        );
 
         $total = (clone $query)->count();
 
@@ -114,7 +119,7 @@ class CompetitorAnalysisActions
      */
     private function newlyCovered(CarbonInterface $since, CarbonInterface $until, int $maxRows): array
     {
-        $firstSeen = CompetitorPrice::query()
+        $firstSeen = $this->brandFilter->withoutExcludedSkus(CompetitorPrice::query(), 'competitor_prices.sku')
             ->selectRaw('sku, MIN(created_at) as first_seen')
             ->groupBy('sku')
             ->havingRaw('MIN(created_at) >= ? AND MIN(created_at) <= ?', [$since, $until])
@@ -178,7 +183,7 @@ class CompetitorAnalysisActions
      */
     private function lostCoverage(CarbonInterface $since, CarbonInterface $until, int $maxRows): array
     {
-        $removals = CompetitorPriceRemoval::query()
+        $removals = $this->brandFilter->withoutExcludedSkus(CompetitorPriceRemoval::query(), 'competitor_price_removals.sku')
             ->whereBetween('removed_at', [$since, $until])
             ->orderByDesc('price')
             ->get();
@@ -237,7 +242,7 @@ class CompetitorAnalysisActions
      */
     private function withoutAnyCompetitor(int $maxRows): array
     {
-        $query = Product::query()
+        $query = $this->brandFilter->withoutExcludedSkus(Product::query(), 'products.sku')
             ->whereNotNull('parent_id')
             ->whereRaw("COALESCE(`values`->>'$.common.onderkleed', '') <> 'Met onderkleed'")
             ->whereRaw("COALESCE(`values`->>'$.common.maat', '') NOT LIKE '%aatwerk%'")

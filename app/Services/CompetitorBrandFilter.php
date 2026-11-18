@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Models\Product;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Brands we no longer sell (config `competitor_pricing.excluded_brands`) stay
@@ -62,6 +65,38 @@ class CompetitorBrandFilter
         }
 
         return $excluded;
+    }
+
+    /**
+     * Constrain a query to rows whose SKU does not belong to an excluded brand.
+     *
+     * The SQL twin of isExcluded(), for the report queries that read the JSON
+     * column directly instead of hydrating tens of thousands of products: the
+     * parent's `merk`, the variant's own as a fallback, matched as a whole
+     * value, case-insensitive. A SKU without a product row is kept.
+     *
+     * @template TQuery of EloquentBuilder|QueryBuilder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    public function withoutExcludedSkus(EloquentBuilder|QueryBuilder $query, string $skuColumn): EloquentBuilder|QueryBuilder
+    {
+        $excluded = $this->excludedBrands();
+
+        if ($excluded === []) {
+            return $query;
+        }
+
+        return $query->whereNotExists(function (QueryBuilder $sub) use ($excluded, $skuColumn): void {
+            $sub->selectRaw('1')
+                ->from('products as brand_variant')
+                ->leftJoin('products as brand_parent', 'brand_parent.id', '=', 'brand_variant.parent_id')
+                ->whereColumn('brand_variant.sku', $skuColumn)
+                ->whereIn(DB::raw(
+                    "LOWER(TRIM(COALESCE(NULLIF(brand_parent.`values`->>'$.common.merk', 'null'), NULLIF(brand_variant.`values`->>'$.common.merk', 'null'))))"
+                ), $excluded);
+        });
     }
 
     /**

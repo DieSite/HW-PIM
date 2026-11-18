@@ -91,7 +91,7 @@ it('leaves variants we never find at a competitor out, even without a competitor
 ]);
 
 it('leaves a special shape out when only the parent names it', function () {
-    makeCoverageVariant([], 'COVTEST-PARENTSHAPE', ['merk' => 'De Munk', 'vorm' => 'Organic']);
+    makeCoverageVariant([], 'COVTEST-PARENTSHAPE', ['merk' => 'Karpi', 'vorm' => 'Organic']);
 
     expect(uncoveredBySku())->not->toHaveKey('COVTEST-PARENTSHAPE');
 });
@@ -233,7 +233,7 @@ it('exports only the requested reason', function () {
 it('splits the uncovered rugs per manufacturer', function () {
     makeCoverageVariant(['maat' => 'Poef'], 'COVTEST-BRAND-1', ['merk' => 'Karpi']);
     makeCoverageVariant([], 'COVTEST-BRAND-2', ['merk' => 'Karpi']);
-    makeCoverageVariant([], 'COVTEST-BRAND-3', ['merk' => 'De Munk']);
+    makeCoverageVariant([], 'COVTEST-BRAND-3', ['merk' => 'Brinker']);
     makeCoverageVariant([], 'COVTEST-BRAND-4', []);
     makeCoverageVariant([], 'COVTEST-BRAND-5', ['merk' => 'Karpi/Mart: Visser [x]']);
 
@@ -248,13 +248,13 @@ it('splits the uncovered rugs per manufacturer', function () {
     $workbook = $reader->load($path);
 
     expect($workbook->getSheetNames())->toBe([
-        'Per fabrikant', 'Karpi', 'De Munk', 'Karpi Mart  Visser  x', 'Zonder merk', 'Niet meegenomen', 'Samenvatting',
+        'Per fabrikant', 'Karpi', 'Brinker', 'Karpi Mart  Visser  x', 'Zonder merk', 'Niet meegenomen', 'Samenvatting',
     ]);
 
     $skusOn = fn (string $sheet): array => array_column(array_slice($workbook->getSheetByName($sheet)->toArray(), 1), 0);
 
     expect($skusOn('Karpi'))->toEqualCanonicalizing(['COVTEST-BRAND-1', 'COVTEST-BRAND-2'])
-        ->and($skusOn('De Munk'))->toBe(['COVTEST-BRAND-3'])
+        ->and($skusOn('Brinker'))->toBe(['COVTEST-BRAND-3'])
         ->and($skusOn('Zonder merk'))->toBe(['COVTEST-BRAND-4']);
 
     $overview = $workbook->getSheetByName('Per fabrikant')->toArray();
@@ -270,9 +270,19 @@ it('splits the uncovered rugs per manufacturer', function () {
         ->mapWithKeys(fn (array $row): array => [$row[0] => array_map('intval', array_slice($row, 1))]);
 
     expect($byBrand['Karpi'])->toBe([2, 0, 1, 1])
-        ->and($byBrand['De Munk'])->toBe([1, 0, 0, 1])
+        ->and($byBrand['Brinker'])->toBe([1, 0, 0, 1])
         ->and($byBrand['Zonder merk'])->toBe([1, 1, 0, 0])
         ->and($byBrand['Totaal'])->toBe([5, 1, 1, 3]);
 
     @unlink($path);
+});
+
+it('leaves brands we no longer sell out of the export', function () {
+    config(['competitor_pricing.excluded_brands' => ['De Munk']]);
+
+    makeCoverageVariant([], 'COVTEST-DEMUNK', ['merk' => 'De Munk']);
+    makeCoverageVariant([], 'COVTEST-STILLSOLD', ['merk' => 'Karpi']);
+
+    expect(uncoveredBySku())->not->toHaveKey('COVTEST-DEMUNK')
+        ->toHaveKey('COVTEST-STILLSOLD');
 });

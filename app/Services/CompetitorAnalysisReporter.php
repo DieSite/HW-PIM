@@ -87,7 +87,10 @@ class CompetitorAnalysisReporter
      */
     private const UTF8_BOM = "\u{FEFF}";
 
-    public function __construct(private readonly CompetitorAnalysisActions $actions) {}
+    public function __construct(
+        private readonly CompetitorAnalysisActions $actions,
+        private readonly CompetitorBrandFilter $brandFilter,
+    ) {}
 
     /**
      * Build the full report for the given window.
@@ -326,7 +329,7 @@ class CompetitorAnalysisReporter
      */
     private function changeRows(CarbonInterface $since, CarbonInterface $until): Collection
     {
-        return ProductPriceHistory::query()
+        return $this->brandFilter->withoutExcludedSkus(ProductPriceHistory::query(), 'product_price_history.sku')
             ->priceChanges()
             ->where('changed_at', '>=', $since)
             ->where('changed_at', '<=', $until)
@@ -523,7 +526,7 @@ class CompetitorAnalysisReporter
      */
     private function competitorPrices(): Collection
     {
-        return CompetitorPrice::query()
+        return $this->brandFilter->withoutExcludedSkus(CompetitorPrice::query(), 'competitor_prices.sku')
             ->where('price', '>', 0)
             ->notExcluded()
             ->orderBy('sku')
