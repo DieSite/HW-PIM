@@ -68,12 +68,15 @@
         @php
             $editSections = app(\App\Services\ProductEditSections::class)->for($product);
 
-            $showCompetitorAnalysis = $product->type === 'configurable' || $product->parent_id !== null;
+            $isCushion = \App\Enums\ProductKind::of($product) === \App\Enums\ProductKind::Cushion;
+
+            // Cushions have no competitor prices and are not sold on Bol.com.
+            $showCompetitorAnalysis = ! $isCushion && ($product->type === 'configurable' || $product->parent_id !== null);
 
             $jumpLinks = collect($editSections['sections'])->mapWithKeys(fn ($section) => ['sectie-'.$section['key'] => $section['label']]);
 
             if ($product->type === 'configurable') {
-                $jumpLinks->put('sectie-maten', 'Maten');
+                $jumpLinks->put('sectie-maten', $isCushion ? 'Varianten' : 'Maten');
             }
 
             if ($showCompetitorAnalysis) {
@@ -367,6 +370,7 @@
                 @endif
 
                 <!-- Add Bol.com Integration Box -->
+                @if (! $isCushion)
                 <div class="p-4 bg-white dark:bg-cherry-900 rounded-sm box-shadow">
                     <p class="text-base text-gray-800 dark:text-white font-semibold mb-4">
                         Bol.com
@@ -570,9 +574,12 @@
                         @endif
                     </div>
                 </div>
+                @endif
 
                 <!-- Price History (competitor analysis) -->
-                @include('admin::catalog.products.edit.price-history')
+                @if (! $isCushion)
+                    @include('admin::catalog.products.edit.price-history')
+                @endif
 
                 <!-- Categories View Blade File -->
                 @if($product->type !== 'simple')

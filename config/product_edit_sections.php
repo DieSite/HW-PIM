@@ -97,4 +97,69 @@ return [
         'label'      => 'Meer velden',
         'attributes' => ['sorteer_volgorde', 'dob', 'prijs2', 'voorraad_5_korting'],
     ],
+
+    /*
+     * Families with a layout of their own, keyed by family code. A family
+     * listed here uses only its own sections and collapsed list; any other
+     * family uses the rug layout above.
+     */
+    'families' => [
+        'kussens' => [
+            'sections' => [
+                'basis' => [
+                    'label'      => 'Basis',
+                    'attributes' => ['sku', 'ean', 'productnaam', 'merk', 'collectie', 'in_collectie', 'kussenmaat', 'kleur', 'vulling'],
+                ],
+
+                'afbeeldingen' => [
+                    'label'      => 'Afbeeldingen',
+                    'attributes' => ['afbeelding', 'afbeelding_zonder_logo'],
+                ],
+
+                'prijzen' => [
+                    'label'      => 'Prijzen',
+                    'attributes' => ['prijs', 'adviesverkoopprijs', 'extra_korting', 'sale_prijs'],
+                ],
+
+                'voorraad' => [
+                    'label'      => 'Voorraad & levertijd',
+                    'attributes' => [
+                        'voorraad_hw_5_korting',
+                        'voorraad_eurogros',
+                        'voorraad_5_korting_handmatig',
+                        'uitverkoop_15_korting',
+                        'levertijd',
+                        'levertijd_voorradig',
+                        'levertijd_niet_voorradig',
+                    ],
+                ],
+
+                'eigenschappen' => [
+                    'label'      => 'Eigenschappen',
+                    'attributes' => [
+                        'materiaal',
+                        'vulling_materiaal',
+                        'sluiting',
+                        'kleuren',
+                        'patroon',
+                        'gewicht',
+                        'wasvoorschrift',
+                        'onderhoudsadvies',
+                        'productieland',
+                        'garantie',
+                    ],
+                ],
+
+                'teksten' => [
+                    'label'      => 'Teksten & SEO',
+                    'attributes' => ['beschrijving_l', 'beschrijving_k', 'meta_titel', 'meta_beschrijving'],
+                ],
+            ],
+
+            'collapsed' => [
+                'label'      => 'Meer velden',
+                'attributes' => ['sorteer_volgorde', 'dob', 'voorraad_5_korting'],
+            ],
+        ],
+    ],
 ];

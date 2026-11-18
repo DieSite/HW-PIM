@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Listeners;
 
+use App\Enums\ProductKind;
 use App\Services\ProductService;
 use Webkul\Product\Models\Product;
 
@@ -22,7 +23,7 @@ class ProductStoredListener
             return;
         }
 
-        $values['common']['meta_titel'] = app(ProductService::class)->generateMetaTitle($values['common']['productnaam'], $values['common']['merk']);
+        $values['common']['meta_titel'] = app(ProductService::class)->generateMetaTitle($values['common']['productnaam'], $values['common']['merk'], ProductKind::of($product));
 
         $product->values = $values;
         $product->save();

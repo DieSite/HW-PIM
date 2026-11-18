@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProductKind;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -52,8 +53,9 @@ class ProductHelperController extends Controller
         $naam = $request->input('title', $product->values['common']['productnaam']);
         $merk = $request->input('merk', $product->values['common']['merk']);
 
-        $metaTitle = $this->productService->generateMetaTitle($naam, $merk);
-        $metaDescription = $this->productService->generateMetaDescription($naam);
+        $kind = ProductKind::of($product);
+        $metaTitle = $this->productService->generateMetaTitle($naam, $merk, $kind);
+        $metaDescription = $this->productService->generateMetaDescription($naam, $kind);
 
         return response()->json(['meta_title' => $metaTitle, 'meta_description' => $metaDescription]);
     }
@@ -109,6 +111,26 @@ class ProductHelperController extends Controller
             originalAdviesPrice: isset($base['adviesverkoopprijs']['EUR']) ? (string) $base['adviesverkoopprijs']['EUR'] : null,
             warning: $warning,
         );
+    }
+
+    public function sku(Request $request)
+    {
+        $data = $request->validate([
+            'brand' => 'required|string|in:ERG,DES,KP,DMC',
+        ]);
+        $brand = $data['brand'];
+
+        // SELECT  FROM products WHERE sku LIKE 'ERG%' AND sku NOT LIKE '%.%'
+
+        $value = Product::where('sku', 'like', $brand.'%')->where('type', 'configurable')->rawValue("MAX(CAST(REPLACE(sku, '$brand', '') as UNSIGNED))");
+        $value++;
+
+        // Ensure the SKU doesn't exist already
+        while (Product::where('sku', $brand.$value)->exists()) {
+            $value++;
+        }
+
+        return response()->json(['sku' => $brand.$value]);
     }
 
     /**
@@ -179,25 +201,5 @@ class ProductHelperController extends Controller
             'warning'               => $warning,
             'error'                 => $error,
         ]);
-    }
-
-    public function sku(Request $request)
-    {
-        $data = $request->validate([
-            'brand' => 'required|string|in:ERG,DES,KP,DMC',
-        ]);
-        $brand = $data['brand'];
-
-        // SELECT  FROM products WHERE sku LIKE 'ERG%' AND sku NOT LIKE '%.%'
-
-        $value = Product::where('sku', 'like', $brand.'%')->where('type', 'configurable')->rawValue("MAX(CAST(REPLACE(sku, '$brand', '') as UNSIGNED))");
-        $value++;
-
-        // Ensure the SKU doesn't exist already
-        while (Product::where('sku', $brand.$value)->exists()) {
-            $value++;
-        }
-
-        return response()->json(['sku' => $brand.$value]);
     }
 }

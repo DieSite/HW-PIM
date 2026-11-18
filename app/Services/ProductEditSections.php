@@ -9,6 +9,7 @@ use Webkul\Product\Models\Product;
  * Splits the editable attributes of a product into the sections of the edit
  * screen (config/product_edit_sections.php) instead of the attribute
  * family's groups, which put nearly everything in one long "General" card.
+ * A family can have its own layout (e.g. cushions) under `families`.
  */
 class ProductEditSections
 {
@@ -30,9 +31,10 @@ class ProductEditSections
             }
         }
 
+        $layout = $this->layoutFor($product);
         $sections = [];
 
-        foreach ((array) config('product_edit_sections.sections', []) as $key => $section) {
+        foreach ((array) ($layout['sections'] ?? []) as $key => $section) {
             $attributes = $this->take($remaining, (array) $section['attributes']);
 
             if ($attributes->isNotEmpty()) {
@@ -40,7 +42,7 @@ class ProductEditSections
             }
         }
 
-        $collapsedConfig = (array) config('product_edit_sections.collapsed', []);
+        $collapsedConfig = (array) ($layout['collapsed'] ?? []);
         $collapsedAttributes = $this->take($remaining, (array) ($collapsedConfig['attributes'] ?? []));
 
         foreach ($remaining->groupBy('group', preserveKeys: true) as $group => $fields) {
@@ -59,6 +61,22 @@ class ProductEditSections
                 'attributes' => $collapsedAttributes,
             ],
         ];
+    }
+
+    /**
+     * The section layout for the product's family: its own entry under
+     * `families` when there is one, the default (rug) layout otherwise.
+     *
+     * @return array{sections?: array<string, array{label: string, attributes: list<string>}>, collapsed?: array{label?: string, attributes?: list<string>}}
+     */
+    private function layoutFor(Product $product): array
+    {
+        $family = (string) $product->attribute_family?->code;
+
+        return (array) (config("product_edit_sections.families.{$family}") ?? [
+            'sections'  => config('product_edit_sections.sections', []),
+            'collapsed' => config('product_edit_sections.collapsed', []),
+        ]);
     }
 
     /**

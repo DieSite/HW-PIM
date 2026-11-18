@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ProductKind;
 use App\Enums\WooCommerceSyncEventStatus;
 use App\Jobs\SyncProductWithBolComJob;
 use App\Models\BolComCredential;
@@ -21,9 +22,20 @@ class ProductService
         private WooCommerceSyncQueue $wooCommerceSyncQueue,
     ) {}
 
+    /**
+     * Keep a variant's twin in step after a save: the onderkleed twin of a
+     * rug (shared stock), or the filling twin of a cushion (shared stock and
+     * the derived "Met vulling" price, see CushionFilling).
+     */
     public function copyStockValuesOnderkleed(Product $product, bool $withUpdatedEvent = true): void
     {
         if (is_null($product->parent)) {
+            return;
+        }
+
+        if (ProductKind::of($product) === ProductKind::Cushion) {
+            app(CushionFilling::class)->syncTwin($product, $withUpdatedEvent);
+
             return;
         }
 
@@ -51,14 +63,18 @@ class ProductService
         }
     }
 
-    public function generateMetaTitle(string $naam, string $merk): string
+    public function generateMetaTitle(string $naam, string $merk, ProductKind $kind = ProductKind::Rug): string
     {
-        return "Vloerkleed $naam van $merk bij Huis & Wonen";
+        $noun = $kind === ProductKind::Cushion ? 'Kussen' : 'Vloerkleed';
+
+        return "$noun $naam van $merk bij Huis & Wonen";
     }
 
-    public function generateMetaDescription(string $naam): string
+    public function generateMetaDescription(string $naam, ProductKind $kind = ProductKind::Rug): string
     {
-        return "Bestel je vloerkleed $naam bij Huis & Wonen online of kom langs in ons Experience Center in Gorinchem. Huis & Wonen de vloerkleden specialist.";
+        $noun = $kind === ProductKind::Cushion ? 'kussen' : 'vloerkleed';
+
+        return "Bestel je $noun $naam bij Huis & Wonen online of kom langs in ons Experience Center in Gorinchem. Huis & Wonen de vloerkleden specialist.";
     }
 
     /**

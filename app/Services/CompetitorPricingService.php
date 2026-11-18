@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ProductKind;
 use App\Models\CompetitorPrice;
 use App\Models\Product;
 use App\Models\ProductPriceHistory;
@@ -83,6 +84,12 @@ class CompetitorPricingService
         // en zolang de oude `.O`-rijen nog in `competitor_prices` staan, wint
         // in de natuurlijke volgorde de verkeerde.
         if ($this->onderkleed($variant) === 'Met onderkleed') {
+            return null;
+        }
+
+        // Cushions are priced by hand: no competitor prices, so a recompute
+        // would only overwrite their prijs with the adviesverkoopprijs.
+        if (ProductKind::of($variant) === ProductKind::Cushion) {
             return null;
         }
 

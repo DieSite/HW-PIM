@@ -72,7 +72,7 @@
                 <!-- Panel Content -->
                 <div class="pv-table">
                     <div class="pv-row pv-header" aria-hidden="true">
-                        <div>Maat</div>
+                        <div>{{ ($isCushion ?? false) ? 'Variant' : 'Maat' }}</div>
                         <div>SKU</div>
                         <div>Prijs</div>
                         <div>Voorraad <span class="pv-muted">(S / L / U)</span></div>
@@ -634,11 +634,13 @@
                     </div>
 
                     <div>
-                        <div class="pv-strong">@{{ common.maatgroep || common.maat || variant.sku }}</div>
+                        <div class="pv-strong">@{{ common.maatgroep || common.kussenmaat || common.maat || variant.sku }}</div>
                         <div class="pv-muted" v-if="common.maat && common.maatgroep && common.maat !== common.maatgroep">exact: @{{ common.maat }}</div>
                         <div class="pv-muted">
                             <template v-if="common.onderkleed">@{{ common.onderkleed.replace('_', ' ') }}</template>
                             <template v-if="common.festoneren_banderen"> · @{{ common.festoneren_banderen }}</template>
+                            <template v-if="common.kleur">@{{ common.kleur }}</template>
+                            <template v-if="common.vulling"> · @{{ common.vulling }}</template>
                         </div>
                     </div>
                 </div>
@@ -987,7 +989,7 @@
                 },
 
                 isTwin() {
-                    return this.common.onderkleed === 'Met onderkleed';
+                    return this.common.onderkleed === 'Met onderkleed' || this.common.vulling === 'Met vulling';
                 },
 
                 supplierStock() {

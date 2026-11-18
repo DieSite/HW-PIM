@@ -2,6 +2,7 @@
 
 namespace App\Services\Mcp;
 
+use App\Enums\ProductKind;
 use App\Services\DeliveryTimeService;
 use App\Services\ProductService;
 use App\Services\WooCommerce\WooCommerceCategorySync;
@@ -59,7 +60,9 @@ class ProductSyncDispatcher
                     self::STOCK_ATTRIBUTES
                 );
 
-                if ($product->parent_id && $stockChanged) {
+                // A cushion twin also carries the derived "Met vulling" price,
+                // so any change to a cushion variant re-syncs it.
+                if ($product->parent_id && ($stockChanged || ProductKind::of($product) === ProductKind::Cushion)) {
                     $this->productService->copyStockValuesOnderkleed($product);
                 }
             } catch (Throwable $e) {

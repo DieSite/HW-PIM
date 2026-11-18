@@ -2,6 +2,7 @@
 
 namespace Webkul\WooCommerce\Helpers\Exporters\Product;
 
+use App\Enums\ProductKind;
 use App\Exceptions\ProductHasNoImagesException;
 use App\Models\Product;
 use App\Services\AfwerkingOptieService;
@@ -378,74 +379,11 @@ class Exporter extends AbstractExporter
             }
             $formatted['meta_data'] = $meta;
         } else {
-            $onderkleed = collect();
-            $maat = collect();
-            $maatgroep = collect();
-            foreach (Arr::get($item, 'variants', []) as $variant) {
-                $onderkleed->push(...Arr::wrap(Arr::get($variant, 'values.common.onderkleed', [])));
-                $maat->push(...Arr::wrap(Arr::get($variant, 'values.common.maat', [])));
-                $maatgroep->push(...Arr::wrap(Arr::get($variant, 'values.common.maatgroep', [])));
+            if (ProductKind::fromFamilyId($item['attribute_family_id'] ?? null) === ProductKind::Cushion) {
+                $this->formatCushionVariationAttributes($formatted, $item);
+            } else {
+                $this->formatRugVariationAttributes($formatted, $item);
             }
-
-            $attributeMappingMaat = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
-            $formatted['attributes'][] = [
-                'id'        => $attributeMappingMaat[0]['externalId'],
-                'visible'   => true,
-                'variation' => true,
-                'options'   => $maat->unique()->toArray(),
-            ];
-
-            $attributeMappingOnderkleed = $this->getDataTransferMapping('onderkleed', self::UNOPIM_ATTRIBUTE_ENTITY);
-            $formatted['attributes'][] = [
-                'id'        => $attributeMappingOnderkleed[0]['externalId'],
-                'visible'   => true,
-                'variation' => true,
-                'options'   => $onderkleed->unique()->sortDesc(SORT_NATURAL)->toArray(),
-            ];
-
-            $attributeMappingMaatgroep = $this->getDataTransferMapping('maatgroep', self::UNOPIM_ATTRIBUTE_ENTITY);
-            $formatted['attributes'][] = [
-                'id'        => $attributeMappingMaatgroep[0]['externalId'],
-                'visible'   => true,
-                'variation' => false,
-                'options'   => $maatgroep->unique()->toArray(),
-            ];
-
-            $laagsteMinimalePrijs = $this->lowestMinimalePrijs(Arr::get($item, 'variants', []));
-
-            if (! is_null($laagsteMinimalePrijs)) {
-                $formatted['attributes'][] = [
-                    'id'        => 0,
-                    'name'      => 'minimale-prijs',
-                    'visible'   => false,
-                    'variation' => false,
-                    'options'   => [$laagsteMinimalePrijs],
-                ];
-            }
-
-            $maat = $maat->sort(function ($a, $b) {
-                // Controleer eerst of een van beide waarden numeriek is
-                $aIsNumeric = is_numeric($a[0]);
-                $bIsNumeric = is_numeric($b[0]);
-
-                // Als een waarde numeriek is en de andere niet,
-                // dan komt de niet-numerieke waarde eerst
-                if ($aIsNumeric && ! $bIsNumeric) {
-                    return 1;
-                }
-                if (! $aIsNumeric && $bIsNumeric) {
-                    return -1;
-                }
-
-                // Als beide waarden van hetzelfde type zijn (beide numeriek of beide niet-numeriek)
-                // dan gebruiken we een normale stringvergelijking
-                return strcasecmp($a, $b);
-            });
-
-            $formatted['default_attributes'] = [
-                ['id' => $attributeMappingMaat[0]['externalId'], 'option' => $maat->first()],
-                ['id' => $attributeMappingOnderkleed[0]['externalId'], 'option' => $onderkleed->first()],
-            ];
 
             $tags = $this->getTags($item);
             if (! is_null($tags)) {
@@ -647,6 +585,140 @@ class Exporter extends AbstractExporter
         }
 
         return null;
+    }
+
+    /**
+     * The variation attributes of a rug parent: maat and onderkleed vary per
+     * variation, maatgroep is a filter-only attribute.
+     *
+     * @param  array<string, mixed>  $formatted
+     * @param  array<string, mixed>  $item
+     */
+    protected function formatRugVariationAttributes(array &$formatted, array $item): void
+    {
+        $onderkleed = collect();
+        $maat = collect();
+        $maatgroep = collect();
+        foreach (Arr::get($item, 'variants', []) as $variant) {
+            $onderkleed->push(...Arr::wrap(Arr::get($variant, 'values.common.onderkleed', [])));
+            $maat->push(...Arr::wrap(Arr::get($variant, 'values.common.maat', [])));
+            $maatgroep->push(...Arr::wrap(Arr::get($variant, 'values.common.maatgroep', [])));
+        }
+
+        $attributeMappingMaat = $this->getDataTransferMapping('maat', self::UNOPIM_ATTRIBUTE_ENTITY);
+        $formatted['attributes'][] = [
+            'id'        => $attributeMappingMaat[0]['externalId'],
+            'visible'   => true,
+            'variation' => true,
+            'options'   => $maat->unique()->toArray(),
+        ];
+
+        $attributeMappingOnderkleed = $this->getDataTransferMapping('onderkleed', self::UNOPIM_ATTRIBUTE_ENTITY);
+        $formatted['attributes'][] = [
+            'id'        => $attributeMappingOnderkleed[0]['externalId'],
+            'visible'   => true,
+            'variation' => true,
+            'options'   => $onderkleed->unique()->sortDesc(SORT_NATURAL)->toArray(),
+        ];
+
+        $attributeMappingMaatgroep = $this->getDataTransferMapping('maatgroep', self::UNOPIM_ATTRIBUTE_ENTITY);
+        $formatted['attributes'][] = [
+            'id'        => $attributeMappingMaatgroep[0]['externalId'],
+            'visible'   => true,
+            'variation' => false,
+            'options'   => $maatgroep->unique()->toArray(),
+        ];
+
+        $laagsteMinimalePrijs = $this->lowestMinimalePrijs(Arr::get($item, 'variants', []));
+
+        if (! is_null($laagsteMinimalePrijs)) {
+            $formatted['attributes'][] = [
+                'id'        => 0,
+                'name'      => 'minimale-prijs',
+                'visible'   => false,
+                'variation' => false,
+                'options'   => [$laagsteMinimalePrijs],
+            ];
+        }
+
+        $maat = $maat->sort(function ($a, $b) {
+            // Controleer eerst of een van beide waarden numeriek is
+            $aIsNumeric = is_numeric($a[0]);
+            $bIsNumeric = is_numeric($b[0]);
+
+            // Als een waarde numeriek is en de andere niet,
+            // dan komt de niet-numerieke waarde eerst
+            if ($aIsNumeric && ! $bIsNumeric) {
+                return 1;
+            }
+            if (! $aIsNumeric && $bIsNumeric) {
+                return -1;
+            }
+
+            // Als beide waarden van hetzelfde type zijn (beide numeriek of beide niet-numeriek)
+            // dan gebruiken we een normale stringvergelijking
+            return strcasecmp($a, $b);
+        });
+
+        $formatted['default_attributes'] = [
+            ['id' => $attributeMappingMaat[0]['externalId'], 'option' => $maat->first()],
+            ['id' => $attributeMappingOnderkleed[0]['externalId'], 'option' => $onderkleed->first()],
+        ];
+    }
+
+    /**
+     * The variation attributes of a cushion parent (config
+     * `cushions.variation_attributes`): every option the enabled variants
+     * use, with the first variation as the default selection.
+     *
+     * @param  array<string, mixed>  $formatted
+     * @param  array<string, mixed>  $item
+     */
+    protected function formatCushionVariationAttributes(array &$formatted, array $item): void
+    {
+        $formatted['default_attributes'] = [];
+
+        foreach ($this->variationAttributeCodes($item) as $code) {
+            $mapping = $this->getDataTransferMapping($code, self::UNOPIM_ATTRIBUTE_ENTITY);
+
+            if (empty($mapping[0]['externalId'])) {
+                Log::warning('Kussen-variatieattribuut heeft geen WooCommerce-mapping', ['attribute' => $code, 'sku' => $item['sku'] ?? null]);
+
+                continue;
+            }
+
+            $options = collect(Arr::get($item, 'variants', []))
+                ->map(fn ($variant) => Arr::get($variant, "values.common.{$code}"))
+                ->filter(fn ($value) => is_string($value) && $value !== '')
+                ->unique()
+                ->values();
+
+            if ($options->isEmpty()) {
+                continue;
+            }
+
+            $formatted['attributes'][] = [
+                'id'        => $mapping[0]['externalId'],
+                'visible'   => true,
+                'variation' => true,
+                'options'   => $options->all(),
+            ];
+
+            $formatted['default_attributes'][] = ['id' => $mapping[0]['externalId'], 'option' => $options->first()];
+        }
+    }
+
+    /**
+     * The attributes that make up a variation of this product in the shop.
+     *
+     * @param  array<string, mixed>  $item
+     * @return list<string>
+     */
+    protected function variationAttributeCodes(array $item): array
+    {
+        return ProductKind::fromFamilyId($item['attribute_family_id'] ?? null) === ProductKind::Cushion
+            ? array_values((array) config('cushions.variation_attributes', []))
+            : ['maat', 'onderkleed'];
     }
 
     /**
@@ -892,7 +964,7 @@ class Exporter extends AbstractExporter
                         if (! in_array($code, $this->selectAttributeCodes) && ! in_array($code, $this->multiSelectVariation) && ! in_array($code, $this->booleanVariation)) {
                             if (in_array($code, $this->customAttributes)) {
 
-                                if (isset($item['parent_id']) && in_array($code, ['maat', 'onderkleed'])) {
+                                if (isset($item['parent_id']) && in_array($code, $this->variationAttributeCodes($item))) {
                                     $customAttrs[] = [
                                         'id'     => $attributeMapping[0]['externalId'],
                                         'option' => $value,
@@ -944,7 +1016,7 @@ class Exporter extends AbstractExporter
                         $variantAttributes = []; // Super attributes disabled
                         $variation = ! empty($variantAttributes) && in_array($code, $variantAttributes);
 
-                        if (isset($item['parent_id']) && in_array($code, ['maat', 'onderkleed'])) {
+                        if (isset($item['parent_id']) && in_array($code, $this->variationAttributeCodes($item))) {
                             $customAttrs[] = [
                                 'id'     => $attributeMapping[0]['externalId'],
                                 'option' => $value,

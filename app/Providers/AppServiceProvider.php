@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Enums\ProductKind;
 use App\Exceptions\Handler;
 use App\Jobs\Middleware\ThrottlesWooCommerceSync;
 use App\Jobs\SyncCategoryToWooCommerceJob;
@@ -136,10 +137,12 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            $event->addTemplate(view('admin::custom.bolCom.timeline', [
-                'product' => $appProduct,
-                'events'  => $appProduct->bolSyncEvents,
-            ])->render());
+            if (ProductKind::of($appProduct) !== ProductKind::Cushion) {
+                $event->addTemplate(view('admin::custom.bolCom.timeline', [
+                    'product' => $appProduct,
+                    'events'  => $appProduct->bolSyncEvents,
+                ])->render());
+            }
 
             $event->addTemplate(view('admin::custom.wooCommerce.timeline', [
                 'product' => $appProduct,

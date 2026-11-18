@@ -8,7 +8,8 @@ use Webkul\Product\Models\Product;
 /**
  * The order sizes are listed in on the product edit screen: standard sizes
  * by SKU in natural order (".2" before ".10"), each "Met onderkleed" twin
- * (".O") right after its base size, and maatwerk last.
+ * (".O") right after its base size, and maatwerk last. Cushions sort by
+ * kussenmaat and kleur, each "Met vulling" right after its "Zonder vulling".
  */
 class VariantOrder
 {
@@ -38,6 +39,16 @@ class VariantOrder
     private static function key(Product $variant): array
     {
         $common = DeliveryTimeService::decodeValues($variant->values)['common'] ?? [];
+
+        // A cushion: by size, then colour, "Zonder vulling" before "Met vulling".
+        if (isset($common['kussenmaat'])) {
+            return [
+                0,
+                trim((string) $common['kussenmaat']).' '.trim((string) ($common['kleur'] ?? '')),
+                ($common['vulling'] ?? null) === CushionFilling::WITH ? 1 : 0,
+            ];
+        }
+
         $isTwin = str_ends_with($variant->sku, '.O');
 
         return [
