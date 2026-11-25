@@ -2,6 +2,8 @@
 
 namespace App\Services\Bol;
 
+use App\Services\Concerns\SplitsMultiValueAttributes;
+use App\Services\PoolhoogteNormalizer;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Webkul\Product\Models\Product;
@@ -16,7 +18,7 @@ use Webkul\Product\Models\Product;
  */
 class BolPayloadBuilder
 {
-    use \App\Services\Concerns\SplitsMultiValueAttributes;
+    use SplitsMultiValueAttributes;
 
     private const STOCK_SOURCES = [
         'voorraad_eurogros',
@@ -279,12 +281,15 @@ class BolPayloadBuilder
         return (float) number_format($price, 2, '.', '');
     }
 
+    /**
+     * Hoogpolig above 15 mm, otherwise (or when the poolhoogte cannot be read)
+     * Laagpolig. Reads the height as a number, so "4,3 mm" is 4.3 mm.
+     */
     private function pileType(array $parentCommon): string
     {
-        $raw = $parentCommon['poolhoogte'] ?? '';
-        $digits = (int) preg_replace('/\D/', '', (string) $raw);
+        $millimetres = app(PoolhoogteNormalizer::class)->millimetres($parentCommon['poolhoogte'] ?? null);
 
-        return $digits > 15 ? 'Hoogpolig' : 'Laagpolig';
+        return $millimetres !== null && $millimetres > 15 ? 'Hoogpolig' : 'Laagpolig';
     }
 
     /**

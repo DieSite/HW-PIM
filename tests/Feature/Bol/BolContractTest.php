@@ -170,3 +170,22 @@ it('Problem response shape (used by violation translator) has the keys we depend
     expect($sample)->toHaveKeys(['type', 'title', 'status', 'detail', 'violations'])
         ->and($sample['violations'][0])->toHaveKeys(['name', 'reason']);
 });
+
+it('reads the poolhoogte as a number for the pile type', function (mixed $poolhoogte, string $expected) {
+    $values = $this->parent->values;
+    $values['common']['poolhoogte'] = $poolhoogte;
+    $this->parent->values = $values;
+
+    $attributes = collect(app(BolPayloadBuilder::class)->content($this->product)['attributes']);
+
+    expect($attributes->firstWhere('id', 'Pile type')['values'][0]['value'])->toBe($expected);
+})->with([
+    'decimal under 15 mm' => ['4,3 mm', 'Laagpolig'],
+    'decimal 10,5 mm'     => ['10,5 mm', 'Laagpolig'],
+    'exactly 15 mm'       => ['15 mm', 'Laagpolig'],
+    'decimal over 15 mm'  => ['15,5 mm', 'Hoogpolig'],
+    'thick, no space'     => ['25mm', 'Hoogpolig'],
+    'centimetres'         => ['2 cm', 'Hoogpolig'],
+    'unreadable'          => ['variabel', 'Laagpolig'],
+    'missing'             => [null, 'Laagpolig'],
+]);
