@@ -12,6 +12,7 @@ use App\Monitor\HorizonQueueStats;
 use App\Observers\AndereVormenMirror;
 use App\Services\AI\AiSettings;
 use App\Services\DeliveryTimeService;
+use App\Services\PoolhoogteNormalizer;
 use App\Services\WooCommerce\WooCommerceSyncQueue;
 use App\Services\WooCommerce\WooCommerceSyncQueueJobRepository;
 use App\Services\WooCommerce\WooCommerceSyncQueueWorkloadRepository;
@@ -122,6 +123,17 @@ class AppServiceProvider extends ServiceProvider
          */
         foreach ([WebkulProduct::class, Product::class] as $productModel) {
             $productModel::saving(fn (WebkulProduct $product) => app(DeliveryTimeService::class)->applyTo($product));
+        }
+
+        /**
+         * Store the poolhoogte in one format on every save, so the shop filter
+         * does not get "25mm" next to "25 mm". The listener must not return
+         * applyTo()'s result: false from a saving listener cancels the save.
+         */
+        foreach ([WebkulProduct::class, Product::class] as $productModel) {
+            $productModel::saving(function (WebkulProduct $product): void {
+                app(PoolhoogteNormalizer::class)->applyTo($product);
+            });
         }
 
         Event::listen('unopim.admin.catalog.product.edit.form.after', function (ViewRenderEventManager $event) {
