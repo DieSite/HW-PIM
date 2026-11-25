@@ -4,7 +4,9 @@ use App\Models\WooCommerceSyncQueueEntry;
 use App\Services\WooCommerce\WooCommerceSyncQueue;
 use App\Services\WooCommerce\WooCommerceSyncQueueJobRepository;
 use App\Services\WooCommerce\WooCommerceSyncQueueWorkloadRepository;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\WorkloadRepository;
@@ -92,6 +94,22 @@ it('requeues a claimed sync whose job was lost', function () {
     expect($lost->fresh()->claimed_at->isAfter(now()->subMinute()))->toBeTrue()
         ->and($alive->fresh()->claimed_at->isBefore(now()->subMinutes(4)))->toBeTrue();
     Queue::assertPushed(SerializedProcessProductsToWooCommerce::class, fn (SerializedProcessProductsToWooCommerce $job): bool => syncJobState($job)[2] === $lost->id);
+});
+
+it('does not range-update claimed entries when none are stale', function () {
+    WooCommerceSyncQueueEntry::factory()->claimed(now()->subMinutes(5))->create();
+    $product = Product::factory()->simple()->create();
+
+    $updates = [];
+    DB::listen(function (QueryExecuted $query) use (&$updates): void {
+        if (str_starts_with(strtolower($query->sql), 'update') && str_contains($query->sql, '`claimed_at` <')) {
+            $updates[] = $query->sql;
+        }
+    });
+
+    app(WooCommerceSyncQueue::class)->enqueue($product);
+
+    expect($updates)->toBe([]);
 });
 
 it('drops the entry of a deleted product', function () {

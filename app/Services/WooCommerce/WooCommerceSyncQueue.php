@@ -9,6 +9,7 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
@@ -30,6 +31,12 @@ use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
 class WooCommerceSyncQueue
 {
     private const PUMP_LOCK = 'woocommerce-sync-queue-pump';
+
+    /**
+     * The claim runs while workers update and delete entries and a bulk
+     * resync inserts them; a deadlock between them is retried this often.
+     */
+    private const CLAIM_ATTEMPTS = 3;
 
     /**
      * Queue a sync of the product, followed by the given products one after
@@ -73,7 +80,7 @@ class WooCommerceSyncQueue
     public function pump(): void
     {
         try {
-            $claimed = Cache::lock(self::PUMP_LOCK, 30)->block(5, fn (): Collection => $this->claim());
+            $claimed = Cache::lock(self::PUMP_LOCK, 30)->block(5, fn (): Collection => DB::transaction(fn (): Collection => $this->claim(), self::CLAIM_ATTEMPTS));
         } catch (LockTimeoutException) {
             return;
         }
@@ -185,11 +192,26 @@ class WooCommerceSyncQueue
         return $entries;
     }
 
+    /**
+     * Free the entries whose job was lost. The stale ids are read first and
+     * updated by key: a range update on claimed_at also locks the gap the new
+     * (unclaimed) entries are inserted into, and deadlocked a bulk resync
+     * that was inserting while the workers claimed and finished entries.
+     */
     private function reclaimStale(): void
     {
-        $reclaimed = WooCommerceSyncQueueEntry::query()
+        $staleIds = WooCommerceSyncQueueEntry::query()
             ->claimed()
             ->where('claimed_at', '<', now()->subMinutes((int) config('woocommerce_sync.queue.stale_after_minutes')))
+            ->pluck('id');
+
+        if ($staleIds->isEmpty()) {
+            return;
+        }
+
+        $reclaimed = WooCommerceSyncQueueEntry::query()
+            ->whereKey($staleIds->all())
+            ->claimed()
             ->update(['claimed_at' => null]);
 
         if ($reclaimed > 0) {
