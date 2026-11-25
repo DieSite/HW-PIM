@@ -16,7 +16,7 @@ use Webkul\User\Models\Role;
  * @param  list<array{0: string, 1: string, 2: int, 3: array<string, int>}>  $sizes
  * @return array{parent: Product, variants: array<string, Product>, prices: array<string, CompetitorPrice>}
  */
-function makeToolRug(string $name, array $sizes, string $brand = 'De Munk'): array
+function makeToolRug(string $name, array $sizes, string $brand = 'Brinker'): array
 {
     $familyId = DB::table('attribute_families')->value('id');
 
@@ -105,13 +105,13 @@ it('lists only the sizes discounted at least the chosen percentage, deepest firs
 });
 
 it('filters on brand, competitor and name', function () {
-    makeToolRug('Munk kleed', [['.1', '200 cm x 300 cm', 1000, ['a.nl' => 700]]], 'De Munk');
+    makeToolRug('Brinker kleed', [['.1', '200 cm x 300 cm', 1000, ['a.nl' => 700]]], 'Brinker');
     makeToolRug('Karpi kleed', [['.1', '200 cm x 300 cm', 1000, ['b.nl' => 700]]], 'Karpi');
 
     $names = fn (array $query) => $this->get(route('admin.tools.competitor-prices.index', $query))->viewData('rugs')->getCollection()->pluck('name')->all();
 
     expect($names(['merk' => 'Karpi']))->toBe(['Karpi kleed'])
-        ->and($names(['winkel' => 'a.nl']))->toBe(['Munk kleed'])
+        ->and($names(['winkel' => 'a.nl']))->toBe(['Brinker kleed'])
         ->and($names(['zoek' => 'karpi']))->toBe(['Karpi kleed']);
 });
 

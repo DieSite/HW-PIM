@@ -9,6 +9,14 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\postJson;
 use function Pest\Laravel\putJson;
 
+/**
+ * Job files live on the private (S3) disk; fake it so the tests do not need
+ * Spaces credentials.
+ */
+beforeEach(function () {
+    Storage::fake('private');
+});
+
 it('should return the Import index page', function () {
     $this->loginAsAdmin();
 

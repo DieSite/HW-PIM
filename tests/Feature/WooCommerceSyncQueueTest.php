@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Queue;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\WorkloadRepository;
 use Laravel\Horizon\Repositories\RedisJobRepository;
+use Laravel\Horizon\Repositories\RedisWorkloadRepository;
 use Webkul\Product\Models\Product;
 use Webkul\WooCommerce\Listeners\ProcessProductsToWooCommerce;
 use Webkul\WooCommerce\Listeners\SerializedProcessProductsToWooCommerce;
@@ -151,9 +152,14 @@ it('adds the waiting room to Horizon\'s workload', function () {
     WooCommerceSyncQueueEntry::factory()->count(3)->create();
     config()->set('woocommerce_sync.rate_limit.per_minute', 20);
 
-    $row = collect(app(WorkloadRepository::class)->get())->firstWhere('name', WooCommerceSyncQueueJobRepository::QUEUE);
+    $horizonRow = ['name' => 'default', 'length' => 1, 'wait' => 0, 'processes' => 2, 'split_queues' => null];
+    $this->mock(RedisWorkloadRepository::class)->shouldReceive('get')->andReturn([$horizonRow]);
+
+    $workload = app(WorkloadRepository::class)->get();
+    $row = collect($workload)->firstWhere('name', WooCommerceSyncQueueJobRepository::QUEUE);
 
     expect(app(WorkloadRepository::class))->toBeInstanceOf(WooCommerceSyncQueueWorkloadRepository::class)
+        ->and($workload[0])->toBe($horizonRow)
         ->and($row['length'])->toBe(3)
         ->and($row['wait'])->toBe(9);
 });

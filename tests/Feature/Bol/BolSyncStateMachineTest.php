@@ -14,9 +14,11 @@ use Illuminate\Contracts\Queue\Job as QueueJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     Mail::fake();
+    Storage::fake('private');
     Http::preventStrayRequests();
 
     // Stub the OAuth token endpoint

@@ -1,10 +1,14 @@
 <?php
 
+use App\Clients\BolApiClient;
 use App\Services\Bol\BolContractValidator;
 use App\Services\Bol\BolPayloadBuilder;
+use Illuminate\Support\Facades\Storage;
 use Webkul\Product\Models\Product;
 
 beforeEach(function () {
+    Storage::fake('private');
+
     $this->validator = new BolContractValidator([
         base_path('docs/bol-api-spec/retailer-v10.json'),
         base_path('docs/bol-api-spec/shared-v10.json'),
@@ -73,14 +77,14 @@ it('CreateOfferRequest payload matches Offers v11 /retailer/offers spec', functi
 });
 
 it('client routes /retailer/offers to v11 and content to v10', function () {
-    expect(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer/offers'))->toBe($this->v11)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer/offers/abc-uuid'))->toBe($this->v11)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer/offers/abc-uuid/price'))->toBe($this->v11)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer/offers/abc-uuid/stock'))->toBe($this->v11)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer-demo/offers/abc'))->toBe($this->v11)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer/content/products'))->toBe($this->v10)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/shared/process-status/abc'))->toBe($this->v10)
-        ->and(\App\Clients\BolApiClient::mediaTypeForEndpoint('/retailer/products/categories'))->toBe($this->v10);
+    expect(BolApiClient::mediaTypeForEndpoint('/retailer/offers'))->toBe($this->v11)
+        ->and(BolApiClient::mediaTypeForEndpoint('/retailer/offers/abc-uuid'))->toBe($this->v11)
+        ->and(BolApiClient::mediaTypeForEndpoint('/retailer/offers/abc-uuid/price'))->toBe($this->v11)
+        ->and(BolApiClient::mediaTypeForEndpoint('/retailer/offers/abc-uuid/stock'))->toBe($this->v11)
+        ->and(BolApiClient::mediaTypeForEndpoint('/retailer-demo/offers/abc'))->toBe($this->v11)
+        ->and(BolApiClient::mediaTypeForEndpoint('/retailer/content/products'))->toBe($this->v10)
+        ->and(BolApiClient::mediaTypeForEndpoint('/shared/process-status/abc'))->toBe($this->v10)
+        ->and(BolApiClient::mediaTypeForEndpoint('/retailer/products/categories'))->toBe($this->v10);
 });
 
 it('Content payload structure matches /retailer/content/products spec', function () {

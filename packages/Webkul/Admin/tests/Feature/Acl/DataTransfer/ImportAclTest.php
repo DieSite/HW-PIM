@@ -1,6 +1,15 @@
 <?php
 
+use Illuminate\Support\Facades\Storage;
 use Webkul\DataTransfer\Models\JobInstances;
+
+/**
+ * Job files live on the private (S3) disk; fake it so the tests do not need
+ * Spaces credentials.
+ */
+beforeEach(function () {
+    Storage::fake('private');
+});
 
 it('should display the import index page if user has permission', function () {
     $this->loginWithPermissions(permissions: ['data_transfer', 'data_transfer.imports']);
