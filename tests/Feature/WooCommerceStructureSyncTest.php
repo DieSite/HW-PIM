@@ -50,9 +50,9 @@ it('fails loudly when WooCommerce does not create the category', function () {
     $connector = $this->mock(WooCommerceService::class);
     $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
     $connector->shouldReceive('requestApiAction')->with('getCategory', Mockery::any(), Mockery::any())->andReturn([]);
-    $connector->shouldReceive('requestApiAction')->with('addCategory', Mockery::any(), Mockery::any())->andReturn(['code' => 'rest_forbidden', 'message' => 'nope']);
+    $connector->shouldReceive('requestApiAction')->with('addCategory', Mockery::any(), Mockery::any())->andReturn(['code' => 403, 'message' => 'nope', 'data' => ['status' => 403]]);
 
-    expect(fn () => app(WooCommerceCategorySync::class)->ensure($category))->toThrow(RuntimeException::class, 'did not create category Brinker');
+    expect(fn () => app(WooCommerceCategorySync::class)->ensure($category))->toThrow(RuntimeException::class, 'WooCommerce did not create category Brinker (HTTP 403): nope');
 
     expect(DataTransferMapping::query()->where('code', 'Brinker')->exists())->toBeFalse();
 });
@@ -63,7 +63,7 @@ it('replaces a mapping whose category was deleted in the shop when verifying', f
 
     $connector = $this->mock(WooCommerceService::class);
     $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
-    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'include' => 1627])->once()->andReturn([]);
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'include' => 1627])->once()->andReturn(['code' => 200]);
     $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'slug' => 'karpi'])->once()->andReturn([['id' => 1300, 'slug' => 'karpi']]);
 
     $sync = app(WooCommerceCategorySync::class);
@@ -79,7 +79,7 @@ it('keeps a verified mapping that still exists in the shop', function () {
 
     $connector = $this->mock(WooCommerceService::class);
     $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
-    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'include' => 1318])->once()->andReturn([['id' => 1318, 'slug' => 'taupe']]);
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'include' => 1318])->once()->andReturn([['id' => 1318, 'slug' => 'taupe', 'aioseo_head' => '<meta>'], 'code' => 200]);
     $connector->shouldNotReceive('requestApiAction')->with('addCategory', Mockery::any(), Mockery::any());
 
     expect(app(WooCommerceCategorySync::class)->ensure($category, verify: true))->toBe(1318);
@@ -91,9 +91,9 @@ it('keeps the mapping when the shop cannot be checked', function () {
 
     $connector = $this->mock(WooCommerceService::class);
     $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
-    $connector->shouldReceive('requestApiAction')->with('getCategory', Mockery::any(), Mockery::any())->andReturn(['code' => 'woocommerce_rest_authentication_error', 'message' => 'nope']);
+    $connector->shouldReceive('requestApiAction')->with('getCategory', Mockery::any(), Mockery::any())->andReturn(['code' => 401, 'message' => 'Sorry, you cannot list resources.', 'data' => ['status' => 401]]);
 
-    expect(fn () => app(WooCommerceCategorySync::class)->ensure($category, verify: true))->toThrow(RuntimeException::class, 'Could not check WooCommerce category 1608');
+    expect(fn () => app(WooCommerceCategorySync::class)->ensure($category, verify: true))->toThrow(RuntimeException::class, 'Could not check WooCommerce category 1608 (HTTP 401): Sorry, you cannot list resources.');
 
     expect(DataTransferMapping::query()->where('code', 'Rond')->value('externalId'))->toBe('1608');
 });
@@ -105,7 +105,7 @@ it('repairs stale category mappings with the verify option of the sync command',
     $connector = $this->mock(WooCommerceService::class);
     $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
     $connector->shouldReceive('requestApiAction')->with('getCategory', [], Mockery::on(fn (array $p): bool => isset($p['include'])))->andReturnUsing(
-        fn (string $action, array $data, array $p): array => (int) $p['include'] === 1600 ? [] : [['id' => (int) $p['include']]]
+        fn (string $action, array $data, array $p): array => (int) $p['include'] === 1600 ? ['code' => 200] : [['id' => (int) $p['include']], 'code' => 200]
     );
     $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'slug' => 'rechthoek'])->once()->andReturn([]);
     $connector->shouldReceive('requestApiAction')->with('addCategory', ['name' => 'Rechthoek', 'slug' => 'rechthoek'], ['credential' => 7])->once()->andReturn(['id' => 1700]);

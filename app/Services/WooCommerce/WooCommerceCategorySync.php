@@ -65,7 +65,7 @@ class WooCommerceCategorySync
             $externalId = $created['id'] ?? $created['data']['resource_id'] ?? null;
 
             if (! $externalId) {
-                throw new RuntimeException("WooCommerce did not create category {$category->code}: ".json_encode($created));
+                throw new RuntimeException("WooCommerce did not create category {$category->code}".$this->describeFailure($created));
             }
         }
 
@@ -114,17 +114,38 @@ class WooCommerceCategorySync
 
     /**
      * Whether the shop still has a category with this id.
+     *
+     * The API client returns the found categories under numeric keys plus the
+     * HTTP status under "code" ({"code":200} when nothing matched). Anything
+     * but a 200 is an error, never a deleted category, so the mapping is kept.
      */
     private function existsInShop(int $externalId, int|string $credentialId): bool
     {
-        $found = $this->connector->requestApiAction('getCategory', [], ['credential' => $credentialId, 'include' => $externalId]);
+        $response = $this->connector->requestApiAction('getCategory', [], ['credential' => $credentialId, 'include' => $externalId]);
 
-        if (! is_array($found) || ! array_is_list($found)) {
-            throw new RuntimeException("Could not check WooCommerce category {$externalId}: ".json_encode($found));
+        if (! is_array($response) || (int) ($response['code'] ?? 0) !== 200) {
+            throw new RuntimeException("Could not check WooCommerce category {$externalId}".$this->describeFailure($response));
         }
 
-        return collect($found)
-            ->contains(fn (mixed $term): bool => is_array($term) && (int) ($term['id'] ?? 0) === $externalId);
+        return collect($response)
+            ->filter(fn (mixed $term, int|string $key): bool => is_int($key) && is_array($term))
+            ->contains(fn (array $term): bool => (int) ($term['id'] ?? 0) === $externalId);
+    }
+
+    /**
+     * A short " (HTTP 401): message" for an API response, without the full
+     * body (which carries a whole SEO plugin's HTML on success).
+     */
+    private function describeFailure(mixed $response): string
+    {
+        if (! is_array($response)) {
+            return ' (no response)';
+        }
+
+        $status = $response['code'] ?? 'no status';
+        $message = is_string($response['message'] ?? null) ? ': '.Str::limit($response['message'], 200) : '';
+
+        return " (HTTP {$status}){$message}";
     }
 
     private function forgetMapping(string $code, string $shopUrl): void
