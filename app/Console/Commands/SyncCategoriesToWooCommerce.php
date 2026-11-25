@@ -9,7 +9,8 @@ use Webkul\Category\Models\Category;
 
 class SyncCategoriesToWooCommerce extends Command
 {
-    protected $signature = 'woocommerce:sync-categories {--dry-run : Only list the categories without a WooCommerce mapping}';
+    protected $signature = 'woocommerce:sync-categories {--dry-run : Only list the categories without a WooCommerce mapping}
+        {--verify : Also check mapped categories against the shop and replace mappings whose category was deleted there}';
 
     protected $description = 'Create every PIM category that has no WooCommerce mapping yet in WooCommerce';
 
@@ -26,7 +27,15 @@ class SyncCategoriesToWooCommerce extends Command
                 return self::FAILURE;
             }
 
-            if ($mapped || $category->code === 'root') {
+            if ($category->code === 'root') {
+                continue;
+            }
+
+            if ($mapped) {
+                if ($this->option('verify') && ! $this->option('dry-run')) {
+                    $failed = ! $this->verify($categorySync, $category) || $failed;
+                }
+
                 continue;
             }
 
@@ -46,5 +55,28 @@ class SyncCategoriesToWooCommerce extends Command
         }
 
         return $failed ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Re-check a mapped category in the shop; reports when its mapping was replaced.
+     */
+    private function verify(WooCommerceCategorySync $categorySync, Category $category): bool
+    {
+        $before = $categorySync->mappedExternalId($category->code);
+
+        try {
+            $after = $categorySync->ensure($category, verify: true);
+        } catch (Throwable $e) {
+            report($e);
+            $this->error("{$category->code}: {$e->getMessage()}");
+
+            return false;
+        }
+
+        if ($after !== $before) {
+            $this->warn("{$category->code}: WooCommerce category {$before} no longer exists → now {$after}");
+        }
+
+        return true;
     }
 }

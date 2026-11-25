@@ -57,6 +57,66 @@ it('fails loudly when WooCommerce does not create the category', function () {
     expect(DataTransferMapping::query()->where('code', 'Brinker')->exists())->toBeFalse();
 });
 
+it('replaces a mapping whose category was deleted in the shop when verifying', function () {
+    $category = Category::query()->create(['code' => 'Karpi']);
+    DataTransferMapping::query()->create(['entityType' => 'category', 'code' => 'Karpi', 'externalId' => 1627, 'jobInstanceId' => 0, 'apiUrl' => STRUCTURE_SHOP]);
+
+    $connector = $this->mock(WooCommerceService::class);
+    $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'include' => 1627])->once()->andReturn([]);
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'slug' => 'karpi'])->once()->andReturn([['id' => 1300, 'slug' => 'karpi']]);
+
+    $sync = app(WooCommerceCategorySync::class);
+
+    expect($sync->ensure($category))->toBe(1627)
+        ->and($sync->ensure($category, verify: true))->toBe(1300)
+        ->and(DataTransferMapping::query()->where(['entityType' => 'category', 'code' => 'Karpi'])->pluck('externalId')->all())->toBe(['1300']);
+});
+
+it('keeps a verified mapping that still exists in the shop', function () {
+    $category = Category::query()->create(['code' => 'Taupe']);
+    DataTransferMapping::query()->create(['entityType' => 'category', 'code' => 'Taupe', 'externalId' => 1318, 'jobInstanceId' => 0, 'apiUrl' => STRUCTURE_SHOP]);
+
+    $connector = $this->mock(WooCommerceService::class);
+    $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'include' => 1318])->once()->andReturn([['id' => 1318, 'slug' => 'taupe']]);
+    $connector->shouldNotReceive('requestApiAction')->with('addCategory', Mockery::any(), Mockery::any());
+
+    expect(app(WooCommerceCategorySync::class)->ensure($category, verify: true))->toBe(1318);
+});
+
+it('keeps the mapping when the shop cannot be checked', function () {
+    $category = Category::query()->create(['code' => 'Rond']);
+    DataTransferMapping::query()->create(['entityType' => 'category', 'code' => 'Rond', 'externalId' => 1608, 'jobInstanceId' => 0, 'apiUrl' => STRUCTURE_SHOP]);
+
+    $connector = $this->mock(WooCommerceService::class);
+    $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
+    $connector->shouldReceive('requestApiAction')->with('getCategory', Mockery::any(), Mockery::any())->andReturn(['code' => 'woocommerce_rest_authentication_error', 'message' => 'nope']);
+
+    expect(fn () => app(WooCommerceCategorySync::class)->ensure($category, verify: true))->toThrow(RuntimeException::class, 'Could not check WooCommerce category 1608');
+
+    expect(DataTransferMapping::query()->where('code', 'Rond')->value('externalId'))->toBe('1608');
+});
+
+it('repairs stale category mappings with the verify option of the sync command', function () {
+    Category::query()->create(['code' => 'Rechthoek']);
+    DataTransferMapping::query()->create(['entityType' => 'category', 'code' => 'Rechthoek', 'externalId' => 1600, 'jobInstanceId' => 0, 'apiUrl' => STRUCTURE_SHOP]);
+
+    $connector = $this->mock(WooCommerceService::class);
+    $connector->shouldReceive('getCredentialForQuickExport')->andReturn(structureCredential());
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], Mockery::on(fn (array $p): bool => isset($p['include'])))->andReturnUsing(
+        fn (string $action, array $data, array $p): array => (int) $p['include'] === 1600 ? [] : [['id' => (int) $p['include']]]
+    );
+    $connector->shouldReceive('requestApiAction')->with('getCategory', [], ['credential' => 7, 'slug' => 'rechthoek'])->once()->andReturn([]);
+    $connector->shouldReceive('requestApiAction')->with('addCategory', ['name' => 'Rechthoek', 'slug' => 'rechthoek'], ['credential' => 7])->once()->andReturn(['id' => 1700]);
+
+    $this->artisan('woocommerce:sync-categories', ['--verify' => true])
+        ->expectsOutputToContain('Rechthoek: WooCommerce category 1600 no longer exists → now 1700')
+        ->assertSuccessful();
+
+    expect(DataTransferMapping::query()->where('code', 'Rechthoek')->value('externalId'))->toBe('1700');
+});
+
 it('does nothing without a shop credential', function () {
     $connector = $this->mock(WooCommerceService::class);
     $connector->shouldReceive('getCredentialForQuickExport')->andReturn(null);
